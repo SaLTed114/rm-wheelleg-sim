@@ -1,0 +1,15 @@
+# reference materials
+/references/
+
+# temporary files
+/temp/
+
+# archive files
+*.zip
+
+# local build output
+/build/
+/out/
+/.vs/
+/.vscode/
+
