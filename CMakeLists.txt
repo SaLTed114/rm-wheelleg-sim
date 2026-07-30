@@ -13,6 +13,22 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(MuJoCo REQUIRED)
 
+option(BALANCE_BUILD_GUI "Build the interactive MuJoCo viewer" ON)
+if(BALANCE_BUILD_GUI)
+  find_package(glfw3 3.3 CONFIG QUIET)
+  if(NOT TARGET glfw)
+    include(FetchContent)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(glfw
+      GIT_REPOSITORY https://github.com/glfw/glfw.git
+      GIT_TAG 7b6aead9fb88b3623e3b3725ebb42670cbe4c579)
+    FetchContent_MakeAvailable(glfw)
+  endif()
+endif()
+
 function(balance_enable_warnings target)
   if(MSVC)
     target_compile_options(${target} PRIVATE /W4 /permissive-)
@@ -51,10 +67,14 @@ target_link_libraries(balance_simulation
   PUBLIC balance_control_core mujoco::mujoco)
 balance_enable_warnings(balance_simulation)
 
-add_executable(rm_balance_sim src/sim/main.cpp)
-target_link_libraries(rm_balance_sim PRIVATE balance_simulation)
-balance_enable_warnings(rm_balance_sim)
-balance_configure_mujoco_runtime(rm_balance_sim)
+if(BALANCE_BUILD_GUI)
+  add_executable(rm_balance_sim
+    src/sim/main.cpp
+    src/sim/mujoco_viewer.cpp)
+  target_link_libraries(rm_balance_sim PRIVATE balance_simulation glfw)
+  balance_enable_warnings(rm_balance_sim)
+  balance_configure_mujoco_runtime(rm_balance_sim)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

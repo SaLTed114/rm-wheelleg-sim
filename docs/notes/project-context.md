@@ -327,7 +327,7 @@ MuJoCo plant
 - MuJoCo 中六个关节和 actuator 的名称、索引及排列只由 C++ adapter 管理；
 - 当前 observation 只包含腿关节和轮的角度、角速度，operator command 只有 `enabled`；
 - 空控制器每拍明确清零六路力矩，不包含估计、行为、运动学或控制算法；
-- C++ 侧分为 `MujocoPlant`、`MujocoAdapter` 和 `SimulationRunner`，当前是 headless 固定时长运行；
+- C++ 侧分为 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner` 和 `MujocoViewer`；正常入口实时无限运行到用户关闭 GUI，`run_for()` 只供 headless 测试使用；
 - 物理和控制周期暂定均为 1 ms。加载后只在内存中覆盖 `mjModel.opt.timestep`，不修改原始 MJCF；
 - 当前仍直接加载固定基座、无地面、无传感器的原始模型；自由基座和完整场景属于下一阶段；
 - CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；

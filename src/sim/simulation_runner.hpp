@@ -20,6 +20,7 @@ public:
     SimulationRunner(MujocoPlant &plant, const MujocoAdapter &adapter);
 
     void reset();
+    void step();
     [[nodiscard]] SimulationStats run_for(double duration_seconds);
 
 private:

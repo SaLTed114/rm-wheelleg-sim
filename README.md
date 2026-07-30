@@ -24,12 +24,16 @@ ctest --test-dir build --output-on-failure
 CMake also accepts a MuJoCo Python package directory as a fallback when an
 official SDK is not available.
 
-Run the headless simulator for one second:
+Run the interactive simulator:
 
 ```bash
 ./build/rm_balance_sim \
-  models/MJCF/COD-2026RoboMaster-Balance.xml 1.0
+  models/MJCF/COD-2026RoboMaster-Balance.xml
 ```
+
+The simulation runs in real time until the window is closed. Use the left mouse
+button to rotate, right mouse button to pan, middle button or wheel to zoom,
+Space to pause, and Backspace or `R` to reset.
 
 ## Windows build with Visual Studio
 
@@ -43,8 +47,10 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 .\build\Release\rm_balance_sim.exe `
-  models\MJCF\COD-2026RoboMaster-Balance.xml 1.0
+  models\MJCF\COD-2026RoboMaster-Balance.xml
 ```
 
-The current runner is headless and uses a 1 ms physics and control period. It
-overrides the MuJoCo timestep in memory and does not modify the source MJCF.
+The GUI uses a 1 ms physics and control period and renders at the display refresh
+rate. It overrides the MuJoCo timestep in memory and does not modify the source
+MJCF. Headless tests can be built without the viewer using
+`-DBALANCE_BUILD_GUI=OFF`.

@@ -19,6 +19,18 @@ void SimulationRunner::reset() {
     operator_command_ = {};
 }
 
+void SimulationRunner::step() {
+    bc_observation_t observation{};
+    bc_actuation_t actuation{};
+
+    adapter_.read(plant_.data(), observation);
+    bc_control_core_step(
+        &control_core_, &observation,
+        &operator_command_, &actuation);
+    adapter_.write(plant_.data(), actuation);
+    plant_.step();
+}
+
 SimulationStats SimulationRunner::run_for(const double duration_seconds) {
     if (!std::isfinite(duration_seconds) || duration_seconds < 0.0) {
         throw std::invalid_argument(
@@ -37,15 +49,8 @@ SimulationStats SimulationRunner::run_for(const double duration_seconds) {
             "simulation duration must be an integer multiple of the timestep");
     }
 
-    bc_observation_t observation{};
-    bc_actuation_t actuation{};
     for (std::size_t step = 0; step < rounded_steps; ++step) {
-        adapter_.read(plant_.data(), observation);
-        bc_control_core_step(
-            &control_core_, &observation,
-            &operator_command_, &actuation);
-        adapter_.write(plant_.data(), actuation);
-        plant_.step();
+        this->step();
     }
 
     return SimulationStats{
