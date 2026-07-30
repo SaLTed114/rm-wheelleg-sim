@@ -9,13 +9,12 @@
 #include <string>
 
 #include "balance/leg_kinematics.h"
+#include "balance/math_utils.h"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "simulation_runner.hpp"
 
 namespace {
-
-constexpr double kPi = 3.14159265358979323846;
 
 struct SideAddresses {
     int front_joint;
@@ -42,19 +41,19 @@ std::array<SideAddresses, BC_SIDE_NUM> resolve_addresses(
     const mjModel &model
 ) {
     const char *front_joints[] = {
-        "Left_front_joint", "Right_front_joint",
+        "Right_front_joint", "Left_front_joint",
     };
     const char *rear_joints[] = {
-        "Left_rear_joint", "Right_rear_joint",
+        "Right_rear_joint", "Left_rear_joint",
     };
     const char *front_actuators[] = {
-        "Left_front_joint_actuator", "Right_front_joint_actuator",
+        "Right_front_joint_actuator", "Left_front_joint_actuator",
     };
     const char *rear_actuators[] = {
-        "Left_rear_joint_actuator", "Right_rear_joint_actuator",
+        "Right_rear_joint_actuator", "Left_rear_joint_actuator",
     };
     const char *position_sensors[] = {
-        "Left_leg_position_sensor", "Right_leg_position_sensor",
+        "Right_leg_position_sensor", "Left_leg_position_sensor",
     };
     std::array<SideAddresses, BC_SIDE_NUM> addresses{};
 
@@ -100,7 +99,7 @@ std::array<double, BC_LEG_COORD_NUM> measure_leg(
 }
 
 double angle_error(const double left, const double right) {
-    return std::abs(std::remainder(left - right, 2.0 * kPi));
+    return std::abs(bc_wrap_angle(left - right));
 }
 
 bool validate_kinematics(
@@ -116,7 +115,7 @@ bool validate_kinematics(
         {{0.85, 0.55}},
     }};
     constexpr double kLengthTolerance = 0.010;
-    constexpr double kAngleTolerance = 2.0 * kPi / 180.0;
+    constexpr double kAngleTolerance = 2.0 * BC_PI / 180.0;
     double maximum_length_error = 0.0;
     double maximum_angle_error = 0.0;
 
@@ -124,7 +123,7 @@ bool validate_kinematics(
         plant.reset();
         for (int step = 0; step < 4000; ++step) {
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
-                const double mirror = side == BC_L ? 1.0 : -1.0;
+                const double mirror = side == BC_L ? -1.0 : 1.0;
                 const auto &address = addresses[side];
                 const int front_qpos =
                     plant.model().jnt_qposadr[address.front_joint];
@@ -150,10 +149,10 @@ bool validate_kinematics(
             plant.step();
         }
 
-        bc_observation_t observation{};
-        adapter.read(plant.data(), observation);
+        bc_sensor_feedback_t feedback{};
+        adapter.read(plant.data(), feedback);
         for (int side = 0; side < BC_SIDE_NUM; ++side) {
-            const auto calculated = calculate_leg(observation.leg[side]);
+            const auto calculated = calculate_leg(feedback.leg[side]);
             const auto measured = measure_leg(
                 plant.data(), addresses[side]);
             maximum_length_error = std::max(
@@ -169,7 +168,7 @@ bool validate_kinematics(
 
     std::cout << "kinematics/site maximum errors: length="
               << 1000.0 * maximum_length_error << " mm, angle="
-              << 180.0 * maximum_angle_error / kPi << " deg\n";
+              << 180.0 * maximum_angle_error / BC_PI << " deg\n";
     return maximum_length_error <= kLengthTolerance &&
         maximum_angle_error <= kAngleTolerance;
 }
@@ -185,7 +184,7 @@ bool validate_leg_control(
     command.enabled = 1U;
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         command.leg[side].length = 0.30F;
-        command.leg[side].angle_body = static_cast<float>(-0.5 * kPi);
+        command.leg[side].angle_body = -0.5F * BC_PI_F;
     }
     runner.set_command(command);
     const auto stats = runner.run_for(8.0);
@@ -193,19 +192,19 @@ bool validate_leg_control(
         return false;
     }
 
-    bc_observation_t observation{};
-    adapter.read(plant.data(), observation);
+    bc_sensor_feedback_t feedback{};
+    adapter.read(plant.data(), feedback);
     bool valid = true;
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        const auto leg = calculate_leg(observation.leg[side]);
+        const auto leg = calculate_leg(feedback.leg[side]);
         const double length_error = std::abs(leg.length - 0.30);
         const double leg_angle_error = angle_error(
-            leg.angle_body, -0.5 * kPi);
+            leg.angle_body, -0.5 * BC_PI);
         std::cout << "controlled leg " << side << " errors: length="
                   << 1000.0 * length_error << " mm, angle="
-                  << 180.0 * leg_angle_error / kPi << " deg\n";
+                  << 180.0 * leg_angle_error / BC_PI << " deg\n";
         valid = valid && length_error <= 0.025;
-        valid = valid && leg_angle_error <= 10.0 * kPi / 180.0;
+        valid = valid && leg_angle_error <= 10.0 * BC_PI / 180.0;
         valid = valid && std::abs(leg.length_velocity) <= 0.02;
         valid = valid && std::abs(leg.angular_velocity) <= 0.1;
     }
@@ -215,6 +214,120 @@ bool validate_leg_control(
         valid = valid && std::abs(plant.data().ctrl[actuator]) <= 40.0;
     }
     return valid;
+}
+
+bool validate_ground_contact(
+    balance::sim::MujocoPlant &plant,
+    const balance::sim::MujocoAdapter &adapter
+) {
+    const int ground = require_id(plant.model(), mjOBJ_GEOM, "ground");
+    const int wheels[] = {
+        require_id(plant.model(), mjOBJ_GEOM, "Left_wheel_collision"),
+        require_id(plant.model(), mjOBJ_GEOM, "Right_wheel_collision"),
+    };
+    std::array<bool, BC_SIDE_NUM> wheel_contact{};
+
+    balance::sim::SimulationRunner runner(plant, adapter);
+    runner.reset();
+
+    bc_operator_command_t command{};
+    command.enabled = 1U;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        command.leg[side].length = 0.34F;
+        command.leg[side].angle_body = -0.5F * BC_PI_F;
+    }
+    runner.set_command(command);
+
+    for (int step = 0; step < 8000; ++step) {
+        runner.step();
+
+        for (int index = 0; index < plant.data().ncon; ++index) {
+            const mjContact &contact = plant.data().contact[index];
+            bool valid_pair = false;
+            for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                const bool ground_first = contact.geom[0] == ground &&
+                    contact.geom[1] == wheels[side];
+                const bool ground_second = contact.geom[1] == ground &&
+                    contact.geom[0] == wheels[side];
+                const bool ground_and_wheel = ground_first || ground_second;
+                if (ground_and_wheel) {
+                    wheel_contact[side] = true;
+                    valid_pair = true;
+                }
+            }
+            if (!valid_pair) return false;
+        }
+    }
+
+    return wheel_contact[BC_L] && wheel_contact[BC_R];
+}
+
+bool validate_forward_odometry(
+    balance::sim::MujocoPlant &plant,
+    const balance::sim::MujocoAdapter &adapter
+) {
+    constexpr int kSettleSteps = 3000;
+    constexpr int kMotionSteps = 4000;
+    constexpr double kTravel = 0.08;
+    const int support = require_id(
+        plant.model(), mjOBJ_BODY, "base_support");
+    const int mocap = plant.model().body_mocapid[support];
+    if (mocap < 0) return false;
+    const int ground = require_id(plant.model(), mjOBJ_GEOM, "ground");
+    const int wheels[BC_SIDE_NUM] = {
+        require_id(plant.model(), mjOBJ_GEOM, "Right_wheel_collision"),
+        require_id(plant.model(), mjOBJ_GEOM, "Left_wheel_collision"),
+    };
+    std::array<int, BC_SIDE_NUM> contact_steps{};
+
+    balance::sim::SimulationRunner runner(plant, adapter);
+    runner.reset();
+
+    bc_operator_command_t command{};
+    command.enabled = 1U;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        command.leg[side].length = 0.34F;
+        command.leg[side].angle_body = -0.5F * BC_PI_F;
+    }
+    runner.set_command(command);
+    for (int step = 0; step < kSettleSteps; ++step) runner.step();
+    const double initial_distance = runner.state().value[BC_STATE_S];
+
+    double maximum_velocity = 0.0;
+    for (int step = 0; step < kMotionSteps; ++step) {
+        const double progress = static_cast<double>(step + 1) / kMotionSteps;
+        plant.data().mocap_pos[3 * mocap] =
+            0.5 * kTravel * (1.0 - std::cos(BC_PI * progress));
+        runner.step();
+        maximum_velocity = std::max(
+            maximum_velocity,
+            static_cast<double>(runner.state().value[BC_STATE_DS]));
+
+        std::array<bool, BC_SIDE_NUM> contacting{};
+        for (int index = 0; index < plant.data().ncon; ++index) {
+            const mjContact &contact = plant.data().contact[index];
+            for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                contacting[side] = contacting[side] ||
+                    (contact.geom[0] == ground &&
+                        contact.geom[1] == wheels[side]) ||
+                    (contact.geom[1] == ground &&
+                        contact.geom[0] == wheels[side]);
+            }
+        }
+        for (int side = 0; side < BC_SIDE_NUM; ++side) {
+            if (contacting[side]) contact_steps[side] += 1;
+        }
+    }
+
+    const double distance_change =
+        runner.state().value[BC_STATE_S] - initial_distance;
+    std::cout << "forward odometry: delta s=" << distance_change
+              << " m, max ds=" << maximum_velocity
+              << " m/s, contact steps=" << contact_steps[BC_L]
+              << '/' << contact_steps[BC_R] << '\n';
+    return distance_change > 0.03 && maximum_velocity > 0.01 &&
+        contact_steps[BC_L] > kMotionSteps / 2 &&
+        contact_steps[BC_R] > kMotionSteps / 2;
 }
 
 } // namespace
@@ -236,6 +349,14 @@ int main(int argc, char **argv) {
         }
         if (!validate_leg_control(plant, adapter)) {
             std::cerr << "leg controller did not settle within tolerance\n";
+            return EXIT_FAILURE;
+        }
+        if (!validate_ground_contact(plant, adapter)) {
+            std::cerr << "wheel-ground contact filtering is incorrect\n";
+            return EXIT_FAILURE;
+        }
+        if (!validate_forward_odometry(plant, adapter)) {
+            std::cerr << "forward motion did not produce positive odometry\n";
             return EXIT_FAILURE;
         }
     } catch (const std::exception &error) {

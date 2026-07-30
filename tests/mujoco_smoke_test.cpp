@@ -21,8 +21,8 @@ int main(int argc, char **argv) {
             std::filesystem::path(argv[1]), kTimestepSeconds);
 
         const bool unexpected_model_dimensions =
-            plant.model().nq != 14 ||
-            plant.model().nv != 14 ||
+            plant.model().nq != 21 ||
+            plant.model().nv != 20 ||
             plant.model().nu != 6;
         if (unexpected_model_dimensions) {
             std::cerr << "unexpected model dimensions: nq=" << plant.model().nq
@@ -32,19 +32,19 @@ int main(int argc, char **argv) {
         }
 
         balance::sim::MujocoAdapter adapter(plant.model());
-        bc_observation_t observation{};
-        adapter.read(plant.data(), observation);
+        bc_sensor_feedback_t feedback{};
+        adapter.read(plant.data(), feedback);
         const double expected_joint_angles[BC_SIDE_NUM][BC_JOINT_NUM] = {
-            {-3.030735772282508, -0.032996075602418},
             {-2.932150759729568, -0.067812378106530},
+            {-3.030735772282508, -0.032996075602418},
         };
         for (int side = 0; side < BC_SIDE_NUM; ++side) {
             for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
                 const double error = std::abs(
-                    observation.leg[side].joint[joint].angle -
+                    feedback.leg[side].joint[joint].angle -
                     expected_joint_angles[side][joint]);
                 if (error > 1.0e-6) {
-                    std::cerr << "incorrect joint observation mapping at "
+                    std::cerr << "incorrect joint feedback mapping at "
                               << side << ", " << joint << '\n';
                     return EXIT_FAILURE;
                 }
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
             "Right_Wheel_joint_actuator",
         };
         const double expected_controls[] = {
-            1.0, -2.0, 3.0, -4.0, 5.0, 6.0,
+            4.0, -5.0, 6.0, -1.0, 2.0, -3.0,
         };
         for (int index = 0; index < 6; ++index) {
             const int actuator = mj_name2id(
@@ -94,7 +94,20 @@ int main(int argc, char **argv) {
             const int dof = plant.model().jnt_dofadr[joint];
             plant.data().qvel[dof] = raw_velocities[index];
         }
-        adapter.read(plant.data(), observation);
+        adapter.read(plant.data(), feedback);
+
+        const int left_wheel = mj_name2id(
+            &plant.model(), mjOBJ_JOINT, "Left_Wheel_joint");
+        const int right_wheel = mj_name2id(
+            &plant.model(), mjOBJ_JOINT, "Right_Wheel_joint");
+        plant.data().qvel[plant.model().jnt_dofadr[left_wheel]] = 2.0;
+        plant.data().qvel[plant.model().jnt_dofadr[right_wheel]] = -2.0;
+        adapter.read(plant.data(), feedback);
+        if (feedback.wheel[BC_L].angular_velocity != 2.0F ||
+            feedback.wheel[BC_R].angular_velocity != 2.0F) {
+            std::cerr << "forward wheel velocity mapping is incorrect\n";
+            return EXIT_FAILURE;
+        }
 
         double raw_power = 0.0;
         for (int index = 0; index < 4; ++index) {
@@ -109,11 +122,40 @@ int main(int argc, char **argv) {
             for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
                 control_power +=
                     mapped_actuation.leg[side].joint_torque[joint] *
-                    observation.leg[side].joint[joint].angular_velocity;
+                    feedback.leg[side].joint[joint].angular_velocity;
             }
         }
         if (std::abs(raw_power - control_power) > 1.0e-6) {
             std::cerr << "joint mapping does not preserve power\n";
+            return EXIT_FAILURE;
+        }
+
+        const int base_joint = mj_name2id(
+            &plant.model(), mjOBJ_JOINT, "base_free_joint");
+        const int base_qpos = plant.model().jnt_qposadr[base_joint];
+        const int base_dof = plant.model().jnt_dofadr[base_joint];
+        const double pitch_axis[] = {0.0, 1.0, 0.0};
+        mju_axisAngle2Quat(
+            plant.data().qpos + base_qpos + 3, pitch_axis, 0.2);
+        plant.data().qvel[base_dof + 4] = 0.7;
+        mj_forward(&plant.model(), &plant.data());
+        adapter.read(plant.data(), feedback);
+        if (std::abs(feedback.imu.pitch - 0.2F) > 1.0e-6F ||
+            std::abs(feedback.imu.pitch_rate - 0.7F) > 1.0e-6F) {
+            std::cerr << "positive pitch mapping is incorrect\n";
+            return EXIT_FAILURE;
+        }
+
+        plant.reset();
+        const double yaw_axis[] = {0.0, 0.0, 1.0};
+        mju_axisAngle2Quat(
+            plant.data().qpos + base_qpos + 3, yaw_axis, 0.3);
+        plant.data().qvel[base_dof + 5] = 0.8;
+        mj_forward(&plant.model(), &plant.data());
+        adapter.read(plant.data(), feedback);
+        if (std::abs(feedback.imu.yaw - 0.3F) > 1.0e-6F ||
+            std::abs(feedback.imu.yaw_rate - 0.8F) > 1.0e-6F) {
+            std::cerr << "positive yaw mapping is incorrect\n";
             return EXIT_FAILURE;
         }
 

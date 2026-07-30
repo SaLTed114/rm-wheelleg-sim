@@ -23,17 +23,18 @@ void SimulationRunner::reset() {
 void SimulationRunner::set_command(
     const bc_operator_command_t &command
 ) {
-    operator_command_ = command;
+    bc_control_core_set_command(&control_core_, &command);
 }
 
 void SimulationRunner::step() {
-    bc_observation_t observation{};
+    bc_sensor_feedback_t feedback{};
     bc_actuation_t actuation{};
 
-    adapter_.read(plant_.data(), observation);
-    bc_control_core_step(
-        &control_core_, &observation,
-        &operator_command_, &actuation);
+    adapter_.read(plant_.data(), feedback);
+    bc_control_core_update(
+        &control_core_, &feedback,
+        static_cast<float>(plant_.timestep()));
+    bc_control_core_execute(&control_core_, &actuation);
     adapter_.write(plant_.data(), actuation);
     plant_.step();
 }

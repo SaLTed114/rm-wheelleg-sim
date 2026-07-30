@@ -1,10 +1,15 @@
 <?xml version='1.0' encoding='utf-8'?>
 <mujoco model="COD-2026-Balance-2.0">
   <default>
-    <geom contype="1" conaffinity="0"/>
+    <geom contype="0" conaffinity="0"/>
   </default>
   <compiler angle="radian" />
+  <visual>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.75 0.75 0.75" specular="0.2 0.2 0.2"/>
+  </visual>
   <asset>
+    <texture name="ground_checker" type="2d" builtin="checker" rgb1="0.22 0.24 0.22" rgb2="0.72 0.70 0.62" width="512" height="512"/>
+    <material name="ground_material" texture="ground_checker" texrepeat="8 8" texuniform="true" reflectance="0.1"/>
     <mesh name="base_link" content_type="model/stl" file="base_link.STL" />
     <mesh name="Left_front_link" content_type="model/stl" file="Left_front_link.STL" />
     <mesh name="Left_front_child1_link" content_type="model/stl" file="Left_front_child1_link.STL" />
@@ -22,9 +27,18 @@
     <mesh name="Right_Wheel_link" content_type="model/stl" file="Right_Wheel_link.STL" />
   </asset>
   <worldbody>
-    <site name="Left_virtual_hip_site" pos="-0.0193914 -0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
-    <site name="Right_virtual_hip_site" pos="-0.0193914 0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
-    <geom type="mesh" rgba="1 1 1 1" mesh="base_link" />
+    <light name="key_light" directional="true" pos="-1 -1 2" dir="0.4 0.3 -1" diffuse="0.8 0.8 0.75" specular="0.2 0.2 0.2"/>
+    <light name="fill_light" directional="true" pos="1 1 1" dir="-0.3 -0.2 -1" diffuse="0.35 0.38 0.42" specular="0.05 0.05 0.05"/>
+    <geom name="ground" type="plane" pos="0 0 -0.43" size="2 2 0.05" material="ground_material" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+
+    <body name="base_support" mocap="true"/>
+    <body name="base_link">
+      <freejoint name="base_free_joint"/>
+      <inertial pos="-0.019917 -0.00040396 0.021412" quat="0.9995742 0.000019294397 -0.00019993757 -0.029182209" mass="11" diaginertia="2.8640678 2.8736324 3.0472"/>
+      <geom type="mesh" rgba="1 1 1 1" mesh="base_link" />
+      <site name="imu_site" pos="0 0 0" size="0.006" rgba="0 0.8 1 1"/>
+      <site name="Left_virtual_hip_site" pos="-0.0193914 -0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
+      <site name="Right_virtual_hip_site" pos="-0.0193914 0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
     
     <body name="Left_front_link" pos="-0.0193914 -0.1837 -0.05">
       <inertial pos="0.032009 -0.002932 -0.003563" quat="0.472786 0.528055 0.525808 0.470275" mass="0.7" diaginertia="0.000152893 0.000125485 2.9469e-05" />
@@ -71,7 +85,7 @@
           <inertial pos="0.00015229 -0.0099965 -0.00013677" quat="0.583036 0.400153 0.400171 0.582932" mass="0.9" diaginertia="0.00043712 0.000230405 0.000228895" />
           <joint name="Left_Wheel_joint" pos="0 0 0" axis="0 1 0" damping="0.01" />
           <site name="Left_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1"/>
-          <geom type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Left_Wheel_link" />
+          <geom name="Left_wheel_collision" type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Left_Wheel_link" contype="0" conaffinity="1" friction="1 0.005 0.0001" />
         
         </body>
       </body>
@@ -120,14 +134,16 @@
           <inertial pos="0.00017762 0.0099965 -0.00010174" quat="0.706853 0.0171001 0.0170535 0.706948" mass="0.9" diaginertia="0.00043712 0.000230404 0.000228896" />
           <joint name="Right_Wheel_joint" pos="0 0 0" axis="0 -1 0" damping="0.01"/>
           <site name="Right_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1"/>
-          <geom type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Right_Wheel_link" />
+          <geom name="Right_wheel_collision" type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Right_Wheel_link" contype="0" conaffinity="1" friction="1 0.005 0.0001" />
         
         </body>
       </body>
     </body>
+    </body>
   </worldbody>
   
   <equality>
+      <weld name="base_support_weld" body1="base_link" body2="base_support" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
       <connect name="Left_loop1" site1="Left_front_site1" site2="Left_rear_site1" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
       <connect name="Left_loop2" site1="Left_front_site2" site2="Left_rear_site2" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
       <connect name="Right_loop1" site1="Right_front_site1" site2="Right_rear_site1" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
@@ -135,6 +151,8 @@
     </equality>
 
   <sensor>
+    <framequat name="imu_attitude_sensor" objtype="site" objname="imu_site"/>
+    <gyro name="imu_gyro_sensor" site="imu_site"/>
     <framepos name="Left_leg_position_sensor" objtype="site" objname="Left_wheel_axis_site" reftype="site" refname="Left_virtual_hip_site"/>
     <framepos name="Right_leg_position_sensor" objtype="site" objname="Right_wheel_axis_site" reftype="site" refname="Right_virtual_hip_site"/>
   </sensor>

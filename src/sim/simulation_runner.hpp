@@ -23,12 +23,14 @@ public:
     void set_command(const bc_operator_command_t &command);
     void step();
     [[nodiscard]] SimulationStats run_for(double duration_seconds);
+    [[nodiscard]] const bc_state_vector_t &state() const noexcept {
+        return control_core_.observer.state;
+    }
 
 private:
     MujocoPlant &plant_;
     const MujocoAdapter &adapter_;
     bc_control_core_t control_core_{};
-    bc_operator_command_t operator_command_{};
 };
 
 } // namespace balance::sim

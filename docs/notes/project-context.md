@@ -179,9 +179,11 @@ L = l1*cos(delta) + sqrt(l2^2 - l1^2*sin(delta)^2)
 
 当前 MJCF 文件观察到的状态：
 
-- `base_link` 作为 `worldbody` 下的 geom，尚未放入带 `freejoint` 的浮动基座 body；
-- 文件中尚无地面和轮地接触场景；已加入左右虚拟髋点、轮轴点和 `framepos` sensor，仅用于运动学交叉验证；
-- 因而它目前更接近“高保真闭链机构模型”，还需要包装成完整平衡仿真场景；
+- `base_link` 已成为带 `freejoint` 的动态刚体；上游 USD 提供的机体参数为质量 `11 kg`、质心 `(-0.019917, -0.00040396, 0.021412) m`、主惯量 `(2.8640678, 2.8736324, 3.0472) kg*m^2` 和对应主轴四元数；
+- 这组机体惯量相对整车尺寸显得偏大，当前只作为上游模型值如实使用，后续仍需按实车复核；
+- mocap `base_support` 通过可关闭 weld 托住机体，当前用于规定运动和观测器验证，后续站立阶段可解除；
+- 已加入 `z=-0.43 m` 的地面，碰撞过滤只允许左右轮与地面接触，其他连杆不参与碰撞；
+- 已加入机体姿态、gyro、左右虚拟髋点、轮轴点和 `framepos` sensor；
 - 上游 USD 文件已移至 `references/`，当前项目不把 Isaac Sim 作为运行后端。
 
 ## 用户实车控制架构
@@ -232,6 +234,8 @@ x = [
 ```
 
 其中腿运动学输出的 `leg.theta` 是相对车体角度，LQR 腿角状态还会叠加车体俯仰和 `pi/2`，转换为相对地面的腿角。
+
+当前第一版观测器不做滤波和 IMU/编码器融合：`ds` 直接来自左右轮速平均，`s` 对 `ds` 按控制周期积分，yaw 在观测器复位时建立自然零点。轮角保留为诊断量，不直接组装 `s`。坐标约定为 FLU：车头 `+X`、左侧 `+Y`、上方 `+Z`，正 pitch 为车头下压，正 yaw 为左转。上游 XML 的 Left/Right 名称与物理位置相反，因此 adapter 使用 `BC_L -> XML Right_*`、`BC_R -> XML Left_*`，不修改上游节点名称。
 
 ### 行为层
 
@@ -317,22 +321,26 @@ u = [T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]
 ```text
 MuJoCo plant
     -> C++ MujocoAdapter::read
-    -> C balance_control_core_step
+    -> C bc_control_core_update
+    -> C bc_control_core_set_command（外部目标变化时）
+    -> C bc_control_core_execute
     -> C++ MujocoAdapter::write
     -> MuJoCo step
 ```
 
-- control core 使用 C11，simulation core 使用 C++17，通过 `include/balance/control_core.h` 中的纯 C 数据结构连接；
-- control core 不暴露六路扁平 actuator 顺序；observation 按左右侧拆分为腿部前/后关节反馈与轮反馈，actuation 对应拆分为腿关节力矩与轮力矩；
+- control core 使用 C11，simulation core 使用 C++17，通过 `include/balance/types.h` 中的纯 C 数据结构连接；
+- control core 顶层恢复为 `update -> set_command -> execute` 三阶段；update 只更新运动学与观测状态，set_command 保存外部参考，execute 只计算 actuation；
+- control core 不暴露六路扁平 actuator 顺序；sensor feedback 按左右侧拆分为腿部前/后关节反馈、轮反馈和 IMU，actuation 对应拆分为腿关节力矩与轮力矩；
+- `control_core.h` 只定义顶层配置与句柄；共享 DTO、腿运动学类型和观测器状态分别归属 `types.h`、`leg_kinematics.h` 和 `observer.h`；
 - MuJoCo 中六个关节和 actuator 的名称、索引、排列、符号及关节零偏只由 C++ adapter 管理；左右腿进入 control core 后共用同一套坐标；
 - operator command 为左右腿分别提供目标长度和相对车体腿角；`SimulationRunner::set_command()` 负责接收外部参考；
 - control core 使用 `l1=0.215 m`、`l2=0.254 m` 计算虚拟腿运动学、解析雅可比和 `J*qdot`，再用虚拟空间 PD 与 `J^T` 输出关节力矩；
-- GUI 当前交替执行两个 4 秒正弦周期：先固定 `L=0.30 m`，令腿角在 `-pi/2 +/- 15 deg` 间运动；再固定腿角，令腿长在 `0.30 +/- 0.04 m` 间运动；
+- GUI 先用 `L=0.34 m` 静止 3 秒等待双轮接地，再循环执行五个 4 秒正弦激励：前向托举、正 pitch、正 yaw、物理左腿角和物理右腿角，并每 0.5 秒输出一次十维状态；
 - 纯 PD 在固定 `0.30 m / -pi/2` 的 8 秒测试中稳态误差约为 `12 mm / 2.1 deg`，暂未加入积分或重力前馈；
 - 解析运动学与 MuJoCo `framepos` 多姿态对照的已知最大偏差约为 `9.1 mm / 1.8 deg`，该偏差保留为当前实际闭链模型的可见特性；
 - C++ 侧分为 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner` 和 `MujocoViewer`；正常入口实时无限运行到用户关闭 GUI，`run_for()` 只供 headless 测试使用；
 - 物理和控制周期暂定均为 1 ms。加载后只在内存中覆盖 `mjModel.opt.timestep`，不修改原始 MJCF；
-- 当前仍使用固定基座、无地面的模型；自由基座和完整场景属于下一阶段；
+- 当前机体已具有自由基座、上游 USD 惯性参数、地面和轮地接触，但由可关闭的 mocap weld 托住；
 - CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；
 - 本机官方 MuJoCo 3.9.0 SDK 安装在 `/home/l/.local/opt/mujoco-3.9.0`，当前 build 和 VS Code compilation database 已切换到该 SDK，不再依赖 Anaconda wheel；
 - 本机已用 MuJoCo 3.9.0 验证 C 运动学/雅可比、模型接线与功率方向、site 几何对照和 8 秒悬空定姿测试。
@@ -341,13 +349,11 @@ MuJoCo plant
 
 1. 以 MJCF/MuJoCo 为当前仿真后端；USD 只保留为外部参考资产。
 2. 核对当前模型每段质量、质心、惯量是否为目标参数；不要用旧 MATLAB 脚本覆盖。
-3. 为 base 添加浮动自由度、总成质量/惯量，并建立地面与轮地接触。
+3. 在无噪声十维状态方向验证完成后，再加入 IMU 与编码器速度融合和状态滤波。
 4. 将当前已验证的 MuJoCo 关节映射与后续实车 adapter 分开维护，避免把模型 joint axis 符号机械照搬到硬件。
-5. 定义仿真状态到 `balance_chassis_t` 传感器数据的适配接口。
-6. 定义关节力矩、轮力矩到仿真 actuator 的接口及限幅。
-7. 依据当前模型重新提取/拟合等效腿质心和惯量，并重新生成 LQR 增益调度。
-8. 单独参数化执行器、摩擦、结构柔性、传感器和接触误差，避免不同 sim-to-real gap 混杂。
-9. 优先先跑通“原控制结构 + 高保真 plant”，再决定是否修改控制器设计。
+5. 解除 mocap 托举，加入支撑前馈和完整平衡控制，使机器人站立。
+6. 依据当前模型重新提取/拟合等效腿质心和惯量，并重新生成 LQR 增益调度。
+7. 单独参数化执行器、摩擦、结构柔性、传感器和接触误差，避免不同 sim-to-real gap 混杂。
 
 ## 快速恢复时优先阅读
 

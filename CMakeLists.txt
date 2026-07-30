@@ -52,6 +52,7 @@ endfunction()
 add_library(balance_control_core STATIC
   src/control/control_core.c
   src/control/leg_kinematics.c
+  src/control/observer.c
   src/control/pd_controller.c)
 target_include_directories(balance_control_core
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -97,6 +98,11 @@ if(BUILD_TESTING)
   target_link_libraries(leg_kinematics_test PRIVATE balance_control_core)
   balance_enable_warnings(leg_kinematics_test)
   add_test(NAME leg_kinematics COMMAND leg_kinematics_test)
+
+  add_executable(observer_test tests/observer_test.c)
+  target_link_libraries(observer_test PRIVATE balance_control_core)
+  balance_enable_warnings(observer_test)
+  add_test(NAME observer_state_assembly COMMAND observer_test)
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_simulation)

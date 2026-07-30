@@ -2,8 +2,8 @@
 
 Minimal MuJoCo host for the wheel-legged balance robot. The runtime is split into
 a C11 control core and a C++17 simulation layer. The current controller uses
-virtual-leg kinematics and a Jacobian-transpose PD controller while the chassis
-base remains fixed for linkage validation.
+virtual-leg kinematics and a Jacobian-transpose PD controller. A mocap support
+holds and excites the otherwise free chassis while the observer is validated.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See
@@ -36,11 +36,14 @@ The simulation runs in real time until the window is closed. Use the left mouse
 button to rotate, right mouse button to pan, middle button or wheel to zoom,
 Space to pause, and Backspace or `R` to reset.
 
-The demo alternates two four-second sine cycles. It first holds the leg length
-at 0.30 m while moving the body-relative leg angle by +/-15 degrees around
-`-pi/2`, then holds the angle at `-pi/2` while moving the length by +/-0.04 m
-around 0.30 m. The controller uses joint velocities through the analytic
-Jacobian; it does not numerically differentiate the virtual-leg position.
+The observer demo first holds a 0.34 m leg target for three seconds so both
+wheels settle onto the ground. It then repeats five four-second sine phases:
+forward mocap motion, positive chassis pitch, positive chassis yaw,
+physical-left leg angle, and physical-right leg angle. It prints the current
+phase and the ten-element state vector every 0.5 s. The state uses
+forward-left-up coordinates; positive pitch lowers the nose, positive yaw turns
+left, and wheel odometry is positive when the chassis rolls forward. Only the
+two wheel meshes collide with the ground.
 
 ## Windows build with Visual Studio
 
