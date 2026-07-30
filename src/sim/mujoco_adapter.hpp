@@ -21,12 +21,16 @@ private:
         int qpos;
         int dof;
         int actuator;
+        double scale;
+        double offset;
     };
 
     static ChannelAddress resolve_channel(
         const mjModel &model,
         const char *joint_name,
-        const char *actuator_name);
+        const char *actuator_name,
+        double scale,
+        double offset);
 
     std::array<std::array<ChannelAddress, BC_JOINT_NUM>, BC_SIDE_NUM>
         joint_addresses_{};

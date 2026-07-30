@@ -50,9 +50,14 @@ function(balance_configure_mujoco_runtime target)
 endfunction()
 
 add_library(balance_control_core STATIC
-  src/control/control_core.c)
+  src/control/control_core.c
+  src/control/leg_kinematics.c
+  src/control/pd_controller.c)
 target_include_directories(balance_control_core
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+if(NOT MSVC)
+  target_link_libraries(balance_control_core PUBLIC m)
+endif()
 balance_enable_warnings(balance_control_core)
 
 add_library(balance_simulation STATIC
@@ -83,11 +88,29 @@ if(BUILD_TESTING)
   balance_enable_warnings(control_core_test)
   add_test(NAME control_core_zero_output COMMAND control_core_test)
 
+  add_executable(pd_controller_test tests/pd_controller_test.c)
+  target_link_libraries(pd_controller_test PRIVATE balance_control_core)
+  balance_enable_warnings(pd_controller_test)
+  add_test(NAME pd_controller COMMAND pd_controller_test)
+
+  add_executable(leg_kinematics_test tests/leg_kinematics_test.c)
+  target_link_libraries(leg_kinematics_test PRIVATE balance_control_core)
+  balance_enable_warnings(leg_kinematics_test)
+  add_test(NAME leg_kinematics COMMAND leg_kinematics_test)
+
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_simulation)
   balance_enable_warnings(mujoco_smoke_test)
   balance_configure_mujoco_runtime(mujoco_smoke_test)
   add_test(NAME mujoco_model_smoke
     COMMAND mujoco_smoke_test
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
+
+  add_executable(mujoco_leg_test tests/mujoco_leg_test.cpp)
+  target_link_libraries(mujoco_leg_test PRIVATE balance_simulation)
+  balance_enable_warnings(mujoco_leg_test)
+  balance_configure_mujoco_runtime(mujoco_leg_test)
+  add_test(NAME mujoco_leg_kinematics_and_control
+    COMMAND mujoco_leg_test
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
 endif()

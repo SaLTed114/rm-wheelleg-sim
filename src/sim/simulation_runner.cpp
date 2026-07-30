@@ -10,13 +10,20 @@ namespace balance::sim {
 SimulationRunner::SimulationRunner(
     MujocoPlant &plant, const MujocoAdapter &adapter
 ) : plant_(plant), adapter_(adapter) {
-    bc_control_core_init(&control_core_);
+    bc_control_config_t config{};
+    bc_control_default_config(&config);
+    bc_control_core_init(&control_core_, &config);
 }
 
 void SimulationRunner::reset() {
     plant_.reset();
     bc_control_core_reset(&control_core_);
-    operator_command_ = {};
+}
+
+void SimulationRunner::set_command(
+    const bc_operator_command_t &command
+) {
+    operator_command_ = command;
 }
 
 void SimulationRunner::step() {

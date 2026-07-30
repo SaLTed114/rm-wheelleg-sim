@@ -1,8 +1,9 @@
 # rm-balance-sim
 
 Minimal MuJoCo host for the wheel-legged balance robot. The runtime is split into
-a C11 control core and a C++17 simulation layer. The initial controller is an
-intentional zero-torque stub.
+a C11 control core and a C++17 simulation layer. The current controller uses
+virtual-leg kinematics and a Jacobian-transpose PD controller while the chassis
+base remains fixed for linkage validation.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See
@@ -34,6 +35,12 @@ Run the interactive simulator:
 The simulation runs in real time until the window is closed. Use the left mouse
 button to rotate, right mouse button to pan, middle button or wheel to zoom,
 Space to pause, and Backspace or `R` to reset.
+
+The demo alternates two four-second sine cycles. It first holds the leg length
+at 0.30 m while moving the body-relative leg angle by +/-15 degrees around
+`-pi/2`, then holds the angle at `-pi/2` while moving the length by +/-0.04 m
+around 0.30 m. The controller uses joint velocities through the analytic
+Jacobian; it does not numerically differentiate the virtual-leg position.
 
 ## Windows build with Visual Studio
 

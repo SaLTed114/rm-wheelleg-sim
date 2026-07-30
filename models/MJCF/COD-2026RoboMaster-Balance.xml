@@ -22,6 +22,8 @@
     <mesh name="Right_Wheel_link" content_type="model/stl" file="Right_Wheel_link.STL" />
   </asset>
   <worldbody>
+    <site name="Left_virtual_hip_site" pos="-0.0193914 -0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
+    <site name="Right_virtual_hip_site" pos="-0.0193914 0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
     <geom type="mesh" rgba="1 1 1 1" mesh="base_link" />
     
     <body name="Left_front_link" pos="-0.0193914 -0.1837 -0.05">
@@ -68,6 +70,7 @@
         <body name="Left_Wheel_link" pos="0.208983 -0.02455 -0.144368">
           <inertial pos="0.00015229 -0.0099965 -0.00013677" quat="0.583036 0.400153 0.400171 0.582932" mass="0.9" diaginertia="0.00043712 0.000230405 0.000228895" />
           <joint name="Left_Wheel_joint" pos="0 0 0" axis="0 1 0" damping="0.01" />
+          <site name="Left_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1"/>
           <geom type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Left_Wheel_link" />
         
         </body>
@@ -116,6 +119,7 @@
         <body name="Right_Wheel_link" pos="0.202605 0.02455 -0.15319">
           <inertial pos="0.00017762 0.0099965 -0.00010174" quat="0.706853 0.0171001 0.0170535 0.706948" mass="0.9" diaginertia="0.00043712 0.000230404 0.000228896" />
           <joint name="Right_Wheel_joint" pos="0 0 0" axis="0 -1 0" damping="0.01"/>
+          <site name="Right_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1"/>
           <geom type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Right_Wheel_link" />
         
         </body>
@@ -130,12 +134,17 @@
       <connect name="Right_loop2" site1="Right_front_site2" site2="Right_rear_site2" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
     </equality>
 
+  <sensor>
+    <framepos name="Left_leg_position_sensor" objtype="site" objname="Left_wheel_axis_site" reftype="site" refname="Left_virtual_hip_site"/>
+    <framepos name="Right_leg_position_sensor" objtype="site" objname="Right_wheel_axis_site" reftype="site" refname="Right_virtual_hip_site"/>
+  </sensor>
+
   <actuator>
-    <general name="Left_front_joint_actuator" joint="Left_front_joint" gainprm="1" ctrlrange="-3.14 3.14" />
-    <general name="Left_rear_joint_actuator" joint="Left_rear_joint" gainprm="1" ctrlrange="-3.14 3.14" />
+    <general name="Left_front_joint_actuator" joint="Left_front_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
+    <general name="Left_rear_joint_actuator" joint="Left_rear_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
     <general name="Left_Wheel_joint_actuator" joint="Left_Wheel_joint" gainprm="1" />
-    <general name="Right_front_joint_actuator" joint="Right_front_joint" gainprm="1" ctrlrange="-3.14 3.14" />
-    <general name="Right_rear_joint_actuator" joint="Right_rear_joint" gainprm="1" ctrlrange="-3.14 3.14" />
+    <general name="Right_front_joint_actuator" joint="Right_front_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
+    <general name="Right_rear_joint_actuator" joint="Right_rear_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
     <general name="Right_Wheel_joint_actuator" joint="Right_Wheel_joint" gainprm="1" ctrlrange="-3.14 3.14" />
   </actuator>
   <keyframe>

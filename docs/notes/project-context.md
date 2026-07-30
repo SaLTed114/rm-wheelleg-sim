@@ -180,7 +180,7 @@ L = l1*cos(delta) + sqrt(l2^2 - l1^2*sin(delta)^2)
 当前 MJCF 文件观察到的状态：
 
 - `base_link` 作为 `worldbody` 下的 geom，尚未放入带 `freejoint` 的浮动基座 body；
-- 文件中尚无地面、轮地接触场景、传感器定义；
+- 文件中尚无地面和轮地接触场景；已加入左右虚拟髋点、轮轴点和 `framepos` sensor，仅用于运动学交叉验证；
 - 因而它目前更接近“高保真闭链机构模型”，还需要包装成完整平衡仿真场景；
 - 上游 USD 文件已移至 `references/`，当前项目不把 Isaac Sim 作为运行后端。
 
@@ -324,22 +324,25 @@ MuJoCo plant
 
 - control core 使用 C11，simulation core 使用 C++17，通过 `include/balance/control_core.h` 中的纯 C 数据结构连接；
 - control core 不暴露六路扁平 actuator 顺序；observation 按左右侧拆分为腿部前/后关节反馈与轮反馈，actuation 对应拆分为腿关节力矩与轮力矩；
-- MuJoCo 中六个关节和 actuator 的名称、索引及排列只由 C++ adapter 管理；
-- 当前 observation 只包含腿关节和轮的角度、角速度，operator command 只有 `enabled`；
-- 空控制器每拍明确清零六路力矩，不包含估计、行为、运动学或控制算法；
+- MuJoCo 中六个关节和 actuator 的名称、索引、排列、符号及关节零偏只由 C++ adapter 管理；左右腿进入 control core 后共用同一套坐标；
+- operator command 为左右腿分别提供目标长度和相对车体腿角；`SimulationRunner::set_command()` 负责接收外部参考；
+- control core 使用 `l1=0.215 m`、`l2=0.254 m` 计算虚拟腿运动学、解析雅可比和 `J*qdot`，再用虚拟空间 PD 与 `J^T` 输出关节力矩；
+- GUI 当前交替执行两个 4 秒正弦周期：先固定 `L=0.30 m`，令腿角在 `-pi/2 +/- 15 deg` 间运动；再固定腿角，令腿长在 `0.30 +/- 0.04 m` 间运动；
+- 纯 PD 在固定 `0.30 m / -pi/2` 的 8 秒测试中稳态误差约为 `12 mm / 2.1 deg`，暂未加入积分或重力前馈；
+- 解析运动学与 MuJoCo `framepos` 多姿态对照的已知最大偏差约为 `9.1 mm / 1.8 deg`，该偏差保留为当前实际闭链模型的可见特性；
 - C++ 侧分为 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner` 和 `MujocoViewer`；正常入口实时无限运行到用户关闭 GUI，`run_for()` 只供 headless 测试使用；
 - 物理和控制周期暂定均为 1 ms。加载后只在内存中覆盖 `mjModel.opt.timestep`，不修改原始 MJCF；
-- 当前仍直接加载固定基座、无地面、无传感器的原始模型；自由基座和完整场景属于下一阶段；
+- 当前仍使用固定基座、无地面的模型；自由基座和完整场景属于下一阶段；
 - CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；
 - 本机官方 MuJoCo 3.9.0 SDK 安装在 `/home/l/.local/opt/mujoco-3.9.0`，当前 build 和 VS Code compilation database 已切换到该 SDK，不再依赖 Anaconda wheel；
-- 本机已用 MuJoCo 3.9.0 验证 C 单元测试、模型接线 smoke test 和 1 秒/1000 tick 的零力矩运行。
+- 本机已用 MuJoCo 3.9.0 验证 C 运动学/雅可比、模型接线与功率方向、site 几何对照和 8 秒悬空定姿测试。
 
 ## 后续需要确认/实现
 
 1. 以 MJCF/MuJoCo 为当前仿真后端；USD 只保留为外部参考资产。
 2. 核对当前模型每段质量、质心、惯量是否为目标参数；不要用旧 MATLAB 脚本覆盖。
 3. 为 base 添加浮动自由度、总成质量/惯量，并建立地面与轮地接触。
-4. 确认模型关节与实车 `JOINT_LF/LB/RF/RB` 的一一映射、正方向和零位。
+4. 将当前已验证的 MuJoCo 关节映射与后续实车 adapter 分开维护，避免把模型 joint axis 符号机械照搬到硬件。
 5. 定义仿真状态到 `balance_chassis_t` 传感器数据的适配接口。
 6. 定义关节力矩、轮力矩到仿真 actuator 的接口及限幅。
 7. 依据当前模型重新提取/拟合等效腿质心和惯量，并重新生成 LQR 增益调度。

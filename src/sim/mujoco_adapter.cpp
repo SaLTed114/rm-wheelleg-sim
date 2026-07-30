@@ -11,19 +11,25 @@ namespace {
 struct ChannelSpec {
     const char *joint_name;
     const char *actuator_name;
+    double scale;
+    double offset;
 };
 
 constexpr std::array<std::array<ChannelSpec, BC_JOINT_NUM>, BC_SIDE_NUM>
     kJointSpecs{{
-        {{{"Left_front_joint", "Left_front_joint_actuator"},
-          {"Left_rear_joint", "Left_rear_joint_actuator"}}},
-        {{{"Right_front_joint", "Right_front_joint_actuator"},
-          {"Right_rear_joint", "Right_rear_joint_actuator"}}},
+        {{{"Left_front_joint", "Left_front_joint_actuator",
+           +1.0, -3.030735772282508},
+          {"Left_rear_joint", "Left_rear_joint_actuator",
+           -1.0, -0.032996075602418}}},
+        {{{"Right_front_joint", "Right_front_joint_actuator",
+           -1.0, -3.032150759729568},
+          {"Right_rear_joint", "Right_rear_joint_actuator",
+           +1.0, -0.067812378106530}}},
     }};
 
 constexpr std::array<ChannelSpec, BC_SIDE_NUM> kWheelSpecs{{
-    {"Left_Wheel_joint", "Left_Wheel_joint_actuator"},
-    {"Right_Wheel_joint", "Right_Wheel_joint_actuator"},
+    {"Left_Wheel_joint", "Left_Wheel_joint_actuator", 1.0, 0.0},
+    {"Right_Wheel_joint", "Right_Wheel_joint_actuator", 1.0, 0.0},
 }};
 
 constexpr std::size_t kActuatorNum =
@@ -57,7 +63,9 @@ void require_unique(
 MujocoAdapter::ChannelAddress MujocoAdapter::resolve_channel(
     const mjModel &model,
     const char *joint_name,
-    const char *actuator_name
+    const char *actuator_name,
+    const double scale,
+    const double offset
 ) {
     const int joint_id = require_named_id(model, mjOBJ_JOINT, joint_name);
     const int actuator_id = require_named_id(
@@ -77,6 +85,8 @@ MujocoAdapter::ChannelAddress MujocoAdapter::resolve_channel(
         model.jnt_qposadr[joint_id],
         model.jnt_dofadr[joint_id],
         actuator_id,
+        scale,
+        offset,
     };
 }
 
@@ -91,7 +101,8 @@ MujocoAdapter::MujocoAdapter(const mjModel &model)
         for (std::size_t joint = 0; joint < BC_JOINT_NUM; ++joint) {
             const auto &spec = kJointSpecs[side][joint];
             const auto address = resolve_channel(
-                model, spec.joint_name, spec.actuator_name);
+                model, spec.joint_name, spec.actuator_name,
+                spec.scale, spec.offset);
             joint_addresses_[side][joint] = address;
             qpos_addresses[channel] = address.qpos;
             dof_addresses[channel] = address.dof;
@@ -101,7 +112,8 @@ MujocoAdapter::MujocoAdapter(const mjModel &model)
 
         const auto &spec = kWheelSpecs[side];
         const auto address = resolve_channel(
-            model, spec.joint_name, spec.actuator_name);
+            model, spec.joint_name, spec.actuator_name,
+            spec.scale, spec.offset);
         wheel_addresses_[side] = address;
         qpos_addresses[channel] = address.qpos;
         dof_addresses[channel] = address.dof;
@@ -122,16 +134,18 @@ void MujocoAdapter::read(
         for (std::size_t joint = 0; joint < BC_JOINT_NUM; ++joint) {
             const auto &address = joint_addresses_[side][joint];
             auto &feedback = observation.leg[side].joint[joint];
-            feedback.angle = static_cast<float>(data.qpos[address.qpos]);
-            feedback.angular_velocity =
-                static_cast<float>(data.qvel[address.dof]);
+            feedback.angle = static_cast<float>(
+                address.scale * data.qpos[address.qpos] + address.offset);
+            feedback.angular_velocity = static_cast<float>(
+                address.scale * data.qvel[address.dof]);
         }
 
         const auto &address = wheel_addresses_[side];
         auto &feedback = observation.wheel[side];
-        feedback.angle = static_cast<float>(data.qpos[address.qpos]);
-        feedback.angular_velocity =
-            static_cast<float>(data.qvel[address.dof]);
+        feedback.angle = static_cast<float>(
+            address.scale * data.qpos[address.qpos] + address.offset);
+        feedback.angular_velocity = static_cast<float>(
+            address.scale * data.qvel[address.dof]);
     }
 }
 
@@ -142,12 +156,14 @@ void MujocoAdapter::write(
     std::fill(data.ctrl, data.ctrl + actuator_count_, 0.0);
     for (std::size_t side = 0; side < BC_SIDE_NUM; ++side) {
         for (std::size_t joint = 0; joint < BC_JOINT_NUM; ++joint) {
-            const int actuator = joint_addresses_[side][joint].actuator;
-            data.ctrl[actuator] = actuation.leg[side].joint_torque[joint];
+            const auto &address = joint_addresses_[side][joint];
+            data.ctrl[address.actuator] = address.scale *
+                actuation.leg[side].joint_torque[joint];
         }
 
         const int actuator = wheel_addresses_[side].actuator;
-        data.ctrl[actuator] = actuation.wheel_torque[side];
+        data.ctrl[actuator] = wheel_addresses_[side].scale *
+            actuation.wheel_torque[side];
     }
 }
 
