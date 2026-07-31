@@ -10,36 +10,40 @@ namespace balance::sim {
 SimulationRunner::SimulationRunner(
     MujocoPlant &plant, const MujocoAdapter &adapter
 ) : plant_(plant), adapter_(adapter) {
-    bc_control_config_t config{};
-    bc_control_default_config(&config);
-    bc_control_core_init(&control_core_, &config);
+    bc_controller_config_t config{};
+    bc_controller_default_config(&config);
+    bc_controller_init(&controller_, &config);
 }
 
 void SimulationRunner::reset() {
     plant_.reset();
-    bc_control_core_reset(&control_core_);
-    actuation_ = {};
+    bc_controller_reset(&controller_);
 }
 
-void SimulationRunner::set_command(
-    const bc_operator_command_t &command
-) {
-    bc_control_core_set_command(&control_core_, &command);
-}
-
-void SimulationRunner::step() {
+void SimulationRunner::step(const bc_operator_command_t &command) {
     bc_sensor_feedback_t feedback{};
+    bc_actuation_t actuation{};
 
     adapter_.read(plant_.data(), feedback);
-    bc_control_core_update(
-        &control_core_, &feedback,
+    bc_controller_update(
+        &controller_, &feedback,
         static_cast<float>(plant_.timestep()));
-    bc_control_core_execute(&control_core_, &actuation_);
-    adapter_.write(plant_.data(), actuation_);
+    bc_controller_set_command(&controller_, &command);
+    bc_controller_calculate(&controller_);
+    bc_controller_execute(&controller_, &actuation);
+    adapter_.write(plant_.data(), actuation);
     plant_.step();
 }
 
 SimulationStats SimulationRunner::run_for(const double duration_seconds) {
+    const bc_operator_command_t command{};
+    return run_for(duration_seconds, command);
+}
+
+SimulationStats SimulationRunner::run_for(
+    const double duration_seconds,
+    const bc_operator_command_t &command
+) {
     if (!std::isfinite(duration_seconds) || duration_seconds < 0.0) {
         throw std::invalid_argument(
             "simulation duration must be finite and non-negative");
@@ -58,12 +62,12 @@ SimulationStats SimulationRunner::run_for(const double duration_seconds) {
     }
 
     for (std::size_t step = 0; step < rounded_steps; ++step) {
-        this->step();
+        this->step(command);
     }
 
     return SimulationStats{
         rounded_steps,
-        static_cast<std::size_t>(control_core_.tick_count),
+        static_cast<std::size_t>(status().tick_count),
         plant_.data().time,
     };
 }

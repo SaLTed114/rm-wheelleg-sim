@@ -10,7 +10,6 @@
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "simulation_runner.hpp"
-#include "static_stand_scenario.hpp"
 
 namespace {
 
@@ -67,8 +66,24 @@ struct MotionMetrics {
     int other_contact_steps{};
 };
 
+void step_controller(
+    balance::sim::SimulationRunner &runner,
+    balance::sim::MujocoPlant &plant,
+    const float forward_velocity,
+    const float yaw_rate
+) {
+    bc_operator_command_t command{};
+    command.system_enabled = static_cast<uint8_t>(
+        plant.data().time >= 2.0);
+    command.balance_restart =
+        command.system_enabled &&
+        runner.status().system_state == BC_SYSTEM_OFF;
+    command.forward_velocity = forward_velocity;
+    command.yaw_rate = yaw_rate;
+    runner.step(command);
+}
+
 MotionMetrics run_motion_phase(
-    balance::sim::StaticStandScenario &scenario,
     balance::sim::SimulationRunner &runner,
     balance::sim::MujocoPlant &plant,
     const int base_qpos,
@@ -82,16 +97,16 @@ MotionMetrics run_motion_phase(
     const double evaluation_start = start_time + duration - 1.0;
     const double initial_x = plant.data().qpos[base_qpos];
     const double initial_y = plant.data().qpos[base_qpos + 1];
-    const double initial_yaw = runner.state().value[BC_STATE_PSI];
+    const double initial_yaw = runner.status().state.value[BC_STATE_PSI];
     int steps = 0;
     int both_wheels_steps = 0;
     double forward_velocity_sum = 0.0;
     double yaw_rate_sum = 0.0;
     MotionMetrics metrics{};
 
-    scenario.set_motion_target(forward_velocity, yaw_rate);
     while (plant.data().time < start_time + duration) {
-        scenario.step();
+        step_controller(
+            runner, plant, forward_velocity, yaw_rate);
         const auto contact = read_contacts(plant.data(), ground, wheel);
         if (contact.wheel[BC_L] && contact.wheel[BC_R]) {
             ++both_wheels_steps;
@@ -100,12 +115,13 @@ MotionMetrics run_motion_phase(
         metrics.maximum_pitch = std::max(
             metrics.maximum_pitch,
             std::abs(static_cast<double>(
-                runner.state().value[BC_STATE_THETA_B])));
+                runner.status().state.value[BC_STATE_THETA_B])));
 
         ++steps;
         if (plant.data().time >= evaluation_start) {
-            forward_velocity_sum += runner.state().value[BC_STATE_DS];
-            yaw_rate_sum += runner.state().value[BC_STATE_DPSI];
+            forward_velocity_sum +=
+                runner.status().state.value[BC_STATE_DS];
+            yaw_rate_sum += runner.status().state.value[BC_STATE_DPSI];
         }
     }
 
@@ -116,7 +132,7 @@ MotionMetrics run_motion_phase(
     metrics.forward_displacement =
         delta_x * std::cos(initial_yaw) + delta_y * std::sin(initial_yaw);
     metrics.yaw_change =
-        runner.state().value[BC_STATE_PSI] - initial_yaw;
+        runner.status().state.value[BC_STATE_PSI] - initial_yaw;
     metrics.average_forward_velocity =
         forward_velocity_sum / evaluation_steps;
     metrics.average_yaw_rate = yaw_rate_sum / evaluation_steps;
@@ -151,7 +167,6 @@ int main(int argc, char **argv) {
             std::filesystem::path(argv[1]), 0.001);
         balance::sim::MujocoAdapter adapter(plant.model());
         balance::sim::SimulationRunner runner(plant, adapter);
-        balance::sim::StaticStandScenario scenario(plant, runner);
         const int weld = require_id(
             plant.model(), mjOBJ_EQUALITY, "base_support_weld");
         const int ground = require_id(
@@ -172,26 +187,47 @@ int main(int argc, char **argv) {
             plant.model(), mjOBJ_JOINT, "base_free_joint");
         const int base_qpos = plant.model().jnt_qposadr[base_joint];
 
-        scenario.reset();
-        if (!plant.data().eq_active[weld]) {
-            std::cerr << "scenario reset did not enable chassis support\n";
+        runner.reset();
+        if (plant.data().eq_active[weld]) {
+            std::cerr << "reset did not disable chassis support\n";
             return EXIT_FAILURE;
         }
 
-        while (plant.data().time < 6.0 &&
-               scenario.phase() ==
-                   balance::sim::StaticStandPhase::Preparing) {
-            scenario.step();
+        while (plant.data().time < 8.0 &&
+               runner.status().motion_state != BC_MOTION_BALANCE_ENGAGING) {
+            step_controller(runner, plant, 0.0F, 0.0F);
         }
-        if (scenario.phase() != balance::sim::StaticStandPhase::Balancing ||
+        if (runner.status().motion_state != BC_MOTION_BALANCE_ENGAGING ||
             plant.data().eq_active[weld]) {
-            std::cerr << "scenario did not release after posture settled\n";
+            std::cerr << "controller did not balance after posture settled: "
+                      << bc_motion_state_name(
+                             runner.status().motion_state)
+                      << ", leg length="
+                      << runner.status().leg[BC_L].length << '/'
+                      << runner.status().leg[BC_R].length << ", leg angle="
+                      << runner.status().leg[BC_L].angle_body << '/'
+                      << runner.status().leg[BC_R].angle_body
+                      << ", leg velocity="
+                      << runner.status().leg[BC_L].length_velocity << '/'
+                      << runner.status().leg[BC_R].length_velocity
+                      << ", angular velocity="
+                      << runner.status().leg[BC_L].angular_velocity << '/'
+                      << runner.status().leg[BC_R].angular_velocity << '\n';
             return EXIT_FAILURE;
         }
+
+        const bc_state_vector_t enable_state = runner.status().state;
+        const std::array<bc_leg_kinematics_t, BC_SIDE_NUM> enable_leg{{
+            runner.status().leg[BC_L],
+            runner.status().leg[BC_R],
+        }};
+        const ContactState enable_contact = read_contacts(
+            plant.data(), ground, wheel);
 
         constexpr double kBalanceDuration = 8.0;
         constexpr double kEvaluationDuration = 3.0;
-        const double end_time = scenario.release_time() + kBalanceDuration;
+        const double balance_start_time = plant.data().time;
+        const double end_time = balance_start_time + kBalanceDuration;
         int evaluation_steps = 0;
         int both_wheels_steps = 0;
         int other_contact_steps = 0;
@@ -200,7 +236,7 @@ int main(int argc, char **argv) {
         bool finite = true;
 
         while (plant.data().time < end_time) {
-            scenario.step();
+            step_controller(runner, plant, 0.0F, 0.0F);
             if (plant.data().time < end_time - kEvaluationDuration) continue;
 
             ++evaluation_steps;
@@ -210,7 +246,7 @@ int main(int argc, char **argv) {
             }
             if (contact.other) ++other_contact_steps;
 
-            const auto &state = runner.state();
+            const auto &state = runner.status().state;
             maximum_final_pitch = std::max(
                 maximum_final_pitch,
                 std::abs(static_cast<double>(
@@ -224,12 +260,12 @@ int main(int argc, char **argv) {
             }
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
                 finite = finite &&
-                    runner.leg(static_cast<bc_side_t>(side)).length >= 0.18F &&
-                    runner.leg(static_cast<bc_side_t>(side)).length <= 0.23F;
+                    runner.status().leg[side].length >= 0.13F &&
+                    runner.status().leg[side].length <= 0.20F;
                 finite = finite && std::isfinite(
-                    runner.actuation().wheel_torque[side]);
+                    runner.status().actuation.wheel_torque[side]);
                 for (float torque :
-                     runner.actuation().leg[side].joint_torque) {
+                     runner.status().actuation.leg[side].joint_torque) {
                     finite = finite && std::isfinite(torque);
                 }
             }
@@ -237,7 +273,7 @@ int main(int argc, char **argv) {
 
         const double wheel_contact_ratio =
             static_cast<double>(both_wheels_steps) / evaluation_steps;
-        std::cout << "static stand: release=" << scenario.release_time()
+        std::cout << "static stand: release=" << balance_start_time
                   << " s, max final pitch="
                   << maximum_final_pitch * 180.0 / BC_PI
                   << " deg, max final pitch rate="
@@ -252,8 +288,8 @@ int main(int argc, char **argv) {
                       << plant.data().site_xpos[3 * wheel_axis[BC_L] + 2]
                       << '/' << plant.data().site_xpos[3 * wheel_axis[BC_R] + 2]
                       << ", leg length="
-                      << runner.leg(BC_L).length << '/'
-                      << runner.leg(BC_R).length << '\n';
+                      << runner.status().leg[BC_L].length << '/'
+                      << runner.status().leg[BC_R].length << '\n';
             std::cout << "final contacts:";
             for (int index = 0; index < plant.data().ncon; ++index) {
                 const mjContact &contact = plant.data().contact[index];
@@ -276,30 +312,56 @@ int main(int argc, char **argv) {
             wheel_contact_ratio >= 0.99 &&
             other_contact_steps == 0;
         if (!standing) {
+            std::cerr << "balance enable: state=";
+            for (const float value : enable_state.value) {
+                std::cerr << ' ' << value;
+            }
+            std::cerr << ", leg length="
+                      << enable_leg[BC_L].length << '/'
+                      << enable_leg[BC_R].length
+                      << ", leg angle="
+                      << enable_leg[BC_L].angle_body << '/'
+                      << enable_leg[BC_R].angle_body
+                      << ", wheel contact="
+                      << enable_contact.wheel[BC_L] << '/'
+                      << enable_contact.wheel[BC_R]
+                      << ", other contact=" << enable_contact.other << '\n';
+            std::cerr << "final actuation: wheel="
+                      << runner.status().actuation.wheel_torque[BC_L] << '/'
+                      << runner.status().actuation.wheel_torque[BC_R]
+                      << ", joint="
+                      << runner.status().actuation.leg[BC_L]
+                             .joint_torque[BC_FRONT] << '/'
+                      << runner.status().actuation.leg[BC_L]
+                             .joint_torque[BC_REAR] << ' '
+                      << runner.status().actuation.leg[BC_R]
+                             .joint_torque[BC_FRONT] << '/'
+                      << runner.status().actuation.leg[BC_R]
+                             .joint_torque[BC_REAR] << '\n';
             std::cerr << "controller did not maintain static standing\n";
             return EXIT_FAILURE;
         }
 
         const auto forward = run_motion_phase(
-            scenario, runner, plant, base_qpos, ground, wheel,
+            runner, plant, base_qpos, ground, wheel,
             0.25F, 0.0F, 3.0);
         run_motion_phase(
-            scenario, runner, plant, base_qpos, ground, wheel,
+            runner, plant, base_qpos, ground, wheel,
             0.0F, 0.0F, 1.5);
         const auto reverse = run_motion_phase(
-            scenario, runner, plant, base_qpos, ground, wheel,
+            runner, plant, base_qpos, ground, wheel,
             -0.25F, 0.0F, 3.0);
         run_motion_phase(
-            scenario, runner, plant, base_qpos, ground, wheel,
+            runner, plant, base_qpos, ground, wheel,
             0.0F, 0.0F, 1.5);
         const auto yaw_left = run_motion_phase(
-            scenario, runner, plant, base_qpos, ground, wheel,
+            runner, plant, base_qpos, ground, wheel,
             0.0F, 1.57F, 3.0);
         run_motion_phase(
-            scenario, runner, plant, base_qpos, ground, wheel,
+            runner, plant, base_qpos, ground, wheel,
             0.0F, 0.0F, 1.5);
         const auto yaw_right = run_motion_phase(
-            scenario, runner, plant, base_qpos, ground, wheel,
+            runner, plant, base_qpos, ground, wheel,
             0.0F, -1.57F, 3.0);
 
         print_motion_metrics("forward", forward);
@@ -330,10 +392,11 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
-        scenario.reset();
-        if (!plant.data().eq_active[weld] ||
-            scenario.phase() != balance::sim::StaticStandPhase::Preparing) {
-            std::cerr << "scenario reset did not restore preparation\n";
+        runner.reset();
+        if (plant.data().eq_active[weld] ||
+            runner.status().system_state != BC_SYSTEM_OFF ||
+            runner.status().motion_state != BC_MOTION_IDLE) {
+            std::cerr << "reset did not restore disabled settling\n";
             return EXIT_FAILURE;
         }
     } catch (const std::exception &error) {

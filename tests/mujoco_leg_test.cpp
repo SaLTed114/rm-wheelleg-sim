@@ -8,11 +8,11 @@
 #include <stdexcept>
 #include <string>
 
+#include "balance/control_core.h"
 #include "balance/leg_kinematics.h"
 #include "balance/math_utils.h"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
-#include "simulation_runner.hpp"
 
 namespace {
 
@@ -106,6 +106,60 @@ void enable_base_support(balance::sim::MujocoPlant &plant) {
     plant.set_equality_active("base_support_weld", true);
 }
 
+class TestControlRunner {
+public:
+    TestControlRunner(
+        balance::sim::MujocoPlant &plant,
+        const balance::sim::MujocoAdapter &adapter
+    ) : plant_(plant), adapter_(adapter) {
+        bc_control_config_t config{};
+        bc_control_default_config(&config);
+        bc_control_core_init(&control_core_, &config);
+    }
+
+    void reset() {
+        plant_.reset();
+        bc_control_core_reset(&control_core_);
+        command_ = {};
+    }
+
+    void set_command(const bc_control_command_t &command) {
+        command_ = command;
+    }
+
+    void step() {
+        bc_sensor_feedback_t feedback{};
+        bc_actuation_t actuation{};
+
+        adapter_.read(plant_.data(), feedback);
+        bc_control_core_update(
+            &control_core_, &feedback,
+            static_cast<float>(plant_.timestep()));
+        bc_control_core_calculate(&control_core_, &command_);
+        bc_control_core_execute(&control_core_, 1U, &actuation);
+        adapter_.write(plant_.data(), actuation);
+        plant_.step();
+    }
+
+    void run_steps(const int steps) {
+        for (int step = 0; step < steps; ++step) this->step();
+    }
+
+    [[nodiscard]] const bc_state_vector_t &state() const noexcept {
+        return control_core_.observer.state;
+    }
+
+    [[nodiscard]] uint32_t tick_count() const noexcept {
+        return control_core_.tick_count;
+    }
+
+private:
+    balance::sim::MujocoPlant &plant_;
+    const balance::sim::MujocoAdapter &adapter_;
+    bc_control_core_t control_core_{};
+    bc_control_command_t command_{};
+};
+
 bool validate_kinematics(
     balance::sim::MujocoPlant &plant,
     const balance::sim::MujocoAdapter &adapter,
@@ -182,21 +236,20 @@ bool validate_leg_control(
     balance::sim::MujocoPlant &plant,
     const balance::sim::MujocoAdapter &adapter
 ) {
-    balance::sim::SimulationRunner runner(plant, adapter);
+    TestControlRunner runner(plant, adapter);
     runner.reset();
     enable_base_support(plant);
 
-    bc_operator_command_t command{};
-    command.enabled = 1U;
+    bc_control_command_t command{};
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        command.leg[side].length = 0.30F;
-        command.leg[side].angle_body = -0.5F * BC_PI_F;
+        command.leg[side].length_strategy = BC_LEG_LENGTH_POSITION;
+        command.leg[side].angle_strategy = BC_LEG_ANGLE_POSITION;
+        command.leg[side].target.length = 0.30F;
+        command.leg[side].target.angle_body = -0.5F * BC_PI_F;
     }
     runner.set_command(command);
-    const auto stats = runner.run_for(8.0);
-    if (stats.physics_steps != 8000 || stats.control_ticks != 8000) {
-        return false;
-    }
+    runner.run_steps(8000);
+    if (runner.tick_count() != 8000U) return false;
 
     bc_sensor_feedback_t feedback{};
     adapter.read(plant.data(), feedback);
@@ -233,15 +286,16 @@ bool validate_ground_contact(
     };
     std::array<bool, BC_SIDE_NUM> wheel_contact{};
 
-    balance::sim::SimulationRunner runner(plant, adapter);
+    TestControlRunner runner(plant, adapter);
     runner.reset();
     enable_base_support(plant);
 
-    bc_operator_command_t command{};
-    command.enabled = 1U;
+    bc_control_command_t command{};
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        command.leg[side].length = 0.34F;
-        command.leg[side].angle_body = -0.5F * BC_PI_F;
+        command.leg[side].length_strategy = BC_LEG_LENGTH_POSITION;
+        command.leg[side].angle_strategy = BC_LEG_ANGLE_POSITION;
+        command.leg[side].target.length = 0.34F;
+        command.leg[side].target.angle_body = -0.5F * BC_PI_F;
     }
     runner.set_command(command);
 
@@ -288,15 +342,16 @@ bool validate_forward_odometry(
     };
     std::array<int, BC_SIDE_NUM> contact_steps{};
 
-    balance::sim::SimulationRunner runner(plant, adapter);
+    TestControlRunner runner(plant, adapter);
     runner.reset();
     enable_base_support(plant);
 
-    bc_operator_command_t command{};
-    command.enabled = 1U;
+    bc_control_command_t command{};
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        command.leg[side].length = 0.34F;
-        command.leg[side].angle_body = -0.5F * BC_PI_F;
+        command.leg[side].length_strategy = BC_LEG_LENGTH_POSITION;
+        command.leg[side].angle_strategy = BC_LEG_ANGLE_POSITION;
+        command.leg[side].target.length = 0.34F;
+        command.leg[side].target.angle_body = -0.5F * BC_PI_F;
     }
     runner.set_command(command);
     for (int step = 0; step < kSettleSteps; ++step) runner.step();

@@ -41,7 +41,7 @@ void bc_control_core_init(
 
 void bc_control_core_reset(bc_control_core_t *core) {
     bc_observer_reset(&core->observer);
-    memset(&core->command, 0, sizeof(core->command));
+    memset(&core->actuation_request, 0, sizeof(core->actuation_request));
     core->tick_count = 0U;
 }
 
@@ -53,55 +53,63 @@ void bc_control_core_update(
     bc_observer_update(&core->observer, feedback, timestep_seconds);
 }
 
-void bc_control_core_set_command(
+void bc_control_core_calculate(
     bc_control_core_t *core,
-    const bc_operator_command_t *command
+    const bc_control_command_t *command
 ) {
-    core->command = *command;
-}
+    memset(&core->actuation_request, 0, sizeof(core->actuation_request));
+    core->tick_count += 1U;
 
-void bc_control_core_execute(
-    bc_control_core_t *core,
-    bc_actuation_t *actuation
-) {
-    memset(actuation, 0, sizeof(*actuation));
-
-    if (!core->command.enabled) {
-        core->tick_count += 1U;
-        return;
+    uint8_t lqr_required =
+        command->wheel_strategy == BC_WHEEL_LQR;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        lqr_required = lqr_required ||
+            command->leg[side].angle_strategy == BC_LEG_ANGLE_LQR;
     }
 
     bc_lqr_output_t lqr_output = {0};
-    if (core->command.balance_enabled) {
+    if (lqr_required) {
         const float average_length = 0.5F * (
             core->observer.leg[BC_L].length +
             core->observer.leg[BC_R].length);
         bc_lqr_calculate(
             average_length, &core->observer.state,
-            &core->command.state_reference, &lqr_output);
+            &command->state_reference, &lqr_output);
     }
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const bc_leg_kinematics_t *leg = &core->observer.leg[side];
-        const bc_leg_target_t *target  = &core->command.leg[side];
+        const bc_leg_control_command_t *leg_command =
+            &command->leg[side];
+        const bc_leg_target_t *target = &leg_command->target;
+        bc_leg_request_t *request = &core->actuation_request.leg[side];
 
-        float axial_force = bc_pd_calculate(
-            &core->config.length_controller,
-            target->length - leg->length, -leg->length_velocity);
-        float leg_torque;
-
-        if (core->command.balance_enabled) {
+        float axial_force = 0.0F;
+        if (leg_command->length_strategy == BC_LEG_LENGTH_POSITION ||
+            leg_command->length_strategy ==
+                BC_LEG_LENGTH_POSITION_SUPPORT) {
+            axial_force = bc_pd_calculate(
+                &core->config.length_controller,
+                target->length - leg->length, -leg->length_velocity);
+        }
+        if (leg_command->length_strategy ==
+            BC_LEG_LENGTH_POSITION_SUPPORT) {
             axial_force += core->config.support_force;
-            leg_torque = lqr_output.leg_torque[side];
-            actuation->wheel_torque[side] = bc_clampf(
-                lqr_output.wheel_torque[side],
-                -core->config.wheel_torque_limit,
-                +core->config.wheel_torque_limit);
-        } else {
+        }
+
+        float leg_torque = 0.0F;
+        if (leg_command->angle_strategy == BC_LEG_ANGLE_POSITION) {
             leg_torque = bc_pd_calculate(
                 &core->config.angle_controller,
                 bc_wrap_anglef(target->angle_body - leg->angle_body),
                 -leg->angular_velocity);
+        } else if (leg_command->angle_strategy == BC_LEG_ANGLE_LQR) {
+            leg_torque = lqr_output.leg_torque[side];
+        }
+
+        if (command->wheel_strategy == BC_WHEEL_LQR) {
+            core->actuation_request.wheel_torque[side] =
+                lqr_output.wheel_torque[side];
         }
 
         for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
@@ -109,12 +117,33 @@ void bc_control_core_execute(
                 axial_force * leg->jacobian[BC_LEG_LENGTH][joint] +
                 leg_torque  * leg->jacobian[BC_LEG_ANGLE ][joint];
 
+            request->joint_torque[joint] = joint_torque;
+        }
+    }
+}
+
+void bc_control_core_execute(
+    bc_control_core_t *core,
+    const uint8_t output_enabled,
+    bc_actuation_t *actuation
+) {
+    memset(actuation, 0, sizeof(*actuation));
+
+    if (!output_enabled) return;
+
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        const bc_leg_request_t *request =
+            &core->actuation_request.leg[side];
+        actuation->wheel_torque[side] = bc_clampf(
+            core->actuation_request.wheel_torque[side],
+            -core->config.wheel_torque_limit,
+            +core->config.wheel_torque_limit);
+
+        for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
             actuation->leg[side].joint_torque[joint] = bc_clampf(
-                joint_torque,
+                request->joint_torque[joint],
                 -core->config.joint_torque_limit,
                 +core->config.joint_torque_limit);
         }
     }
-
-    core->tick_count += 1U;
 }

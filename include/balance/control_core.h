@@ -21,7 +21,7 @@ typedef struct {
 typedef struct {
     bc_control_config_t config;
     bc_observer_t observer;
-    bc_operator_command_t command;
+    bc_actuation_t actuation_request;
     uint32_t tick_count;
 } bc_control_core_t;
 
@@ -35,11 +35,12 @@ void bc_control_core_update(
     bc_control_core_t *core,
     const bc_sensor_feedback_t *feedback,
     float timestep_seconds);
-void bc_control_core_set_command(
+void bc_control_core_calculate(
     bc_control_core_t *core,
-    const bc_operator_command_t *command);
+    const bc_control_command_t *command);
 void bc_control_core_execute(
     bc_control_core_t *core,
+    uint8_t output_enabled,
     bc_actuation_t *actuation);
 
 #ifdef __cplusplus

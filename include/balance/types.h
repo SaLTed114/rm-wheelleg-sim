@@ -75,12 +75,41 @@ typedef struct {
     float angle_body;
 } bc_leg_target_t;
 
+typedef enum {
+    BC_LEG_LENGTH_DISABLED,
+    BC_LEG_LENGTH_POSITION,
+    BC_LEG_LENGTH_POSITION_SUPPORT
+} bc_leg_length_strategy_t;
+
+typedef enum {
+    BC_LEG_ANGLE_DISABLED,
+    BC_LEG_ANGLE_POSITION,
+    BC_LEG_ANGLE_LQR
+} bc_leg_angle_strategy_t;
+
+typedef enum {
+    BC_WHEEL_DISABLED,
+    BC_WHEEL_LQR
+} bc_wheel_strategy_t;
+
 typedef struct {
-    uint8_t enabled;
-    uint8_t balance_enabled;
-    bc_leg_target_t leg[BC_SIDE_NUM];
-    bc_state_vector_t state_reference;
+    uint8_t system_enabled;
+    uint8_t balance_restart;
+    float forward_velocity;
+    float yaw_rate;
 } bc_operator_command_t;
+
+typedef struct {
+    bc_leg_length_strategy_t length_strategy;
+    bc_leg_angle_strategy_t angle_strategy;
+    bc_leg_target_t target;
+} bc_leg_control_command_t;
+
+typedef struct {
+    bc_leg_control_command_t leg[BC_SIDE_NUM];
+    bc_wheel_strategy_t wheel_strategy;
+    bc_state_vector_t state_reference;
+} bc_control_command_t;
 
 typedef struct {
     float joint_torque[BC_JOINT_NUM];

@@ -3,7 +3,7 @@
 
 #include <cstddef>
 
-#include "balance/control_core.h"
+#include "balance/controller.h"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 
@@ -20,26 +20,19 @@ public:
     SimulationRunner(MujocoPlant &plant, const MujocoAdapter &adapter);
 
     void reset();
-    void set_command(const bc_operator_command_t &command);
-    void step();
+    void step(const bc_operator_command_t &command);
     [[nodiscard]] SimulationStats run_for(double duration_seconds);
-    [[nodiscard]] const bc_state_vector_t &state() const noexcept {
-        return control_core_.observer.state;
-    }
-    [[nodiscard]] const bc_leg_kinematics_t &leg(
-        bc_side_t side
-    ) const noexcept {
-        return control_core_.observer.leg[side];
-    }
-    [[nodiscard]] const bc_actuation_t &actuation() const noexcept {
-        return actuation_;
+    [[nodiscard]] SimulationStats run_for(
+        double duration_seconds,
+        const bc_operator_command_t &command);
+    [[nodiscard]] const bc_controller_status_t &status() const noexcept {
+        return *bc_controller_get_status(&controller_);
     }
 
 private:
     MujocoPlant &plant_;
     const MujocoAdapter &adapter_;
-    bc_control_core_t control_core_{};
-    bc_actuation_t actuation_{};
+    bc_controller_t controller_{};
 };
 
 } // namespace balance::sim

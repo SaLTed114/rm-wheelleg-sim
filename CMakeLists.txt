@@ -51,10 +51,13 @@ endfunction()
 
 add_library(balance_control_core STATIC
   src/control/control_core.c
+  src/control/controller.c
   src/control/leg_kinematics.c
   src/control/lqr_controller.c
   src/control/observer.c
-  src/control/pd_controller.c)
+  src/control/pd_controller.c
+  src/control/state_machine/motion.c
+  src/control/state_machine/system.c)
 target_include_directories(balance_control_core
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tools/lqr/generated")
@@ -66,8 +69,7 @@ balance_enable_warnings(balance_control_core)
 add_library(balance_simulation STATIC
   src/sim/mujoco_adapter.cpp
   src/sim/mujoco_plant.cpp
-  src/sim/simulation_runner.cpp
-  src/sim/static_stand_scenario.cpp)
+  src/sim/simulation_runner.cpp)
 target_include_directories(balance_simulation
   PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -91,6 +93,16 @@ if(BUILD_TESTING)
   target_link_libraries(control_core_test PRIVATE balance_control_core)
   balance_enable_warnings(control_core_test)
   add_test(NAME control_core_zero_output COMMAND control_core_test)
+
+  add_executable(state_machine_test tests/state_machine_test.c)
+  target_link_libraries(state_machine_test PRIVATE balance_control_core)
+  balance_enable_warnings(state_machine_test)
+  add_test(NAME layered_state_machine COMMAND state_machine_test)
+
+  add_executable(controller_test tests/controller_test.c)
+  target_link_libraries(controller_test PRIVATE balance_control_core)
+  balance_enable_warnings(controller_test)
+  add_test(NAME controller_facade COMMAND controller_test)
 
   add_executable(pd_controller_test tests/pd_controller_test.c)
   target_link_libraries(pd_controller_test PRIVATE balance_control_core)

@@ -10,7 +10,6 @@
 #include "mujoco_plant.hpp"
 #include "mujoco_viewer.hpp"
 #include "simulation_runner.hpp"
-#include "static_stand_scenario.hpp"
 
 namespace {
 
@@ -21,16 +20,24 @@ struct MotionTarget {
 };
 
 MotionTarget make_motion_target(
-    const balance::sim::StaticStandScenario &scenario,
+    const bc_controller_status_t &status,
+    const double balance_start_time,
     const double simulation_time
 ) {
-    if (scenario.phase() != balance::sim::StaticStandPhase::Balancing) {
-        return {0.0F, 0.0F, scenario.phase_name()};
+    if (status.system_state == BC_SYSTEM_OFF) {
+        return {0.0F, 0.0F, bc_system_state_name(status.system_state)};
     }
+    if (status.motion_state != BC_MOTION_BALANCE_ENGAGING) {
+        return {
+            0.0F, 0.0F,
+            bc_motion_state_name(status.motion_state),
+        };
+    }
+    if (balance_start_time < 0.0) return {0.0F, 0.0F, "standing"};
 
     constexpr double kCycleDuration = 23.0;
     const double time = std::fmod(
-        simulation_time - scenario.release_time(), kCycleDuration);
+        simulation_time - balance_start_time, kCycleDuration);
     if (time < 3.0) return {0.0F, 0.0F, "standing"};
     if (time < 6.0) return {0.25F, 0.0F, "forward"};
     if (time < 8.0) return {0.0F, 0.0F, "stopping"};
@@ -68,15 +75,19 @@ int main(int argc, char **argv) {
             std::filesystem::path(argv[1]), kTimestepSeconds);
         balance::sim::MujocoAdapter adapter(plant.model());
         balance::sim::SimulationRunner runner(plant, adapter);
-        balance::sim::StaticStandScenario scenario(plant, runner);
         balance::sim::MujocoViewer viewer(plant.model());
-        scenario.reset();
+        runner.reset();
 
         using Clock = std::chrono::steady_clock;
         auto previous_time = Clock::now();
         double accumulated_time = 0.0;
         double next_state_print = 0.0;
-        MotionTarget motion{0.0F, 0.0F, scenario.phase_name()};
+        double balance_start_time = -1.0;
+        bc_motion_state_t previous_motion = BC_MOTION_IDLE;
+        MotionTarget motion{
+            0.0F, 0.0F,
+            bc_system_state_name(runner.status().system_state),
+        };
 
         while (!viewer.should_close()) {
             const auto current_time = Clock::now();
@@ -85,10 +96,15 @@ int main(int argc, char **argv) {
             previous_time = current_time;
 
             if (viewer.consume_reset_request()) {
-                scenario.reset();
-                motion = {0.0F, 0.0F, scenario.phase_name()};
+                runner.reset();
+                motion = {
+                    0.0F, 0.0F,
+                    bc_system_state_name(runner.status().system_state),
+                };
                 accumulated_time = 0.0;
                 next_state_print = 0.0;
+                balance_start_time = -1.0;
+                previous_motion = BC_MOTION_IDLE;
             }
 
             if (viewer.paused()) {
@@ -97,17 +113,29 @@ int main(int argc, char **argv) {
                 accumulated_time += std::clamp(
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant.timestep()) {
+                    const auto &status = runner.status();
+                    if (previous_motion != BC_MOTION_BALANCE_ENGAGING &&
+                        status.motion_state == BC_MOTION_BALANCE_ENGAGING) {
+                        balance_start_time = plant.data().time;
+                    }
+                    previous_motion = status.motion_state;
                     motion = make_motion_target(
-                        scenario, plant.data().time);
-                    scenario.set_motion_target(
-                        motion.forward_velocity, motion.yaw_rate);
-                    scenario.step();
+                        status, balance_start_time, plant.data().time);
+                    bc_operator_command_t command{};
+                    command.system_enabled = static_cast<uint8_t>(
+                        plant.data().time >= 2.0);
+                    command.balance_restart =
+                        command.system_enabled &&
+                        status.system_state == BC_SYSTEM_OFF;
+                    command.forward_velocity = motion.forward_velocity;
+                    command.yaw_rate = motion.yaw_rate;
+                    runner.step(command);
                     accumulated_time -= plant.timestep();
                 }
             }
 
             if (plant.data().time >= next_state_print) {
-                print_state(motion.phase, runner.state());
+                print_state(motion.phase, runner.status().state);
                 next_state_print += 0.5;
             }
 
