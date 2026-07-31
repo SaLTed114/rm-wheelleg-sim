@@ -77,7 +77,9 @@ typedef struct {
 
 typedef struct {
     uint8_t enabled;
+    uint8_t balance_enabled;
     bc_leg_target_t leg[BC_SIDE_NUM];
+    bc_state_vector_t state_reference;
 } bc_operator_command_t;
 
 typedef struct {

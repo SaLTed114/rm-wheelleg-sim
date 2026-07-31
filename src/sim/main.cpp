@@ -1,120 +1,50 @@
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iostream>
-#include <stdexcept>
-#include <string>
 
-#include "balance/math_utils.h"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "mujoco_viewer.hpp"
 #include "simulation_runner.hpp"
+#include "static_stand_scenario.hpp"
 
 namespace {
 
-constexpr double kPhaseDuration = 4.0;
-constexpr double kSettleDuration = 3.0;
-constexpr int kPhaseCount = 5;
-
-struct DemoTarget {
-    bc_operator_command_t command;
-    std::array<double, 3> support_position;
-    std::array<double, 4> support_quaternion;
+struct MotionTarget {
+    float forward_velocity;
+    float yaw_rate;
     const char *phase;
 };
 
-DemoTarget make_demo_target(double simulation_time) {
-    constexpr float kLengthCenter = 0.34F;
-    constexpr float kAngleCenter = -0.5F * BC_PI_F;
-    constexpr float kAngleAmplitude = 15.0F * BC_PI_F / 180.0F;
-    constexpr double kTravelAmplitude = 0.08;
-    constexpr double kPitchAmplitude = 10.0 * BC_PI / 180.0;
-    constexpr double kYawAmplitude = 15.0 * BC_PI / 180.0;
-
-    const double cycle_time = std::fmod(
-        simulation_time,
-        kSettleDuration + kPhaseCount * kPhaseDuration);
-    const bool settling = cycle_time < kSettleDuration;
-    const double excitation_time = settling
-        ? 0.0 : cycle_time - kSettleDuration;
-    const int phase = static_cast<int>(
-        excitation_time / kPhaseDuration);
-    const double phase_time = excitation_time - phase * kPhaseDuration;
-    const double wave = std::sin(
-        2.0 * BC_PI * phase_time / kPhaseDuration);
-
-    DemoTarget target{};
-    target.command.enabled = 1U;
-    target.support_quaternion = {1.0, 0.0, 0.0, 0.0};
-    for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        target.command.leg[side].length = kLengthCenter;
-        target.command.leg[side].angle_body = kAngleCenter;
-    }
-
-    if (settling) {
-        target.phase = "settling on ground";
-        return target;
-    }
-
-    const double pitch_axis[] = {0.0, 1.0, 0.0};
-    const double yaw_axis[] = {0.0, 0.0, 1.0};
-    switch (phase) {
-    case 0:
-        target.phase = "forward odometry";
-        target.support_position[0] = kTravelAmplitude * wave;
-        break;
-    case 1:
-        target.phase = "positive pitch";
-        mju_axisAngle2Quat(
-            target.support_quaternion.data(), pitch_axis,
-            kPitchAmplitude * wave);
-        break;
-    case 2:
-        target.phase = "positive yaw";
-        mju_axisAngle2Quat(
-            target.support_quaternion.data(), yaw_axis,
-            kYawAmplitude * wave);
-        break;
-    case 3:
-        target.phase = "physical left leg";
-        target.command.leg[BC_L].angle_body +=
-            kAngleAmplitude * static_cast<float>(wave);
-        break;
-    default:
-        target.phase = "physical right leg";
-        target.command.leg[BC_R].angle_body +=
-            kAngleAmplitude * static_cast<float>(wave);
-        break;
-    }
-    return target;
-}
-
-int require_mocap_id(const mjModel &model, const char *body_name) {
-    const int body = mj_name2id(&model, mjOBJ_BODY, body_name);
-    if (body < 0 || model.body_mocapid[body] < 0) {
-        throw std::runtime_error(
-            "missing mocap support body '" + std::string(body_name) + "'");
-    }
-    return model.body_mocapid[body];
-}
-
-void apply_demo_target(
-    mjData &data, const int mocap, const DemoTarget &target
+MotionTarget make_motion_target(
+    const balance::sim::StaticStandScenario &scenario,
+    const double simulation_time
 ) {
-    std::copy(
-        target.support_position.begin(), target.support_position.end(),
-        data.mocap_pos + 3 * mocap);
-    std::copy(
-        target.support_quaternion.begin(), target.support_quaternion.end(),
-        data.mocap_quat + 4 * mocap);
+    if (scenario.phase() != balance::sim::StaticStandPhase::Balancing) {
+        return {0.0F, 0.0F, scenario.phase_name()};
+    }
+
+    constexpr double kCycleDuration = 23.0;
+    const double time = std::fmod(
+        simulation_time - scenario.release_time(), kCycleDuration);
+    if (time < 3.0) return {0.0F, 0.0F, "standing"};
+    if (time < 6.0) return {0.25F, 0.0F, "forward"};
+    if (time < 8.0) return {0.0F, 0.0F, "stopping"};
+    if (time < 11.0) return {-0.25F, 0.0F, "reverse"};
+    if (time < 13.0) return {0.0F, 0.0F, "stopping"};
+    if (time < 16.0) return {0.0F, 1.57F, "yaw left"};
+    if (time < 18.0) return {0.0F, 0.0F, "stopping"};
+    if (time < 21.0) return {0.0F, -1.57F, "yaw right"};
+    return {0.0F, 0.0F, "stopping"};
 }
 
-void print_state(const char *phase, const bc_state_vector_t &state) {
+void print_state(
+    const char *phase, const bc_state_vector_t &state
+) {
     std::cout << phase << ':';
     for (int index = 0; index < BC_STATE_NUM; ++index) {
         std::cout << ' ' << state.value[index];
@@ -138,18 +68,15 @@ int main(int argc, char **argv) {
             std::filesystem::path(argv[1]), kTimestepSeconds);
         balance::sim::MujocoAdapter adapter(plant.model());
         balance::sim::SimulationRunner runner(plant, adapter);
+        balance::sim::StaticStandScenario scenario(plant, runner);
         balance::sim::MujocoViewer viewer(plant.model());
-        const int support_mocap = require_mocap_id(
-            plant.model(), "base_support");
-        runner.reset();
-        auto target = make_demo_target(plant.data().time);
-        apply_demo_target(plant.data(), support_mocap, target);
-        runner.set_command(target.command);
+        scenario.reset();
 
         using Clock = std::chrono::steady_clock;
         auto previous_time = Clock::now();
         double accumulated_time = 0.0;
         double next_state_print = 0.0;
+        MotionTarget motion{0.0F, 0.0F, scenario.phase_name()};
 
         while (!viewer.should_close()) {
             const auto current_time = Clock::now();
@@ -158,10 +85,8 @@ int main(int argc, char **argv) {
             previous_time = current_time;
 
             if (viewer.consume_reset_request()) {
-                runner.reset();
-                target = make_demo_target(plant.data().time);
-                apply_demo_target(plant.data(), support_mocap, target);
-                runner.set_command(target.command);
+                scenario.reset();
+                motion = {0.0F, 0.0F, scenario.phase_name()};
                 accumulated_time = 0.0;
                 next_state_print = 0.0;
             }
@@ -172,16 +97,17 @@ int main(int argc, char **argv) {
                 accumulated_time += std::clamp(
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant.timestep()) {
-                    target = make_demo_target(plant.data().time);
-                    apply_demo_target(plant.data(), support_mocap, target);
-                    runner.set_command(target.command);
-                    runner.step();
+                    motion = make_motion_target(
+                        scenario, plant.data().time);
+                    scenario.set_motion_target(
+                        motion.forward_velocity, motion.yaw_rate);
+                    scenario.step();
                     accumulated_time -= plant.timestep();
                 }
             }
 
             if (plant.data().time >= next_state_print) {
-                print_state(target.phase, runner.state());
+                print_state(motion.phase, runner.state());
                 next_state_print += 0.5;
             }
 

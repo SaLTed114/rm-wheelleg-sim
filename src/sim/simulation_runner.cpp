@@ -18,6 +18,7 @@ SimulationRunner::SimulationRunner(
 void SimulationRunner::reset() {
     plant_.reset();
     bc_control_core_reset(&control_core_);
+    actuation_ = {};
 }
 
 void SimulationRunner::set_command(
@@ -28,14 +29,13 @@ void SimulationRunner::set_command(
 
 void SimulationRunner::step() {
     bc_sensor_feedback_t feedback{};
-    bc_actuation_t actuation{};
 
     adapter_.read(plant_.data(), feedback);
     bc_control_core_update(
         &control_core_, &feedback,
         static_cast<float>(plant_.timestep()));
-    bc_control_core_execute(&control_core_, &actuation);
-    adapter_.write(plant_.data(), actuation);
+    bc_control_core_execute(&control_core_, &actuation_);
+    adapter_.write(plant_.data(), actuation_);
     plant_.step();
 }
 

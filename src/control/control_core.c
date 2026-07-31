@@ -1,4 +1,5 @@
 #include "balance/control_core.h"
+#include "balance/lqr_controller.h"
 #include "balance/math_utils.h"
 #include "balance/observer.h"
 
@@ -23,6 +24,8 @@ void bc_control_default_config(bc_control_config_t *config) {
             .kd           = 6.0F,
             .output_limit = 30.0F,
         },
+        .support_force      = 54.0F,
+        .wheel_torque_limit = 6.32F,
         .joint_torque_limit = 40.0F,
     };
 }
@@ -63,19 +66,43 @@ void bc_control_core_execute(
 ) {
     memset(actuation, 0, sizeof(*actuation));
 
-    for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        if (!core->command.enabled) continue;
+    if (!core->command.enabled) {
+        core->tick_count += 1U;
+        return;
+    }
 
+    bc_lqr_output_t lqr_output = {0};
+    if (core->command.balance_enabled) {
+        const float average_length = 0.5F * (
+            core->observer.leg[BC_L].length +
+            core->observer.leg[BC_R].length);
+        bc_lqr_calculate(
+            average_length, &core->observer.state,
+            &core->command.state_reference, &lqr_output);
+    }
+
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const bc_leg_kinematics_t *leg = &core->observer.leg[side];
         const bc_leg_target_t *target  = &core->command.leg[side];
 
-        const float axial_force = bc_pd_calculate(
+        float axial_force = bc_pd_calculate(
             &core->config.length_controller,
             target->length - leg->length, -leg->length_velocity);
-        const float leg_torque = bc_pd_calculate(
-            &core->config.angle_controller,
-            bc_wrap_anglef(target->angle_body - leg->angle_body),
-            -leg->angular_velocity);
+        float leg_torque;
+
+        if (core->command.balance_enabled) {
+            axial_force += core->config.support_force;
+            leg_torque = lqr_output.leg_torque[side];
+            actuation->wheel_torque[side] = bc_clampf(
+                lqr_output.wheel_torque[side],
+                -core->config.wheel_torque_limit,
+                +core->config.wheel_torque_limit);
+        } else {
+            leg_torque = bc_pd_calculate(
+                &core->config.angle_controller,
+                bc_wrap_anglef(target->angle_body - leg->angle_body),
+                -leg->angular_velocity);
+        }
 
         for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
             const float joint_torque =

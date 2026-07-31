@@ -1,6 +1,7 @@
 #include "balance/control_core.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdio.h>
 
 int main() {
@@ -68,6 +69,59 @@ int main() {
             if (torque <= 0.0F || torque >= 2.0F) {
                 fprintf(
                     stderr, "leg %d joint %d did not use wrapped angle error\n",
+                    side, joint);
+                return 1;
+            }
+        }
+    }
+
+    bc_control_config_t supported_config = config;
+    bc_control_config_t unsupported_config = config;
+    supported_config.joint_torque_limit = 1000.0F;
+    supported_config.wheel_torque_limit = 0.5F;
+    unsupported_config.joint_torque_limit = 1000.0F;
+    unsupported_config.wheel_torque_limit = 0.5F;
+    unsupported_config.support_force = 0.0F;
+
+    bc_control_core_t supported_core;
+    bc_control_core_t unsupported_core;
+    bc_control_core_init(&supported_core, &supported_config);
+    bc_control_core_init(&unsupported_core, &unsupported_config);
+    bc_control_core_update(&supported_core, &feedback, 0.001F);
+    bc_control_core_update(&unsupported_core, &feedback, 0.001F);
+
+    command = (bc_operator_command_t){
+        .enabled = 1U,
+        .balance_enabled = 1U,
+        .state_reference = supported_core.observer.state,
+    };
+    command.state_reference.value[BC_STATE_S] += 100.0F;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        command.leg[side].length = supported_core.observer.leg[side].length;
+    }
+    bc_control_core_set_command(&supported_core, &command);
+    bc_control_core_set_command(&unsupported_core, &command);
+
+    bc_actuation_t supported_actuation;
+    bc_actuation_t unsupported_actuation;
+    bc_control_core_execute(&supported_core, &supported_actuation);
+    bc_control_core_execute(&unsupported_core, &unsupported_actuation);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        if (fabsf(supported_actuation.wheel_torque[side]) != 0.5F) {
+            fprintf(stderr, "wheel %d did not use the torque limit\n", side);
+            return 1;
+        }
+        for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+            const float expected_difference = config.support_force *
+                supported_core.observer.leg[side]
+                    .jacobian[BC_LEG_LENGTH][joint];
+            const float actual_difference =
+                supported_actuation.leg[side].joint_torque[joint] -
+                unsupported_actuation.leg[side].joint_torque[joint];
+            if (fabsf(actual_difference - expected_difference) > 1.0e-4F) {
+                fprintf(
+                    stderr,
+                    "leg %d joint %d did not add support feedforward\n",
                     side, joint);
                 return 1;
             }

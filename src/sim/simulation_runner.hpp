@@ -26,11 +26,20 @@ public:
     [[nodiscard]] const bc_state_vector_t &state() const noexcept {
         return control_core_.observer.state;
     }
+    [[nodiscard]] const bc_leg_kinematics_t &leg(
+        bc_side_t side
+    ) const noexcept {
+        return control_core_.observer.leg[side];
+    }
+    [[nodiscard]] const bc_actuation_t &actuation() const noexcept {
+        return actuation_;
+    }
 
 private:
     MujocoPlant &plant_;
     const MujocoAdapter &adapter_;
     bc_control_core_t control_core_{};
+    bc_actuation_t actuation_{};
 };
 
 } // namespace balance::sim

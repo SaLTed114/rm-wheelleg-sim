@@ -1,15 +1,16 @@
 <?xml version='1.0' encoding='utf-8'?>
 <mujoco model="COD-2026-Balance-2.0">
   <default>
-    <geom contype="0" conaffinity="0"/>
+    <geom contype="0" conaffinity="1"/>
   </default>
   <compiler angle="radian" />
   <visual>
     <headlight ambient="0.35 0.35 0.35" diffuse="0.75 0.75 0.75" specular="0.2 0.2 0.2"/>
   </visual>
   <asset>
-    <texture name="ground_checker" type="2d" builtin="checker" rgb1="0.22 0.24 0.22" rgb2="0.72 0.70 0.62" width="512" height="512"/>
-    <material name="ground_material" texture="ground_checker" texrepeat="8 8" texuniform="true" reflectance="0.1"/>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.12 0.25 0.42" rgb2="0.55 0.70 0.82" width="512" height="3072"/>
+    <texture name="ground_checker" type="2d" builtin="checker" rgb1="0.18 0.20 0.18" rgb2="0.45 0.44 0.39" width="512" height="512"/>
+    <material name="ground_material" texture="ground_checker" texrepeat="0.5 0.5" texuniform="true" reflectance="0.05"/>
     <mesh name="base_link" content_type="model/stl" file="base_link.STL" />
     <mesh name="Left_front_link" content_type="model/stl" file="Left_front_link.STL" />
     <mesh name="Left_front_child1_link" content_type="model/stl" file="Left_front_child1_link.STL" />
@@ -29,7 +30,7 @@
   <worldbody>
     <light name="key_light" directional="true" pos="-1 -1 2" dir="0.4 0.3 -1" diffuse="0.8 0.8 0.75" specular="0.2 0.2 0.2"/>
     <light name="fill_light" directional="true" pos="1 1 1" dir="-0.3 -0.2 -1" diffuse="0.35 0.38 0.42" specular="0.05 0.05 0.05"/>
-    <geom name="ground" type="plane" pos="0 0 -0.43" size="2 2 0.05" material="ground_material" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    <geom name="ground" type="plane" pos="0 0 -0.43" size="20 20 0.05" material="ground_material" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
 
     <body name="base_support" mocap="true"/>
     <body name="base_link">
@@ -143,7 +144,7 @@
   </worldbody>
   
   <equality>
-      <weld name="base_support_weld" body1="base_link" body2="base_support" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
+      <weld name="base_support_weld" body1="base_link" body2="base_support" active="false" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
       <connect name="Left_loop1" site1="Left_front_site1" site2="Left_rear_site1" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
       <connect name="Left_loop2" site1="Left_front_site2" site2="Left_rear_site2" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>
       <connect name="Right_loop1" site1="Right_front_site1" site2="Right_rear_site1" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>

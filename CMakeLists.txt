@@ -52,10 +52,12 @@ endfunction()
 add_library(balance_control_core STATIC
   src/control/control_core.c
   src/control/leg_kinematics.c
+  src/control/lqr_controller.c
   src/control/observer.c
   src/control/pd_controller.c)
 target_include_directories(balance_control_core
-  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tools/lqr/generated")
 if(NOT MSVC)
   target_link_libraries(balance_control_core PUBLIC m)
 endif()
@@ -64,7 +66,8 @@ balance_enable_warnings(balance_control_core)
 add_library(balance_simulation STATIC
   src/sim/mujoco_adapter.cpp
   src/sim/mujoco_plant.cpp
-  src/sim/simulation_runner.cpp)
+  src/sim/simulation_runner.cpp
+  src/sim/static_stand_scenario.cpp)
 target_include_directories(balance_simulation
   PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -94,6 +97,11 @@ if(BUILD_TESTING)
   balance_enable_warnings(pd_controller_test)
   add_test(NAME pd_controller COMMAND pd_controller_test)
 
+  add_executable(lqr_controller_test tests/lqr_controller_test.c)
+  target_link_libraries(lqr_controller_test PRIVATE balance_control_core)
+  balance_enable_warnings(lqr_controller_test)
+  add_test(NAME lqr_controller COMMAND lqr_controller_test)
+
   add_executable(leg_kinematics_test tests/leg_kinematics_test.c)
   target_link_libraries(leg_kinematics_test PRIVATE balance_control_core)
   balance_enable_warnings(leg_kinematics_test)
@@ -118,5 +126,14 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_leg_test)
   add_test(NAME mujoco_leg_kinematics_and_control
     COMMAND mujoco_leg_test
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
+
+  add_executable(mujoco_static_stand_test
+    tests/mujoco_static_stand_test.cpp)
+  target_link_libraries(mujoco_static_stand_test PRIVATE balance_simulation)
+  balance_enable_warnings(mujoco_static_stand_test)
+  balance_configure_mujoco_runtime(mujoco_static_stand_test)
+  add_test(NAME mujoco_static_stand
+    COMMAND mujoco_static_stand_test
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
 endif()

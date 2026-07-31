@@ -31,6 +31,50 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
+        const int base_body = mj_name2id(
+            &plant.model(), mjOBJ_BODY, "base_link");
+        const int support_weld = mj_name2id(
+            &plant.model(), mjOBJ_EQUALITY, "base_support_weld");
+        const double expected_base_com[] = {
+            -0.019917, -0.00040396, 0.021412,
+        };
+        const double expected_base_inertia[] = {
+            2.8640678, 2.8736324, 3.0472,
+        };
+        bool invalid_base_properties =
+            std::abs(plant.model().body_mass[base_body] - 11.0) > 1.0e-9 ||
+            plant.model().eq_active0[support_weld] != 0;
+        for (int axis = 0; axis < 3; ++axis) {
+            invalid_base_properties = invalid_base_properties ||
+                std::abs(
+                    plant.model().body_ipos[3 * base_body + axis] -
+                    expected_base_com[axis]) > 1.0e-9 ||
+                std::abs(
+                    plant.model().body_inertia[3 * base_body + axis] -
+                    expected_base_inertia[axis]) > 1.0e-7;
+        }
+        if (invalid_base_properties) {
+            std::cerr << "base physical properties or support state are incorrect\n";
+            return EXIT_FAILURE;
+        }
+
+        const int ground = mj_name2id(
+            &plant.model(), mjOBJ_GEOM, "ground");
+        for (int geom = 0; geom < plant.model().ngeom; ++geom) {
+            if (geom == ground) continue;
+
+            const bool collides_with_ground =
+                plant.model().geom_conaffinity[geom] &
+                plant.model().geom_contype[ground];
+            const bool has_robot_collision_type =
+                plant.model().geom_contype[geom] != 0;
+            if (!collides_with_ground || has_robot_collision_type) {
+                std::cerr << "incorrect ground collision filter at geom "
+                          << geom << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
         balance::sim::MujocoAdapter adapter(plant.model());
         bc_sensor_feedback_t feedback{};
         adapter.read(plant.data(), feedback);
@@ -169,6 +213,10 @@ int main(int argc, char **argv) {
         }
         if (std::abs(stats.final_time - kDurationSeconds) > 1.0e-12) {
             std::cerr << "unexpected final time: " << stats.final_time << '\n';
+            return EXIT_FAILURE;
+        }
+        if (plant.data().qvel[base_dof + 2] >= -0.05) {
+            std::cerr << "free chassis did not accelerate under gravity\n";
             return EXIT_FAILURE;
         }
         for (int actuator = 0; actuator < plant.model().nu; ++actuator) {

@@ -13,6 +13,8 @@ typedef struct {
     bc_observer_config_t observer;
     bc_pd_controller_t length_controller;
     bc_pd_controller_t angle_controller;
+    float support_force;
+    float wheel_torque_limit;
     float joint_torque_limit;
 } bc_control_config_t;
 

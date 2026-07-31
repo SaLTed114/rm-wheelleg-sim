@@ -2,8 +2,9 @@
 
 Minimal MuJoCo host for the wheel-legged balance robot. The runtime is split into
 a C11 control core and a C++17 simulation layer. The current controller uses
-virtual-leg kinematics and a Jacobian-transpose PD controller. A mocap support
-holds and excites the otherwise free chassis while the observer is validated.
+virtual-leg kinematics, Jacobian-transpose actuation, and a gain-scheduled LQR.
+A mocap support prepares the low-leg posture before releasing the chassis for
+static standing.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See
@@ -36,14 +37,14 @@ The simulation runs in real time until the window is closed. Use the left mouse
 button to rotate, right mouse button to pan, middle button or wheel to zoom,
 Space to pause, and Backspace or `R` to reset.
 
-The observer demo first holds a 0.34 m leg target for three seconds so both
-wheels settle onto the ground. It then repeats five four-second sine phases:
-forward mocap motion, positive chassis pitch, positive chassis yaw,
-physical-left leg angle, and physical-right leg angle. It prints the current
-phase and the ten-element state vector every 0.5 s. The state uses
-forward-left-up coordinates; positive pitch lowers the nose, positive yaw turns
-left, and wheel odometry is positive when the chassis rolls forward. Only the
-two wheel meshes collide with the ground.
+The interactive simulator first holds the chassis while both virtual legs settle
+at `0.20 m / -pi/2`. It then places both wheels at ground height, enables the
+current-model LQR and `54 N` axial support per leg, and releases the support. It
+then repeats standing, `+/-0.25 m/s` travel, and `+/-1.57 rad/s` yaw phases. It
+prints the current phase and ten-element state vector every 0.5 s. The chassis,
+leg links, and wheels collide with the infinite ground plane, while
+self-collision remains disabled. A 40 by 40 m checkerboard and gradient skybox
+provide the visible environment.
 
 ## Windows build with Visual Studio
 

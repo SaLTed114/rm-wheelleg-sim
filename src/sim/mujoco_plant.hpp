@@ -18,6 +18,7 @@ public:
 
     void reset();
     void step();
+    void set_equality_active(const char *name, bool active);
 
     [[nodiscard]] const mjModel &model() const noexcept { return *model_; }
     [[nodiscard]] mjData &data() noexcept { return *data_; }

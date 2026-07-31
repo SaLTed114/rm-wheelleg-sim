@@ -102,6 +102,10 @@ double angle_error(const double left, const double right) {
     return std::abs(bc_wrap_angle(left - right));
 }
 
+void enable_base_support(balance::sim::MujocoPlant &plant) {
+    plant.set_equality_active("base_support_weld", true);
+}
+
 bool validate_kinematics(
     balance::sim::MujocoPlant &plant,
     const balance::sim::MujocoAdapter &adapter,
@@ -121,6 +125,7 @@ bool validate_kinematics(
 
     for (const auto &target : kTargets) {
         plant.reset();
+        enable_base_support(plant);
         for (int step = 0; step < 4000; ++step) {
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
                 const double mirror = side == BC_L ? -1.0 : 1.0;
@@ -179,6 +184,7 @@ bool validate_leg_control(
 ) {
     balance::sim::SimulationRunner runner(plant, adapter);
     runner.reset();
+    enable_base_support(plant);
 
     bc_operator_command_t command{};
     command.enabled = 1U;
@@ -229,6 +235,7 @@ bool validate_ground_contact(
 
     balance::sim::SimulationRunner runner(plant, adapter);
     runner.reset();
+    enable_base_support(plant);
 
     bc_operator_command_t command{};
     command.enabled = 1U;
@@ -243,7 +250,10 @@ bool validate_ground_contact(
 
         for (int index = 0; index < plant.data().ncon; ++index) {
             const mjContact &contact = plant.data().contact[index];
-            bool valid_pair = false;
+            const bool ground_contact =
+                contact.geom[0] == ground || contact.geom[1] == ground;
+            if (!ground_contact) return false;
+
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
                 const bool ground_first = contact.geom[0] == ground &&
                     contact.geom[1] == wheels[side];
@@ -252,10 +262,8 @@ bool validate_ground_contact(
                 const bool ground_and_wheel = ground_first || ground_second;
                 if (ground_and_wheel) {
                     wheel_contact[side] = true;
-                    valid_pair = true;
                 }
             }
-            if (!valid_pair) return false;
         }
     }
 
@@ -282,6 +290,7 @@ bool validate_forward_odometry(
 
     balance::sim::SimulationRunner runner(plant, adapter);
     runner.reset();
+    enable_base_support(plant);
 
     bc_operator_command_t command{};
     command.enabled = 1U;

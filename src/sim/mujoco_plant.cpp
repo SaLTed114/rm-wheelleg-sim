@@ -49,4 +49,16 @@ void MujocoPlant::step() {
     mj_step(model_.get(), data_.get());
 }
 
+void MujocoPlant::set_equality_active(
+    const char *name, const bool active
+) {
+    const int equality = mj_name2id(model_.get(), mjOBJ_EQUALITY, name);
+    if (equality < 0) {
+        throw std::runtime_error(
+            "MuJoCo model is missing equality '" +
+            std::string(name) + "'");
+    }
+    data_->eq_active[equality] = active ? 1 : 0;
+}
+
 } // namespace balance::sim
