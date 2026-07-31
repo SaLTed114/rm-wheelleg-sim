@@ -1,15 +1,23 @@
 # rm-balance-sim 项目上下文
 
 > 本文是给后续 Codex/开发会话快速恢复上下文用的工作笔记，不是对外设计文档。
-> 最近更新：2026-07-30。
+> 最近更新：2026-07-31。
 
 ## 首要约束
 
-- `references/matlab_scripts/lqr.m` 和 `leg_fit.m` 中的质量、几何、质心、惯量及 LQR 权重是旧控制器/参考脚本参数，不是当前 `models` 仿真机器人的实际参数。
+- `references/matlab_scripts/lqr.m` 是用户生成实车 LQR 参数的正式脚本；其中与 `leg_fit.m` 相关的质量、几何、质心、惯量及 LQR 权重仍是旧机器人参数，不是当前 `models` 仿真机器人的实际参数。
 - 不得把这些数值直接移植到仿真模型或新控制器；需要依据当前机器人模型重新确认参数、重新线性化并重新生成控制器。
 - `/home/l/SaLT/wheelleg` 是已经放弃继续修补的历史仿真项目，只用于提取经验和测试方法。不要把它的旧 MJCF、模型参数、关节标定、LQR 表或仿真补偿直接搬进本项目。
 - 运动学等效不等于动力学等效。控制层可以使用虚拟腿坐标，但 plant 必须保留实际闭链连杆的偏置质心和惯量。
 - 用户当前希望先建立架构和构型认知。除非明确要求，不要主动转入“为什么实车没调好”的代码审查或调参诊断。
+
+## 已验证：LQR 偏航惯量与生成链
+
+- Python 生成器以旧参数复现当前实车 `bc_lqr_schedule.c`，最大系数误差为 `4.974874e-10`，确认该固件表就是 `lqr.m` 当前参数的生成结果。
+- `equ5` 中全部 `I_z/(2*R_l)` 项结合 `equ7` 后严格化简为 `-I_z*D2psi`；参考 PDF 的原始方程也把 `I` 定义为机体绕竖直轴的完整惯量。式中不存在尚未处理的 `1/2`。
+- 当前模型正式采用 `I_z_model_scale=1`，即 `I_z_model=I_z_body_actual=3.047199970 kg*m^2`。两倍值 `6.094399941 kg*m^2` 只作为敏感性对照，不能在其他位置再次乘二。
+- 当前模型两种惯量生成的原始增益最大差为 `1.178199615`。完整参数、误差、物理依据及 1 ms 调度验证见 `docs/notes/lqr-validation.md`。
+- 工具仍须显式区分 `body_yaw_inertia_actual`、`body_yaw_inertia_scale` 和 `body_yaw_inertia_model`，避免以后重新引入歧义。
 
 ## 项目目标
 
@@ -44,7 +52,7 @@ MuJoCo/Isaac Sim 实际闭链 plant
 ### 控制代码与参考材料
 
 - `references/rm2026cb-balance-chassis/`：用户自己的实车控制工程，是控制软件架构的主要参考。
-- `references/matlab_scripts/`：旧运动学、惯量拟合和 LQR 生成脚本；只参考方法，参数需要重建。
+- `references/matlab_scripts/`：实车使用过的运动学、惯量拟合和 LQR 生成脚本；生成流程可作为正式迁移基线，但物理参数需要重建。
 - `references/中石油北京轮腿电控代码/`：其他学校参考工程。
 - `references/南航金城轮腿电控代码/`：其他学校参考工程。
 - `references/平衡步兵..pdf`：轮腿平衡资料。
@@ -272,7 +280,7 @@ u = [T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]
 - 起身、收腿、越障使用行为层切换后的腿长/腿角控制；
 - 虚拟腿 `F/Tp` 最后通过 `J^T` 映射为四个真实髋关节力矩。
 
-### 旧 LQR 生成方法（方法可参考，参数不可复用）
+### 实车 LQR 生成方法（结构沿用，参数不可复用）
 
 `references/matlab_scripts/lqr.m` 的方法：
 
@@ -285,6 +293,8 @@ u = [T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]
 7. 嵌入式端用平均腿长和 Horner 法在线计算增益。
 
 注意：脚本中的 `Lmin/Lmax`、质量、质心比例、惯量范围、`Q/R`、采样周期等都只是旧版本参考值。新模型必须重新确定。
+
+当前实车工程的 `bc_lqr_schedule.c` 已由 golden test 确认为该脚本的直接生成结果。无 MATLAB 的迁移位于 `tools/lqr/`：SymPy 建立符号方程和 Jacobian、SciPy 完成 ZOH 与离散 Riccati 求解、NumPy 完成多项式拟合，并强制先通过固件系数 golden test，再换入新模型参数。
 
 ## 其他两套参考代码的主循环
 
