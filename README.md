@@ -3,8 +3,12 @@
 Minimal MuJoCo host for the wheel-legged balance robot. The runtime is split into
 a C11 control core and a C++17 simulation layer. The current controller uses
 virtual-leg kinematics, Jacobian-transpose actuation, and a gain-scheduled LQR.
-A mocap support prepares the low-leg posture before releasing the chassis for
-static standing.
+The demo keeps the system off while the robot settles, then enables it and
+sends a simulated balance-restart pulse so the controller can position the
+legs and enter balance control.
+The simulation talks to the C controller through one operator-command input and
+one read-only status snapshot; the state machine and low-level control remain
+internal.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See
@@ -37,14 +41,16 @@ The simulation runs in real time until the window is closed. Use the left mouse
 button to rotate, right mouse button to pan, middle button or wheel to zoom,
 Space to pause, and Backspace or `R` to reset.
 
-The interactive simulator first holds the chassis while both virtual legs settle
-at `0.20 m / -pi/2`. It then places both wheels at ground height, enables the
-current-model LQR and `54 N` axial support per leg, and releases the support. It
-then repeats standing, `+/-0.25 m/s` travel, and `+/-1.57 rad/s` yaw phases. It
-prints the current phase and ten-element state vector every 0.5 s. The chassis,
-leg links, and wheels collide with the infinite ground plane, while
-self-collision remains disabled. A 40 by 40 m checkerboard and gradient skybox
-provide the visible environment.
+The interactive simulator first keeps `SYSTEM_OFF` for two seconds while the
+robot falls and settles. It then enables the system and emits one simulated
+balance-restart event. `LEG_POSITIONING` moves both virtual legs toward
+`0.16 m / -pi/2`; once stable, `ENGAGING` enables the current-model LQR and
+`54 N` axial support per leg. No mocap support or pose teleport is used. The
+simulator then repeats standing, `+/-0.25 m/s` travel, and `+/-1.57 rad/s` yaw
+phases. It prints the current phase and ten-element state vector every 0.5 s.
+The chassis, leg links, and wheels collide with the infinite ground plane,
+while self-collision remains disabled. A 40 by 40 m checkerboard and gradient
+skybox provide the visible environment.
 
 ## Windows build with Visual Studio
 

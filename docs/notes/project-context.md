@@ -322,7 +322,7 @@ u = [T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]
 
 也是约 1 ms 的独立底盘线程，流水线清楚，但具体业务步骤直接平铺在顶层。
 
-用户自己的 `update -> set_command -> execute` 抽象层级更高，适合作为仿真控制器接口。
+用户自己的 `update -> set_command -> calculate -> execute` 抽象层级更高，适合作为仿真控制器接口。
 
 ## 当前最小运行骨架
 
@@ -331,24 +331,37 @@ u = [T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]
 ```text
 MuJoCo plant
     -> C++ MujocoAdapter::read
-    -> C bc_control_core_update
-    -> C bc_control_core_set_command（外部目标变化时）
-    -> C bc_control_core_execute
+    -> C bc_controller_update
+    -> C bc_controller_set_command（每个控制周期）
+    -> C bc_controller_calculate
+    -> C bc_controller_execute
     -> C++ MujocoAdapter::write
     -> MuJoCo step
 ```
 
 - control core 使用 C11，simulation core 使用 C++17，通过 `include/balance/types.h` 中的纯 C 数据结构连接；
-- control core 顶层恢复为 `update -> set_command -> execute` 三阶段；update 只更新运动学与观测状态，set_command 保存外部参考，execute 只计算 actuation；
+- 正式外部接口收口到 `bc_controller_t`，统一持有 state machine、control core、最新 operator command 和只读 status；operator command 是 `set_command` 与 `calculate` 之间待处理的输入；仿真与后续实车上层只调用 controller 的 `update -> set_command -> calculate -> execute`，不负责拼接内部模块；
+- controller 的 update 更新运动学与观测状态，set_command 只保存最新 operator command，calculate 是唯一推进状态机、时间计数并生成低层控制请求的阶段，execute 只根据顶层 system 状态做硬门控、力矩限幅和最终输出；
 - control core 不暴露六路扁平 actuator 顺序；sensor feedback 按左右侧拆分为腿部前/后关节反馈、轮反馈和 IMU，actuation 对应拆分为腿关节力矩与轮力矩；
-- `control_core.h` 只定义顶层配置与句柄；共享 DTO、腿运动学类型和观测器状态分别归属 `types.h`、`leg_kinematics.h` 和 `observer.h`；
+- controller 通过单一只读 status 分别提供 system/motion 状态、十维状态、左右腿运动学、最近 actuation 和 tick count；`SimulationRunner` 不再读取 state machine/control core 内部字段，也不再分别暴露 state/leg/actuation getter；
+- state machine 和 control core 的低层 API 继续供各自单元测试与内部调试使用，但正式仿真路径只使用 controller facade；MuJoCo 腿部定姿等低层集成验证使用测试文件内的专用 harness，不污染 runner 的生产接口；
 - MuJoCo 中六个关节和 actuator 的名称、索引、排列、符号及关节零偏只由 C++ adapter 管理；左右腿进入 control core 后共用同一套坐标；
-- operator command 为左右腿提供目标长度和相对车体腿角，并带有平衡模式开关和十维状态参考；`SimulationRunner::set_command()` 负责接收外部参考；
-- control core 使用 `l1=0.215 m`、`l2=0.254 m` 计算虚拟腿运动学、解析雅可比和 `J*qdot`；姿态模式使用腿长/腿角 PD，平衡模式使用腿长 PD、每腿 `54 N` 支撑前馈和当前模型的 `4x10` LQR，最后通过 `J^T` 输出关节力矩；
+- operator command 使用持续电平 `system_enabled` 和单周期事件 `balance_restart`：顶层 `SYSTEM_OFF` 时 control core 的 execute 无条件输出零；使能只进入 `SYSTEM_ON/MOTION_IDLE`，不会在状态机内部隐式启动恢复流程，必须由外部发送 restart；开启状态下 restart 会清除计时和 LQR 参考并重新整理腿部，关闭状态下忽略 restart；
+- 第一版分层 C 状态机使用 `system -> motion -> task` 命名：当前已建立 `SYSTEM_OFF/ON` 和 `MOTION_IDLE/SELF_RIGHTING/LEG_POSITIONING/BALANCE_ENGAGING/ACTIVE`；restart 令 motion 进入 `SELF_RIGHTING`，当前因仿真不会完全翻倒而在同一周期默认跳过到 `LEG_POSITIONING`，稳定摆腿后进入 `BALANCE_ENGAGING`；GUI 和无界面静态测试在首次使能时从输入侧显式模拟一次 restart，尚未实现真正的自扶正动作、进入 ACTIVE 的判据及其下任务状态机；
+- system 与 motion 位于 `state_machine/` 子目录：system 的转移和动作只负责 `OFF/ON` 及下层启动/复位，motion 使用先转移、再按转移后状态执行动作的两个 switch，不再把两级转移和平衡控制输出混在一条 if 链中；
+- controller 每周期组装一份只读 `bc_state_machine_input_t`，集中提供 operator command、观测状态、双腿运动学和 timestep，system 向 motion 传递同一份输入；持久配置、状态和计时器仍属于各状态机对象，控制策略与目标仍通过独立的 `bc_control_command_t` 输出，不使用可写的大 context；
+- controller config 只提供实际生效的 `control` 与 `motion` 两组配置，不在 controller 内保存副本，也不使用仅包装 motion 的空 `system` config；control core 和 motion 初始化时各自复制并持有自己的有效配置；
+- 状态转移中“条件连续成立指定时长”的公共逻辑使用头文件内联工具 `bc_condition_hold_t`；条件不成立时自动清零累计时间，各状态机为每个独立条件持有自己的 hold，不把普通延时、超时、锁存或滞回混入这一原语；
+- 后续平衡失败不自动恢复，而是回到 `MOTION_IDLE` 等待新的 restart；ACTIVE 下预留 `NORMAL/STAIR_CLIMB/JUMP/RAMP_JUMP` 任务层，`AIRBORNE` 是由接触观测派生、可供跳跃和飞坡共用的状态，不能仅因轮子离地就判定平衡失败；
+- 当前不保留独立 scenario 抽象；GUI 入口直接根据仿真时间和 controller status 生成 operator command，headless 测试使用文件内局部辅助函数生成输入。等出现多套可复现实验、扰动或回放需求后再引入场景层；
+- control command 不再使用粗粒度的 `POSTURE/BALANCE` 模式，而是由状态机为左右腿自动生成独立的腿长、腿角策略及目标，并生成车轮策略；operator command 只提供系统使能、平衡重启和运动意图，不能从顶层指定低层控制策略；
+- control core 使用 `l1=0.215 m`、`l2=0.254 m` 计算虚拟腿运动学、解析雅可比和 `J*qdot`；`LEG_POSITIONING` 选择腿长/腿角位置 PD 和车轮禁用，`ENGAGING` 选择腿长位置 PD + 每腿 `54 N` 支撑前馈、腿角 LQR 和车轮 LQR，最后通过 `J^T` 输出关节力矩；
 - LQR 按左右平均腿长调用三次增益调度，误差定义为 `reference - state`；轮力矩限制为实车电机参数换算得到的 `6.32 N*m`，真实关节力矩限制为 `40 N*m`；
-- GUI 先由 mocap weld 托住机体，将双腿收到 `L=0.20 m / angle_body=-pi/2`；姿态连续稳定 `0.25 s` 后把轮轴对齐到地面高度，在同一控制周期开启完整 LQR/前馈并解除 weld；
+- GUI 启动后保持所有执行器关闭，让机器人自由落地 `2 s`；随后由行为层用腿长/腿角 PD 将双腿调至目标长度和 `angle_body=-pi/2`，姿态连续稳定 `0.25 s` 后切入完整 LQR/支撑前馈。整个过程不使用 mocap weld，也不人为搬动机体或把轮轴对齐地面；
+- 若自由落地 `2 s` 后直接开启完整 LQR，起控瞬间两轮和机体同时接地，但被动腿已塌到约 `0.158/0.145 m`，左右腿角状态约 `-0.72/-0.74 rad`；之后轮和四个关节力矩长期饱和、轮子离地，无法自行站起。加入上述腿部姿态预备后约在 `3.711 s` 切入平衡并成功站立，因此当前 LQR 的恢复域不包含未经整理的被动落地姿态；
+- 腿长目标已由 `0.20 m` 改为 `0.16 m`，行为层约在 `2.775 s` 切入平衡；末段双轮接触率 `100%`、无其他部件触地，最大机体俯仰约 `1.95 deg`。最初出现的缓慢回正和机体持续触地并非腿长不足，而是行为层切换时误把整个当前状态复制为 LQR 参考，导致 `theta_l/theta_r/theta_b` 及其角速度参考非零；现已改为参考向量先清零、只捕获当前 `S/PSI`，并由单元测试保证六个姿态参考保持零；
 - 不能在轮子仍悬空时直接开启完整 LQR：当前观测器会把轮自转积分为底盘位移，实测可迅速产生约 `-27 m/s` 的错误里程计速度并把腿打到角度限位。第一版静态场景通过接地高度释放规避，后续应由接触状态或融合观测器正式处理；
-- 无界面静态站立测试在约 `0.478 s` 自动释放，最后 `3 s` 双轮接触率为 `100%`、无其他部件触地，最大机体俯仰约 `2.42 deg`，最大俯仰角速度约 `0.00026 rad/s`；
+- 腿长目标为 `0.20 m` 时，无界面静态站立测试在约 `3.711 s` 切入平衡，最后 `3 s` 双轮接触率为 `100%`、无其他部件触地，最大机体俯仰约 `1.48 deg`，最大俯仰角速度约 `0.00065 rad/s`；
 - 平衡场景支持前进速度和偏航速度参考；每个控制周期分别积分为 `s_ref` 和 `psi_ref`，同时设置 `ds_ref` 和 `dpsi_ref`。GUI 循环演示静止、`+/-0.25 m/s` 前后运动和 `+/-1.57 rad/s` 左右偏航；
 - 无界面运动验证中，前进/后退稳态速度约为 `+0.258/-0.258 m/s`，三秒真实位移约为 `+0.742/-0.769 m`；`+/-1.57 rad/s` 偏航目标实际约为 `+1.88/-1.85 rad/s`，存在约 18 至 20% 超调。四个阶段双轮接触率均为 `100%`，无其他部件触地；
 - 纯 PD 在固定 `0.30 m / -pi/2` 的 8 秒测试中稳态误差约为 `12 mm / 2.1 deg`，暂未加入积分或重力前馈；
