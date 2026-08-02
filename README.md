@@ -13,6 +13,10 @@ Observability is provided by an on-demand, caller-owned controller snapshot;
 the state machine and low-level control remain internal. `SimulationRunner`
 captures its latest snapshot after construction, reset, and each controller
 execution, so the GUI and tests never need to read controller internals.
+Forward-velocity and yaw-rate references pass through independent linear ramps
+limited to `3 m/s, 5 m/s^2` and `4*pi rad/s, 15 rad/s^2`. Roll and roll rate
+are observable through the snapshot but are not yet used for compensation;
+the lower `1.5*pi rad/s` moving-turn envelope is also not yet enforced.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See
@@ -92,3 +96,37 @@ The GUI uses a 1 ms physics and control period and renders at the display refres
 rate. It overrides the MuJoCo timestep in memory and does not modify the source
 MJCF. Headless tests can be built without the viewer using
 `-DBALANCE_BUILD_GUI=OFF`.
+
+## Performance benchmark
+
+`rm_balance_performance` is a diagnostic benchmark rather than a CTest gate.
+It independently resets and runs coarse forward/reverse and left/right yaw
+sweeps, classifying stability, tracking, stopping, and actuator saturation.
+Run it with an output directory for the per-case summary and 100 Hz trace:
+
+```powershell
+.\build\Release\rm_balance_performance.exe `
+  .\models\MJCF\COD-2026RoboMaster-Balance.xml `
+  .\build\performance\initial
+```
+
+The generated `summary.csv` and `trace.csv` stay under the ignored build tree.
+The benchmark challenges `+/-1, 2, 3 m/s` translation and
+`+/-pi, 2*pi, 3*pi, 4*pi rad/s` in-place yaw. These targets map the current
+controller boundary; reaching the configured maximum is not a build-pass
+requirement. See `docs/notes/performance-baseline.md` for the first measured
+baseline and its acceptance criteria.
+
+The GUI can replay any one of the exact same benchmark cases:
+
+```powershell
+.\build\Release\rm_balance_sim.exe `
+  .\models\MJCF\COD-2026RoboMaster-Balance.xml `
+  --case forward_pos_2
+```
+
+Valid names are `forward_pos_1` through `forward_pos_3`, their `forward_neg_*`
+counterparts, and `yaw_pos_1pi` through `yaw_pos_4pi` with matching
+`yaw_neg_*` cases. The camera follows the chassis. Playback freezes on the
+same early-termination condition used by the headless benchmark; press `R` to
+replay the case and use Space to pause or resume while it is running.

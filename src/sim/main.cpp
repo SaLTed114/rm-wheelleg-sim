@@ -5,10 +5,13 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <optional>
+#include <string>
 
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "mujoco_viewer.hpp"
+#include "performance_scenario.hpp"
 #include "simulation_runner.hpp"
 
 namespace {
@@ -62,11 +65,28 @@ void print_state(
     std::cout << '\n';
 }
 
+void print_usage() {
+    std::cerr
+        << "usage: rm_balance_sim <model.xml> [--case <case-name>]\n"
+        << "available performance cases:\n";
+    for (const auto &spec : balance::sim::performance_cases()) {
+        std::cerr << "  " << spec.name << '\n';
+    }
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        std::cerr << "usage: rm_balance_sim <model.xml>\n";
+    const balance::sim::PerformanceCaseSpec *selected_case = nullptr;
+    if (argc == 4 && std::string(argv[2]) == "--case") {
+        selected_case = balance::sim::find_performance_case(argv[3]);
+        if (selected_case == nullptr) {
+            std::cerr << "unknown performance case: " << argv[3] << '\n';
+            print_usage();
+            return EXIT_FAILURE;
+        }
+    } else if (argc != 2) {
+        print_usage();
         return EXIT_FAILURE;
     }
 
@@ -79,13 +99,24 @@ int main(int argc, char **argv) {
         balance::sim::MujocoAdapter adapter(plant.model());
         balance::sim::SimulationRunner runner(plant, adapter);
         balance::sim::MujocoViewer viewer(plant.model());
+        balance::sim::PerformanceContactMonitor contact_monitor(
+            plant.model());
+        std::optional<balance::sim::PerformanceScenario>
+            performance_scenario;
+        if (selected_case != nullptr) {
+            performance_scenario.emplace(*selected_case);
+        }
         runner.reset();
+        if (performance_scenario) {
+            performance_scenario->reset(plant.data().time);
+        }
 
         using Clock = std::chrono::steady_clock;
         auto previous_time = Clock::now();
         double accumulated_time = 0.0;
         double next_state_print = 0.0;
         double balance_start_time = -1.0;
+        bool case_finished = false;
         bc_motion_state_t previous_motion = BC_MOTION_IDLE;
         MotionTarget motion{
             0.0F, 0.0F,
@@ -100,6 +131,9 @@ int main(int argc, char **argv) {
 
             if (viewer.consume_reset_request()) {
                 runner.reset();
+                if (performance_scenario) {
+                    performance_scenario->reset(plant.data().time);
+                }
                 motion = {
                     0.0F, 0.0F,
                     bc_system_state_name(
@@ -108,16 +142,68 @@ int main(int argc, char **argv) {
                 accumulated_time = 0.0;
                 next_state_print = 0.0;
                 balance_start_time = -1.0;
+                case_finished = false;
                 previous_motion = BC_MOTION_IDLE;
             }
 
-            if (viewer.paused()) {
+            if (viewer.paused() || case_finished) {
                 accumulated_time = 0.0;
             } else {
                 accumulated_time += std::clamp(
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant.timestep()) {
                     const auto &snapshot = runner.snapshot();
+                    bc_operator_command_t command{};
+
+                    if (performance_scenario) {
+                        performance_scenario->update(
+                            snapshot, plant.data().time);
+                        motion = {
+                            performance_scenario->command()
+                                .forward_velocity,
+                            performance_scenario->command().yaw_rate,
+                            performance_scenario->phase_name(),
+                        };
+                        if (performance_scenario->finished()) {
+                            case_finished = true;
+                            std::cout << "case " << selected_case->name
+                                      << ' '
+                                      << (performance_scenario->failed() ?
+                                          "failed: " : "complete")
+                                      << (performance_scenario->failed() ?
+                                          performance_scenario
+                                              ->failure_reason() : "")
+                                      << "; press R to replay\n";
+                            accumulated_time = 0.0;
+                            break;
+                        }
+                        command = performance_scenario->command();
+                        const bool monitored =
+                            performance_scenario->monitored();
+                        runner.step(command);
+                        accumulated_time -= plant.timestep();
+
+                        if (monitored) {
+                            const auto contact =
+                                contact_monitor.read(plant.data());
+                            const std::string termination =
+                                balance::sim::performance_termination_reason(
+                                    runner.snapshot(), contact);
+                            if (!termination.empty()) {
+                                case_finished = true;
+                                std::cout
+                                    << "case " << selected_case->name
+                                    << " stopped in " << motion.phase
+                                    << " at " << plant.data().time
+                                    << " s: " << termination
+                                    << "; press R to replay\n";
+                                accumulated_time = 0.0;
+                                break;
+                            }
+                        }
+                        continue;
+                    }
+
                     if (previous_motion != BC_MOTION_BALANCE_ENGAGING &&
                         snapshot.state_machine.motion ==
                             BC_MOTION_BALANCE_ENGAGING) {
@@ -126,7 +212,6 @@ int main(int argc, char **argv) {
                     previous_motion = snapshot.state_machine.motion;
                     motion = make_motion_target(
                         snapshot, balance_start_time, plant.data().time);
-                    bc_operator_command_t command{};
                     command.system_enabled = static_cast<uint8_t>(
                         plant.data().time >= 2.0);
                     command.balance_restart =
@@ -142,6 +227,15 @@ int main(int argc, char **argv) {
             if (plant.data().time >= next_state_print) {
                 print_state(motion.phase, runner.snapshot().state);
                 next_state_print += 0.5;
+            }
+
+            if (selected_case != nullptr) {
+                std::string title = "rm-balance-sim | ";
+                title += selected_case->name;
+                title += " | ";
+                title += motion.phase;
+                if (case_finished) title += " | stopped - R to replay";
+                viewer.set_title(title);
             }
 
             viewer.render(plant.data());

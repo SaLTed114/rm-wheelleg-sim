@@ -1,6 +1,8 @@
 #ifndef BALANCE_SIM_MUJOCO_VIEWER_HPP
 #define BALANCE_SIM_MUJOCO_VIEWER_HPP
 
+#include <string>
+
 #include <mujoco/mujoco.h>
 
 struct GLFWwindow;
@@ -19,6 +21,7 @@ public:
     [[nodiscard]] bool paused() const noexcept { return paused_; }
     bool consume_reset_request();
 
+    void set_title(const std::string &title);
     void render(mjData &data);
     void poll_events();
 

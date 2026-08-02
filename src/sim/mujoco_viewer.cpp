@@ -28,6 +28,14 @@ MujocoViewer::MujocoViewer(const mjModel &model)
     glfwSetScrollCallback(window_, scroll_callback);
 
     mjv_defaultFreeCamera(&model_, &camera_);
+    const int tracked_body = mj_name2id(&model_, mjOBJ_BODY, "base_link");
+    if (tracked_body >= 0) {
+        camera_.type = mjCAMERA_TRACKING;
+        camera_.trackbodyid = tracked_body;
+        camera_.distance = 3.0;
+        camera_.azimuth = 135.0;
+        camera_.elevation = -20.0;
+    }
     mjv_defaultOption(&option_);
     mjv_defaultScene(&scene_);
     mjr_defaultContext(&context_);
@@ -54,6 +62,10 @@ bool MujocoViewer::consume_reset_request() {
     const bool requested = reset_requested_;
     reset_requested_ = false;
     return requested;
+}
+
+void MujocoViewer::set_title(const std::string &title) {
+    glfwSetWindowTitle(window_, title.c_str());
 }
 
 void MujocoViewer::render(mjData &data) {
