@@ -17,6 +17,10 @@ Forward-velocity and yaw-rate references pass through independent linear ramps
 limited to `3 m/s, 5 m/s^2` and `4*pi rad/s, 15 rad/s^2`. Roll and roll rate
 are observable through the snapshot but are not yet used for compensation;
 the lower `1.5*pi rad/s` moving-turn envelope is also not yet enforced.
+The current 1 ms LQR schedule was retuned around `0.16 m` and `0.18 m` leg
+lengths. It completes the diagnostic `+/-3 m/s` translation sweep at both
+lengths; in-place yaw above `pi rad/s` remains an investigation target rather
+than a validated operating range.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See
@@ -111,11 +115,44 @@ Run it with an output directory for the per-case summary and 100 Hz trace:
 ```
 
 The generated `summary.csv` and `trace.csv` stay under the ignored build tree.
-The benchmark challenges `+/-1, 2, 3 m/s` translation and
+The benchmark challenges `+/-1, 2, 2.5, 3 m/s` translation and
 `+/-pi, 2*pi, 3*pi, 4*pi rad/s` in-place yaw. These targets map the current
 controller boundary; reaching the configured maximum is not a build-pass
 requirement. See `docs/notes/performance-baseline.md` for the first measured
 baseline and its acceptance criteria.
+
+To separate acceleration capability from top speed, run the dedicated
+`+/-2 m/s` sweep at `0.5, 1, 2, 3, 5 m/s^2`:
+
+```powershell
+.\build\Release\rm_balance_performance.exe `
+  .\models\MJCF\COD-2026RoboMaster-Balance.xml `
+  .\build\performance\forward-acceleration `
+  --suite forward-acceleration
+```
+
+This suite always runs the complete timed schedule. Contact, attitude, and
+state-machine problems are annotated in the console and CSV instead of ending
+the case early; only non-finite simulation data stops a run. The output also
+records virtual-leg common/differential angles, vertical leg projection,
+initial position error, base height, and MuJoCo base velocity alongside
+wheel-odometry velocity. `finite`, `tracked`, and `settled` are direct
+diagnostic columns, not gates that control execution; the tool deliberately
+does not synthesize a single pass or stability label.
+
+For a diagnostic comparison without changing the controller default, append
+`--leg-length <metres>`. For example:
+
+```powershell
+.\build\Release\rm_balance_performance.exe `
+  .\models\MJCF\COD-2026RoboMaster-Balance.xml `
+  .\build\performance\leg-0p20 `
+  --suite forward-acceleration --leg-length 0.20
+```
+
+`leg_length_valid` continues to show whether the measured length stayed in the
+original `0.13-0.20 m` observation band. Chassis contact or leaving that band
+is reported independently and is not treated as controller divergence.
 
 The GUI can replay any one of the exact same benchmark cases:
 
@@ -127,6 +164,8 @@ The GUI can replay any one of the exact same benchmark cases:
 
 Valid names are `forward_pos_1` through `forward_pos_3`, their `forward_neg_*`
 counterparts, and `yaw_pos_1pi` through `yaw_pos_4pi` with matching
-`yaw_neg_*` cases. The camera follows the chassis. Playback freezes on the
-same early-termination condition used by the headless benchmark; press `R` to
-replay the case and use Space to pause or resume while it is running.
+`yaw_neg_*` cases. Acceleration cases use names such as
+`forward_pos_2_a0p5`, `forward_neg_2_a2`, and `forward_pos_2_a5`. The camera
+follows the chassis. Playback notes problems in the title and continues to the
+scheduled end; press `R` to replay the case and use Space to pause or resume
+while it is running.
