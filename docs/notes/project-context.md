@@ -1,7 +1,7 @@
 # rm-balance-sim 项目上下文
 
 > 本文是给后续 Codex/开发会话快速恢复上下文用的工作笔记，不是对外设计文档。
-> 最近更新：2026-07-31。
+> 最近更新：2026-08-02。
 
 ## 首要约束
 
@@ -369,9 +369,11 @@ MuJoCo plant
 - C++ 侧分为 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner` 和 `MujocoViewer`；正常入口实时无限运行到用户关闭 GUI，`run_for()` 只供 headless 测试使用；
 - 物理和控制周期暂定均为 1 ms。加载后只在内存中覆盖 `mjModel.opt.timestep`，不修改原始 MJCF；
 - 当前机体具有自由基座、上游 USD 惯性参数、地面和轮地接触；mocap weld 默认关闭，只在测试中显式启用；
-- CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；
-- 本机官方 MuJoCo 3.9.0 SDK 安装在 `/home/l/.local/opt/mujoco-3.9.0`，当前 build 和 VS Code compilation database 已切换到该 SDK，不再依赖 Anaconda wheel；
-- 本机已用 MuJoCo 3.9.0 验证 C 运动学/雅可比、模型接线与功率方向、site 几何对照和 8 秒悬空定姿测试。
+- CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；Windows 原生链接还需要 `lib/mujoco.lib`，当前检查到的 `armsim` Python wheel 只有头文件和 `mujoco.dll`，不能单独作为 Windows C++ SDK；
+- 此前 Linux 环境的官方 MuJoCo 3.9.0 SDK 位于 `/home/l/.local/opt/mujoco-3.9.0`，并已用于验证 C 运动学/雅可比、模型接线与功率方向、site 几何对照和 8 秒悬空定姿测试；该路径只是历史机器记录，不是跨平台默认值；
+- 当前 Windows 环境把不入库的本地依赖放在 `third_party/mujoco-3.9.0` 与 `third_party/glfw`，使用 MSVC 19.44、Windows SDK 10.0.26100 和 MuJoCo 3.9.0 完成 Release 构建，10 个 CTest 全部通过，GUI 已实际启动并运行站立、前后运动与左右偏航阶段；
+- Windows 配置应同时显式传入 `-DMUJOCO_ROOT=<third_party/mujoco-3.9.0>` 与 `-DFETCHCONTENT_SOURCE_DIR_GLFW=<third_party/glfw>`。只设置 `MUJOCO_ROOT` 不会阻止 GLFW FetchContent 联网；中断 Git clone 可能留下仍在运行的子进程和 `build/_deps/glfw-src/.git/objects/pack/tmp_pack_*` 只读文件，导致后续删除 build 目录受阻；
+- MuJoCo 3.9.0 将尺寸类型 `mjtSize` 定义为 `int64_t`；adapter 的 actuator 数量缓存使用同一类型，避免将 `mjModel::nu` 收窄到 `int` 的 MSVC C4244 警告。
 
 ## 后续需要确认/实现
 

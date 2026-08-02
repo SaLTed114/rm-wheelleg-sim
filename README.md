@@ -17,12 +17,11 @@ by the Liaoning University of Science and Technology COD RoboMaster team. See
 ## Linux build with the official MuJoCo SDK
 
 Download and extract the official Linux release, then point `MUJOCO_ROOT` at
-the directory containing `include` and `lib`. The current local installation is
-`/home/l/.local/opt/mujoco-3.9.0`:
+the directory containing `include` and `lib`:
 
 ```bash
 cmake -S . -B build \
-  -DMUJOCO_ROOT=/home/l/.local/opt/mujoco-3.9.0
+  -DMUJOCO_ROOT=/path/to/mujoco-3.9.0
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
@@ -56,16 +55,34 @@ skybox provide the visible environment.
 
 Download and extract the official MuJoCo Windows release, then configure with
 the Visual Studio generator. `MUJOCO_ROOT` must contain `include`, `lib`, and
-`bin`; CMake copies `mujoco.dll` beside each executable.
+`bin`; in particular, a native build needs both `lib/mujoco.lib` and
+`bin/mujoco.dll`. A MuJoCo Python wheel that only contains headers and the DLL
+is not sufficient for linking the C++ targets.
+
+The recommended local layout is `third_party/mujoco-3.9.0`. The directory is
+ignored by Git. If GLFW source is also available at `third_party/glfw`, pass it
+to FetchContent explicitly so configuration does not require a Git clone:
 
 ```powershell
+$mujocoRoot = (Resolve-Path .\third_party\mujoco-3.9.0).Path
+$glfwRoot = (Resolve-Path .\third_party\glfw).Path
+
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
-  -DMUJOCO_ROOT=C:\libs\mujoco-3.x.x-windows-x86_64
-cmake --build build --config Release
+  "-DMUJOCO_ROOT=$mujocoRoot" `
+  "-DFETCHCONTENT_SOURCE_DIR_GLFW=$glfwRoot"
+cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 .\build\Release\rm_balance_sim.exe `
-  models\MJCF\COD-2026RoboMaster-Balance.xml
+  .\models\MJCF\COD-2026RoboMaster-Balance.xml
 ```
+
+Without `FETCHCONTENT_SOURCE_DIR_GLFW`, CMake clones the pinned GLFW revision
+during configuration. This requires working Git network access. On Windows, an
+interrupted FetchContent clone can leave Git child processes and a read-only
+temporary pack file under `build/_deps`; stop those processes before deleting
+the build directory. Passing `MUJOCO_ROOT` only configures MuJoCo and does not
+change how GLFW is obtained. Prefer the explicit `-D` argument over a
+shell-local environment variable, especially when reusing a build directory.
 
 The GUI uses a 1 ms physics and control period and renders at the display refresh
 rate. It overrides the MuJoCo timestep in memory and does not modify the source

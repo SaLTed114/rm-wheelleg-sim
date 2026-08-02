@@ -39,7 +39,7 @@ private:
     std::array<ChannelAddress, BC_SIDE_NUM> wheel_addresses_{};
     int imu_attitude_address_{};
     int imu_gyro_address_{};
-    int actuator_count_{};
+    mjtSize actuator_count_{};
 };
 
 } // namespace balance::sim
