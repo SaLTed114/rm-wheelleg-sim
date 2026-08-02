@@ -19,21 +19,36 @@ constexpr double kForwardRateLimit = 5.0;
 constexpr double kYawRateLimit = 15.0;
 constexpr double kTerminationAngle = 45.0 * BC_PI / 180.0;
 
-constexpr std::array<PerformanceCaseSpec, 14> kCases{{
-    {"forward_pos_1", PerformanceAxis::forward, 1.0},
-    {"forward_neg_1", PerformanceAxis::forward, -1.0},
-    {"forward_pos_2", PerformanceAxis::forward, 2.0},
-    {"forward_neg_2", PerformanceAxis::forward, -2.0},
-    {"forward_pos_3", PerformanceAxis::forward, 3.0},
-    {"forward_neg_3", PerformanceAxis::forward, -3.0},
-    {"yaw_pos_1pi", PerformanceAxis::yaw, BC_PI},
-    {"yaw_neg_1pi", PerformanceAxis::yaw, -BC_PI},
-    {"yaw_pos_2pi", PerformanceAxis::yaw, 2.0 * BC_PI},
-    {"yaw_neg_2pi", PerformanceAxis::yaw, -2.0 * BC_PI},
-    {"yaw_pos_3pi", PerformanceAxis::yaw, 3.0 * BC_PI},
-    {"yaw_neg_3pi", PerformanceAxis::yaw, -3.0 * BC_PI},
-    {"yaw_pos_4pi", PerformanceAxis::yaw, 4.0 * BC_PI},
-    {"yaw_neg_4pi", PerformanceAxis::yaw, -4.0 * BC_PI},
+constexpr std::array<PerformanceCaseSpec, 16> kCases{{
+    {"forward_pos_1", PerformanceAxis::forward, 1.0, 5.0},
+    {"forward_neg_1", PerformanceAxis::forward, -1.0, 5.0},
+    {"forward_pos_2", PerformanceAxis::forward, 2.0, 5.0},
+    {"forward_neg_2", PerformanceAxis::forward, -2.0, 5.0},
+    {"forward_pos_2p5", PerformanceAxis::forward, 2.5, 5.0},
+    {"forward_neg_2p5", PerformanceAxis::forward, -2.5, 5.0},
+    {"forward_pos_3", PerformanceAxis::forward, 3.0, 5.0},
+    {"forward_neg_3", PerformanceAxis::forward, -3.0, 5.0},
+    {"yaw_pos_1pi", PerformanceAxis::yaw, BC_PI, 15.0},
+    {"yaw_neg_1pi", PerformanceAxis::yaw, -BC_PI, 15.0},
+    {"yaw_pos_2pi", PerformanceAxis::yaw, 2.0 * BC_PI, 15.0},
+    {"yaw_neg_2pi", PerformanceAxis::yaw, -2.0 * BC_PI, 15.0},
+    {"yaw_pos_3pi", PerformanceAxis::yaw, 3.0 * BC_PI, 15.0},
+    {"yaw_neg_3pi", PerformanceAxis::yaw, -3.0 * BC_PI, 15.0},
+    {"yaw_pos_4pi", PerformanceAxis::yaw, 4.0 * BC_PI, 15.0},
+    {"yaw_neg_4pi", PerformanceAxis::yaw, -4.0 * BC_PI, 15.0},
+}};
+
+constexpr std::array<PerformanceCaseSpec, 10> kForwardAccelerationCases{{
+    {"forward_pos_2_a0p5", PerformanceAxis::forward, 2.0, 0.5},
+    {"forward_neg_2_a0p5", PerformanceAxis::forward, -2.0, 0.5},
+    {"forward_pos_2_a1", PerformanceAxis::forward, 2.0, 1.0},
+    {"forward_neg_2_a1", PerformanceAxis::forward, -2.0, 1.0},
+    {"forward_pos_2_a2", PerformanceAxis::forward, 2.0, 2.0},
+    {"forward_neg_2_a2", PerformanceAxis::forward, -2.0, 2.0},
+    {"forward_pos_2_a3", PerformanceAxis::forward, 2.0, 3.0},
+    {"forward_neg_2_a3", PerformanceAxis::forward, -2.0, 3.0},
+    {"forward_pos_2_a5", PerformanceAxis::forward, 2.0, 5.0},
+    {"forward_neg_2_a5", PerformanceAxis::forward, -2.0, 5.0},
 }};
 
 int require_id(
@@ -62,9 +77,14 @@ bool finite_actuation(const bc_actuation_t &actuation) {
 
 } // namespace
 
-const std::array<PerformanceCaseSpec, 14> &
+const std::array<PerformanceCaseSpec, 16> &
 performance_cases() noexcept {
     return kCases;
+}
+
+const std::array<PerformanceCaseSpec, 10> &
+forward_acceleration_cases() noexcept {
+    return kForwardAccelerationCases;
 }
 
 const PerformanceCaseSpec *find_performance_case(
@@ -75,7 +95,16 @@ const PerformanceCaseSpec *find_performance_case(
         [name](const PerformanceCaseSpec &spec) {
             return spec.name == name;
         });
-    return found == kCases.end() ? nullptr : &*found;
+    if (found != kCases.end()) return &*found;
+
+    const auto acceleration_found = std::find_if(
+        kForwardAccelerationCases.begin(),
+        kForwardAccelerationCases.end(),
+        [name](const PerformanceCaseSpec &spec) {
+            return spec.name == name;
+        });
+    return acceleration_found == kForwardAccelerationCases.end() ?
+        nullptr : &*acceleration_found;
 }
 
 const char *performance_axis_name(const PerformanceAxis axis) noexcept {
@@ -92,7 +121,6 @@ const char *performance_phase_name(const PerformancePhase phase) noexcept {
     case PerformancePhase::stop_ramp: return "stop_ramp";
     case PerformancePhase::stop_settle: return "stop_settle";
     case PerformancePhase::complete: return "complete";
-    case PerformancePhase::failed: return "failed";
     }
     return "unknown";
 }
@@ -100,6 +128,12 @@ const char *performance_phase_name(const PerformancePhase phase) noexcept {
 PerformanceScenario::PerformanceScenario(
     const PerformanceCaseSpec &spec
 ) : spec_(spec) {
+    if (!std::isfinite(spec_.target) ||
+        !std::isfinite(spec_.command_rate) ||
+        spec_.command_rate <= 0.0) {
+        throw std::invalid_argument(
+            "performance case target and command rate must be valid");
+    }
     reset();
 }
 
@@ -108,7 +142,6 @@ void PerformanceScenario::reset(const double simulation_time) noexcept {
     command_ = {};
     phase_start_time_ = simulation_time;
     simulation_time_ = simulation_time;
-    failure_reason_ = "none";
 }
 
 void PerformanceScenario::enter(
@@ -136,29 +169,21 @@ void PerformanceScenario::update(
         break;
 
     case PerformancePhase::engaging:
-        if (snapshot.state_machine.motion == BC_MOTION_BALANCE_ENGAGING) {
+        if (snapshot.state_machine.motion == BC_MOTION_BALANCE_ENGAGING ||
+            phase_elapsed() >= kEngagementTimeoutSeconds) {
             enter(PerformancePhase::standing, simulation_time);
-        } else if (phase_elapsed() >= kEngagementTimeoutSeconds) {
-            enter(PerformancePhase::failed, simulation_time);
-            failure_reason_ = "engagement_timeout";
         }
         break;
 
     case PerformancePhase::standing:
-        if (snapshot.state_machine.system != BC_SYSTEM_ON ||
-            snapshot.state_machine.motion !=
-                BC_MOTION_BALANCE_ENGAGING) {
-            enter(PerformancePhase::failed, simulation_time);
-            failure_reason_ = "standing_state_lost";
-        } else if (phase_elapsed() >= kStandingSeconds) {
+        if (phase_elapsed() >= kStandingSeconds) {
             enter(PerformancePhase::target_ramp, simulation_time);
         }
         break;
 
     case PerformancePhase::target_ramp: {
-        const double rate = spec_.axis == PerformanceAxis::forward ?
-            kForwardRateLimit : kYawRateLimit;
-        if (phase_elapsed() >= std::abs(spec_.target) / rate) {
+        if (phase_elapsed() >=
+            std::abs(spec_.target) / spec_.command_rate) {
             enter(PerformancePhase::target_hold, simulation_time);
         }
         break;
@@ -171,9 +196,8 @@ void PerformanceScenario::update(
         break;
 
     case PerformancePhase::stop_ramp: {
-        const double rate = spec_.axis == PerformanceAxis::forward ?
-            kForwardRateLimit : kYawRateLimit;
-        if (phase_elapsed() >= std::abs(spec_.target) / rate) {
+        if (phase_elapsed() >=
+            std::abs(spec_.target) / spec_.command_rate) {
             enter(PerformancePhase::stop_settle, simulation_time);
         }
         break;
@@ -186,7 +210,6 @@ void PerformanceScenario::update(
         break;
 
     case PerformancePhase::complete:
-    case PerformancePhase::failed:
         break;
     }
 
@@ -200,10 +223,37 @@ void PerformanceScenario::update(
     }
     if (phase_ == PerformancePhase::target_ramp ||
         phase_ == PerformancePhase::target_hold) {
+        double target = spec_.target;
+        const double controller_rate_limit =
+            spec_.axis == PerformanceAxis::forward ?
+                kForwardRateLimit : kYawRateLimit;
+        if (phase_ == PerformancePhase::target_ramp &&
+            spec_.command_rate < controller_rate_limit) {
+            target = std::copysign(
+                std::min(
+                    std::abs(spec_.target),
+                    spec_.command_rate * phase_elapsed()),
+                spec_.target);
+        }
         if (spec_.axis == PerformanceAxis::forward) {
-            command_.forward_velocity = static_cast<float>(spec_.target);
+            command_.forward_velocity = static_cast<float>(target);
         } else {
-            command_.yaw_rate = static_cast<float>(spec_.target);
+            command_.yaw_rate = static_cast<float>(target);
+        }
+    } else if (phase_ == PerformancePhase::stop_ramp &&
+               spec_.command_rate <
+                   (spec_.axis == PerformanceAxis::forward ?
+                       kForwardRateLimit : kYawRateLimit)) {
+        const double target = std::copysign(
+            std::max(
+                0.0,
+                std::abs(spec_.target) -
+                    spec_.command_rate * phase_elapsed()),
+            spec_.target);
+        if (spec_.axis == PerformanceAxis::forward) {
+            command_.forward_velocity = static_cast<float>(target);
+        } else {
+            command_.yaw_rate = static_cast<float>(target);
         }
     }
 }
@@ -226,8 +276,7 @@ bool PerformanceScenario::settle_evaluation() const noexcept {
 }
 
 bool PerformanceScenario::finished() const noexcept {
-    return phase_ == PerformancePhase::complete ||
-        phase_ == PerformancePhase::failed;
+    return phase_ == PerformancePhase::complete;
 }
 
 PerformanceContactMonitor::PerformanceContactMonitor(const mjModel &model)
@@ -294,7 +343,7 @@ std::string PerformanceContactMonitor::contact_name(
     return description;
 }
 
-std::string performance_termination_reason(
+std::string performance_diagnostic_issue(
     const bc_controller_snapshot_t &snapshot,
     const PerformanceContactState &contact
 ) {

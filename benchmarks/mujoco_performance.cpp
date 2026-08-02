@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -21,10 +22,8 @@ namespace {
 
 constexpr double kTimestepSeconds = 0.001;
 constexpr std::size_t kTraceStride = 10U;
-constexpr double kStableAngle = 10.0 * BC_PI / 180.0;
 constexpr double kMinimumLegLength = 0.13;
 constexpr double kMaximumLegLength = 0.20;
-constexpr double kMinimumWheelContactRatio = 0.99;
 constexpr double kForwardBaseTolerance = 0.10;
 constexpr double kYawBaseTolerance = 0.20;
 constexpr double kRelativeTrackingTolerance = 0.10;
@@ -57,18 +56,28 @@ struct ErrorAccumulator {
 
 struct CaseResult {
     CaseSpec spec;
+    double leg_length_target{};
     bool completed{};
+    bool balance_engaged{};
     bool finite{true};
     bool leg_length_valid{true};
-    bool stable{};
     bool tracked{};
     bool settled{};
-    std::string failure{"none"};
+    std::string issue{"none"};
+    std::string issue_phase{"none"};
     std::size_t monitored_steps{};
     std::size_t both_wheel_steps{};
     std::size_t other_contact_steps{};
     double maximum_pitch{};
     double maximum_roll{};
+    double maximum_leg_common{};
+    double maximum_leg_difference{};
+    std::array<double, BC_SIDE_NUM> minimum_vertical_projection{{
+        std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity(),
+    }};
+    double initial_position_error{};
+    bool initial_position_error_captured{};
     ErrorAccumulator tracking_error;
     ErrorAccumulator settle_forward;
     ErrorAccumulator settle_yaw;
@@ -100,6 +109,21 @@ struct CaseResult {
     }
 };
 
+bc_controller_config_t controller_config(
+    const std::optional<double> leg_length
+) {
+    bc_controller_config_t config{};
+    bc_controller_default_config(&config);
+    if (leg_length) {
+        if (!std::isfinite(*leg_length) || *leg_length <= 0.0) {
+            throw std::invalid_argument(
+                "leg length must be finite and positive");
+        }
+        config.motion.leg_length = static_cast<float>(*leg_length);
+    }
+    return config;
+}
+
 const char *axis_name(const Axis axis) {
     return balance::sim::performance_axis_name(axis);
 }
@@ -121,10 +145,14 @@ class PerformanceBenchmark {
 public:
     PerformanceBenchmark(
         const std::filesystem::path &model_path,
-        const std::filesystem::path &output_directory
+        const std::filesystem::path &output_directory,
+        const std::optional<double> leg_length
     ) : plant_(model_path, kTimestepSeconds),
-        adapter_(plant_.model()), runner_(plant_, adapter_),
+        adapter_(plant_.model()),
+        runner_(plant_, adapter_, controller_config(leg_length)),
         contact_monitor_(plant_.model()) {
+        const bc_controller_config_t config = controller_config(leg_length);
+        leg_length_target_ = config.motion.leg_length;
         std::filesystem::create_directories(output_directory);
         summary_.open(output_directory / "summary.csv", std::ios::trunc);
         trace_.open(output_directory / "trace.csv", std::ios::trunc);
@@ -132,6 +160,15 @@ public:
             throw std::runtime_error(
                 "failed to open performance benchmark output files");
         }
+
+        const int base_joint = mj_name2id(
+            &plant_.model(), mjOBJ_JOINT, "base_free_joint");
+        if (base_joint < 0) {
+            throw std::runtime_error(
+                "missing MuJoCo object 'base_free_joint'");
+        }
+        base_qpos_ = plant_.model().jnt_qposadr[base_joint];
+        base_dof_ = plant_.model().jnt_dofadr[base_joint];
 
         write_summary_header();
         write_trace_header();
@@ -141,10 +178,14 @@ public:
         runner_.reset();
         sample_index_ = 0U;
         CaseResult result{spec};
+        result.leg_length_target = leg_length_target_;
         balance::sim::PerformanceScenario scenario(spec);
         scenario.reset(plant_.data().time);
 
         while (!scenario.finished()) {
+            result.balance_engaged = result.balance_engaged ||
+                runner_.snapshot().state_machine.motion ==
+                    BC_MOTION_BALANCE_ENGAGING;
             scenario.update(runner_.snapshot(), plant_.data().time);
             if (scenario.finished()) break;
 
@@ -158,10 +199,10 @@ public:
             }
         }
 
-        if (scenario.failed()) {
-            result.failure = scenario.failure_reason();
-        } else {
-            result.completed = true;
+        result.completed = true;
+        if (!result.balance_engaged) {
+            result.issue = "balance_not_engaged";
+            result.issue_phase = "engaging";
         }
         finish_result(result);
         return result;
@@ -172,15 +213,25 @@ public:
                  << result.spec.name << ','
                  << axis_name(result.spec.axis) << ','
                  << result.spec.target << ','
+                 << result.spec.command_rate << ','
+                 << result.leg_length_target << ','
                  << result.completed << ','
-                 << result.stable << ','
+                 << result.balance_engaged << ','
+                 << result.leg_length_valid << ','
+                 << result.finite << ','
                  << result.tracked << ','
                  << result.settled << ','
-                 << result.failure << ','
+                 << result.issue << ','
+                 << result.issue_phase << ','
                  << result.contact_ratio() << ','
                  << result.other_contact_steps << ','
                  << result.maximum_pitch * 180.0 / BC_PI << ','
                  << result.maximum_roll * 180.0 / BC_PI << ','
+                 << result.maximum_leg_common * 180.0 / BC_PI << ','
+                 << result.maximum_leg_difference * 180.0 / BC_PI << ','
+                 << result.minimum_vertical_projection[BC_L] << ','
+                 << result.minimum_vertical_projection[BC_R] << ','
+                 << result.initial_position_error << ','
                  << result.tracking_error.mean() << ','
                  << result.tracking_error.rms() << ','
                  << result.settle_forward.mean() << ','
@@ -223,11 +274,13 @@ private:
 
         if (result == nullptr) return true;
         return collect(
-            *result, contact, evaluate_tracking, evaluate_settle);
+            *result, phase, contact,
+            evaluate_tracking, evaluate_settle);
     }
 
     bool collect(
-        CaseResult &result, const ContactState &contact,
+        CaseResult &result, const char *phase,
+        const ContactState &contact,
         const bool evaluate_tracking, const bool evaluate_settle
     ) const {
         const bc_controller_snapshot_t &snapshot = runner_.snapshot();
@@ -253,12 +306,37 @@ private:
         result.maximum_roll = std::max(result.maximum_roll, roll);
         result.finite = result.finite && finite;
 
+        if (!result.initial_position_error_captured) {
+            result.initial_position_error =
+                snapshot.state_reference.value[BC_STATE_S] -
+                snapshot.state.value[BC_STATE_S];
+            result.initial_position_error_captured = true;
+        }
+        const double theta_left =
+            snapshot.state.value[BC_STATE_THETA_L];
+        const double theta_right =
+            snapshot.state.value[BC_STATE_THETA_R];
+        result.maximum_leg_common = std::max(
+            result.maximum_leg_common,
+            std::abs(0.5 * (theta_left + theta_right)));
+        result.maximum_leg_difference = std::max(
+            result.maximum_leg_difference,
+            std::abs(0.5 * (theta_left - theta_right)));
+
+        const int theta_index[BC_SIDE_NUM] = {
+            BC_STATE_THETA_L, BC_STATE_THETA_R,
+        };
+
         for (int side = 0; side < BC_SIDE_NUM; ++side) {
             const double length = snapshot.leg[side].length;
             result.leg_length_valid = result.leg_length_valid &&
                 std::isfinite(length) &&
                 length >= kMinimumLegLength &&
                 length <= kMaximumLegLength;
+            result.minimum_vertical_projection[side] = std::min(
+                result.minimum_vertical_projection[side],
+                length * std::cos(
+                    snapshot.state.value[theta_index[side]]));
 
             const double raw_wheel =
                 snapshot.actuation_request.wheel_torque[side];
@@ -299,13 +377,13 @@ private:
                 snapshot.state.value[BC_STATE_DPSI]);
         }
 
-        const std::string termination =
-            balance::sim::performance_termination_reason(snapshot, contact);
-        if (!termination.empty()) {
-            result.failure = termination;
-            return false;
+        const std::string issue =
+            balance::sim::performance_diagnostic_issue(snapshot, contact);
+        if (!issue.empty() && result.issue == "none") {
+            result.issue = issue;
+            result.issue_phase = phase;
         }
-        return true;
+        return issue != "non_finite_telemetry";
     }
 
     void finish_result(CaseResult &result) const {
@@ -317,17 +395,11 @@ private:
                 kYawBaseTolerance,
                 kRelativeTrackingTolerance * std::abs(result.spec.target));
 
-        result.stable = result.completed && result.finite &&
-            result.leg_length_valid &&
-            result.other_contact_steps == 0U &&
-            result.contact_ratio() >= kMinimumWheelContactRatio &&
-            result.maximum_pitch < kStableAngle &&
-            result.maximum_roll < kStableAngle;
-        result.tracked = result.completed &&
+        result.tracked = result.completed && result.balance_engaged &&
             result.tracking_error.count != 0U &&
             std::abs(result.tracking_error.mean()) <= tracking_tolerance &&
             result.tracking_error.rms() <= tracking_tolerance;
-        result.settled = result.completed &&
+        result.settled = result.completed && result.balance_engaged &&
             result.settle_forward.count != 0U &&
             std::abs(result.settle_forward.mean()) <=
                 kForwardBaseTolerance &&
@@ -338,9 +410,13 @@ private:
 
     void write_summary_header() {
         summary_
-            << "case,axis,target,completed,stable,tracked,settled,failure,"
+            << "case,axis,target,command_rate,leg_length_target,completed,"
+               "balance_engaged,leg_length_valid,finite,tracked,settled,"
+               "issue,issue_phase,"
                "wheel_contact_ratio,other_contact_steps,max_pitch_deg,"
-               "max_roll_deg,tracking_mean_error,tracking_rmse,"
+               "max_roll_deg,max_leg_common_deg,max_leg_difference_deg,"
+               "min_vertical_l,min_vertical_r,initial_s_error,"
+               "tracking_mean_error,tracking_rmse,"
                "settle_mean_ds,settle_rmse_ds,settle_mean_dpsi,"
                "settle_rmse_dpsi,peak_raw_wheel_l,peak_raw_wheel_r,"
                "peak_raw_joint_l_front,peak_raw_joint_l_rear,"
@@ -351,7 +427,9 @@ private:
     }
 
     void write_trace_header() {
-        trace_ << "case,phase,simulation_time,command_forward,command_yaw,"
+        trace_ << "case,phase,simulation_time,command_rate,leg_length_target,"
+                  "base_x,base_z,"
+                  "base_forward_velocity,command_forward,command_yaw,"
                   "system,motion,s,ds,psi,dpsi,theta_l,dtheta_l,theta_r,"
                   "dtheta_r,theta_b,dtheta_b,ref_s,ref_ds,ref_psi,"
                   "ref_dpsi,ref_theta_l,ref_dtheta_l,ref_theta_r,"
@@ -371,9 +449,18 @@ private:
         const ContactState &contact
     ) {
         const bc_controller_snapshot_t &snapshot = runner_.snapshot();
+        const double yaw = snapshot.state.value[BC_STATE_PSI];
+        const double base_forward_velocity =
+            plant_.data().qvel[base_dof_] * std::cos(yaw) +
+            plant_.data().qvel[base_dof_ + 1] * std::sin(yaw);
         trace_ << std::setprecision(10)
                << spec.name << ',' << phase << ','
                << plant_.data().time << ','
+               << spec.command_rate << ','
+               << leg_length_target_ << ','
+               << plant_.data().qpos[base_qpos_] << ','
+               << plant_.data().qpos[base_qpos_ + 2] << ','
+               << base_forward_velocity << ','
                << command.forward_velocity << ',' << command.yaw_rate << ','
                << snapshot.state_machine.system << ','
                << snapshot.state_machine.motion;
@@ -418,6 +505,9 @@ private:
     balance::sim::MujocoAdapter adapter_;
     balance::sim::SimulationRunner runner_;
     balance::sim::PerformanceContactMonitor contact_monitor_;
+    int base_qpos_{};
+    int base_dof_{};
+    double leg_length_target_{};
     std::ofstream summary_;
     std::ofstream trace_;
     std::size_t sample_index_{};
@@ -437,8 +527,11 @@ void print_result(const CaseResult &result) {
         }
     }
 
-    std::cout << std::left << std::setw(16) << result.spec.name
-              << " stable=" << result.stable
+    std::cout << std::left << std::setw(22) << result.spec.name
+              << " complete=" << result.completed
+              << " engaged=" << result.balance_engaged
+              << " leg_range=" << result.leg_length_valid
+              << " finite=" << result.finite
               << " tracked=" << result.tracked
               << " settled=" << result.settled
               << " error=" << std::setw(10)
@@ -451,76 +544,71 @@ void print_result(const CaseResult &result) {
               << result.maximum_roll * 180.0 / BC_PI
               << " wheel_sat=" << maximum_wheel_saturation
               << " joint_sat=" << maximum_joint_saturation;
-    if (result.failure != "none") {
-        std::cout << " failure=" << result.failure;
+    if (result.issue != "none") {
+        std::cout << " issue=" << result.issue
+                  << '@' << result.issue_phase;
     }
     std::cout << '\n';
-}
-
-void print_boundaries(const std::vector<CaseResult> &results) {
-    std::cout << "\nDirectional boundaries:\n";
-    for (const Axis axis : {Axis::forward, Axis::yaw}) {
-        for (const int sign : {1, -1}) {
-            double stable = 0.0;
-            double tracked = 0.0;
-            double settled = 0.0;
-            bool has_stable = false;
-            bool has_tracked = false;
-            bool has_settled = false;
-            for (const CaseResult &result : results) {
-                if (result.spec.axis != axis ||
-                    (result.spec.target > 0.0 ? 1 : -1) != sign) {
-                    continue;
-                }
-                const double magnitude = std::abs(result.spec.target);
-                if (result.stable) {
-                    stable = std::max(stable, magnitude);
-                    has_stable = true;
-                }
-                if (result.stable && result.tracked) {
-                    tracked = std::max(tracked, magnitude);
-                    has_tracked = true;
-                }
-                if (result.stable && result.settled) {
-                    settled = std::max(settled, magnitude);
-                    has_settled = true;
-                }
-            }
-            std::cout << "  " << axis_name(axis) << ' '
-                      << (sign > 0 ? '+' : '-')
-                      << ": stable=";
-            if (has_stable) std::cout << stable;
-            else std::cout << "none";
-            std::cout << ", tracked=";
-            if (has_tracked) std::cout << tracked;
-            else std::cout << "none";
-            std::cout << ", settled=";
-            if (has_settled) std::cout << settled;
-            else std::cout << "none";
-            std::cout << '\n';
-        }
-    }
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
+    bool acceleration_suite = false;
+    std::optional<double> leg_length;
+    const CaseSpec *selected_case = nullptr;
+    bool arguments_valid = argc >= 3 && (argc - 3) % 2 == 0;
+    for (int index = 3; arguments_valid && index < argc; index += 2) {
+        const std::string option = argv[index];
+        const std::string value = argv[index + 1];
+        if (option == "--suite" && value == "forward-acceleration" &&
+            !acceleration_suite) {
+            acceleration_suite = true;
+        } else if (option == "--leg-length" && !leg_length) {
+            std::size_t consumed = 0U;
+            try {
+                leg_length = std::stod(value, &consumed);
+            } catch (const std::exception &) {
+                arguments_valid = false;
+                break;
+            }
+            arguments_valid = consumed == value.size();
+        } else if (option == "--case" && selected_case == nullptr) {
+            selected_case = balance::sim::find_performance_case(value);
+            arguments_valid = selected_case != nullptr;
+        } else {
+            arguments_valid = false;
+        }
+    }
+    arguments_valid = arguments_valid &&
+        !(acceleration_suite && selected_case != nullptr);
+    if (!arguments_valid) {
         std::cerr
-            << "usage: rm_balance_performance <model.xml> <output-directory>\n";
+            << "usage: rm_balance_performance <model.xml> <output-directory> "
+               "[--suite forward-acceleration] [--case <case-name>] "
+               "[--leg-length <metres>]\n";
         return EXIT_FAILURE;
     }
 
     try {
-        PerformanceBenchmark benchmark(argv[1], argv[2]);
-        std::vector<CaseResult> results;
-        for (const CaseSpec &spec : balance::sim::performance_cases()) {
+        PerformanceBenchmark benchmark(argv[1], argv[2], leg_length);
+        std::vector<CaseSpec> cases;
+        if (selected_case != nullptr) {
+            cases.push_back(*selected_case);
+        } else if (acceleration_suite) {
+            const auto &acceleration_cases =
+                balance::sim::forward_acceleration_cases();
+            cases.assign(
+                acceleration_cases.begin(), acceleration_cases.end());
+        } else {
+            const auto &baseline_cases = balance::sim::performance_cases();
+            cases.assign(baseline_cases.begin(), baseline_cases.end());
+        }
+        for (const CaseSpec &spec : cases) {
             CaseResult result = benchmark.run(spec);
             benchmark.write_summary(result);
             print_result(result);
-            results.push_back(std::move(result));
         }
-        print_boundaries(results);
     } catch (const std::exception &error) {
         std::cerr << "rm_balance_performance: " << error.what() << '\n';
         return EXIT_FAILURE;

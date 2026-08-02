@@ -67,9 +67,13 @@ void print_state(
 
 void print_usage() {
     std::cerr
-        << "usage: rm_balance_sim <model.xml> [--case <case-name>]\n"
+        << "usage: rm_balance_sim <model.xml> [--case <case-name>] "
+           "[--leg-length <metres>]\n"
         << "available performance cases:\n";
     for (const auto &spec : balance::sim::performance_cases()) {
+        std::cerr << "  " << spec.name << '\n';
+    }
+    for (const auto &spec : balance::sim::forward_acceleration_cases()) {
         std::cerr << "  " << spec.name << '\n';
     }
 }
@@ -78,14 +82,33 @@ void print_usage() {
 
 int main(int argc, char **argv) {
     const balance::sim::PerformanceCaseSpec *selected_case = nullptr;
-    if (argc == 4 && std::string(argv[2]) == "--case") {
-        selected_case = balance::sim::find_performance_case(argv[3]);
-        if (selected_case == nullptr) {
-            std::cerr << "unknown performance case: " << argv[3] << '\n';
-            print_usage();
-            return EXIT_FAILURE;
+    std::optional<float> selected_leg_length;
+    bool arguments_valid = argc >= 2 && (argc - 2) % 2 == 0;
+    for (int index = 2; arguments_valid && index < argc; index += 2) {
+        const std::string option = argv[index];
+        const std::string value = argv[index + 1];
+        if (option == "--case" && selected_case == nullptr) {
+            selected_case = balance::sim::find_performance_case(value);
+            if (selected_case == nullptr) {
+                std::cerr << "unknown performance case: " << value << '\n';
+                arguments_valid = false;
+            }
+        } else if (option == "--leg-length" && !selected_leg_length) {
+            std::size_t consumed = 0U;
+            try {
+                selected_leg_length = std::stof(value, &consumed);
+            } catch (const std::exception &) {
+                arguments_valid = false;
+                break;
+            }
+            arguments_valid = consumed == value.size() &&
+                std::isfinite(*selected_leg_length) &&
+                *selected_leg_length > 0.0F;
+        } else {
+            arguments_valid = false;
         }
-    } else if (argc != 2) {
+    }
+    if (!arguments_valid) {
         print_usage();
         return EXIT_FAILURE;
     }
@@ -97,7 +120,13 @@ int main(int argc, char **argv) {
         balance::sim::MujocoPlant plant(
             std::filesystem::path(argv[1]), kTimestepSeconds);
         balance::sim::MujocoAdapter adapter(plant.model());
-        balance::sim::SimulationRunner runner(plant, adapter);
+        bc_controller_config_t controller_config{};
+        bc_controller_default_config(&controller_config);
+        if (selected_leg_length) {
+            controller_config.motion.leg_length = *selected_leg_length;
+        }
+        balance::sim::SimulationRunner runner(
+            plant, adapter, controller_config);
         balance::sim::MujocoViewer viewer(plant.model());
         balance::sim::PerformanceContactMonitor contact_monitor(
             plant.model());
@@ -117,6 +146,8 @@ int main(int argc, char **argv) {
         double next_state_print = 0.0;
         double balance_start_time = -1.0;
         bool case_finished = false;
+        bool case_balance_engaged = false;
+        std::string case_issue{"none"};
         bc_motion_state_t previous_motion = BC_MOTION_IDLE;
         MotionTarget motion{
             0.0F, 0.0F,
@@ -143,6 +174,8 @@ int main(int argc, char **argv) {
                 next_state_print = 0.0;
                 balance_start_time = -1.0;
                 case_finished = false;
+                case_balance_engaged = false;
+                case_issue = "none";
                 previous_motion = BC_MOTION_IDLE;
             }
 
@@ -156,6 +189,9 @@ int main(int argc, char **argv) {
                     bc_operator_command_t command{};
 
                     if (performance_scenario) {
+                        case_balance_engaged = case_balance_engaged ||
+                            snapshot.state_machine.motion ==
+                                BC_MOTION_BALANCE_ENGAGING;
                         performance_scenario->update(
                             snapshot, plant.data().time);
                         motion = {
@@ -166,13 +202,15 @@ int main(int argc, char **argv) {
                         };
                         if (performance_scenario->finished()) {
                             case_finished = true;
+                            if (!case_balance_engaged) {
+                                case_issue = "balance_not_engaged";
+                            }
                             std::cout << "case " << selected_case->name
-                                      << ' '
-                                      << (performance_scenario->failed() ?
-                                          "failed: " : "complete")
-                                      << (performance_scenario->failed() ?
-                                          performance_scenario
-                                              ->failure_reason() : "")
+                                      << " complete";
+                            if (case_issue != "none") {
+                                std::cout << "; issue=" << case_issue;
+                            }
+                            std::cout
                                       << "; press R to replay\n";
                             accumulated_time = 0.0;
                             break;
@@ -186,17 +224,19 @@ int main(int argc, char **argv) {
                         if (monitored) {
                             const auto contact =
                                 contact_monitor.read(plant.data());
-                            const std::string termination =
-                                balance::sim::performance_termination_reason(
+                            const std::string issue =
+                                balance::sim::performance_diagnostic_issue(
                                     runner.snapshot(), contact);
-                            if (!termination.empty()) {
-                                case_finished = true;
+                            if (!issue.empty() && case_issue == "none") {
+                                case_issue = issue;
                                 std::cout
                                     << "case " << selected_case->name
-                                    << " stopped in " << motion.phase
+                                    << " noted in " << motion.phase
                                     << " at " << plant.data().time
-                                    << " s: " << termination
-                                    << "; press R to replay\n";
+                                    << " s: " << issue << '\n';
+                            }
+                            if (issue == "non_finite_telemetry") {
+                                case_finished = true;
                                 accumulated_time = 0.0;
                                 break;
                             }
@@ -234,7 +274,16 @@ int main(int argc, char **argv) {
                 title += selected_case->name;
                 title += " | ";
                 title += motion.phase;
-                if (case_finished) title += " | stopped - R to replay";
+                if (selected_leg_length) {
+                    title += " | L=";
+                    title += std::to_string(*selected_leg_length);
+                    title += " m";
+                }
+                if (case_issue != "none") {
+                    title += " | issue: ";
+                    title += case_issue;
+                }
+                if (case_finished) title += " | complete - R to replay";
                 viewer.set_title(title);
             }
 

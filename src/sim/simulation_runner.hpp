@@ -19,6 +19,10 @@ struct SimulationStats {
 class SimulationRunner {
 public:
     SimulationRunner(MujocoPlant &plant, const MujocoAdapter &adapter);
+    SimulationRunner(
+        MujocoPlant &plant,
+        const MujocoAdapter &adapter,
+        const bc_controller_config_t &config);
 
     void reset();
     void step(const bc_operator_command_t &command);

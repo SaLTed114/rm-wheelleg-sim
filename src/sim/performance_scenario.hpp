@@ -25,17 +25,19 @@ enum class PerformancePhase {
     stop_ramp,
     stop_settle,
     complete,
-    failed,
 };
 
 struct PerformanceCaseSpec {
     std::string_view name;
     PerformanceAxis axis;
     double target;
+    double command_rate;
 };
 
-[[nodiscard]] const std::array<PerformanceCaseSpec, 14> &
+[[nodiscard]] const std::array<PerformanceCaseSpec, 16> &
 performance_cases() noexcept;
+[[nodiscard]] const std::array<PerformanceCaseSpec, 10> &
+forward_acceleration_cases() noexcept;
 [[nodiscard]] const PerformanceCaseSpec *find_performance_case(
     std::string_view name) noexcept;
 [[nodiscard]] const char *performance_axis_name(
@@ -66,12 +68,6 @@ public:
     [[nodiscard]] bool tracking_evaluation() const noexcept;
     [[nodiscard]] bool settle_evaluation() const noexcept;
     [[nodiscard]] bool finished() const noexcept;
-    [[nodiscard]] bool failed() const noexcept {
-        return phase_ == PerformancePhase::failed;
-    }
-    [[nodiscard]] const char *failure_reason() const noexcept {
-        return failure_reason_;
-    }
 
 private:
     void enter(PerformancePhase phase, double simulation_time) noexcept;
@@ -82,7 +78,6 @@ private:
     bc_operator_command_t command_{};
     double phase_start_time_{};
     double simulation_time_{};
-    const char *failure_reason_{"none"};
 };
 
 struct PerformanceContactState {
@@ -106,7 +101,7 @@ private:
     std::array<int, BC_SIDE_NUM> wheel_{};
 };
 
-[[nodiscard]] std::string performance_termination_reason(
+[[nodiscard]] std::string performance_diagnostic_issue(
     const bc_controller_snapshot_t &snapshot,
     const PerformanceContactState &contact);
 

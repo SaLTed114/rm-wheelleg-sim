@@ -7,11 +7,25 @@
 
 namespace balance::sim {
 
-SimulationRunner::SimulationRunner(
-    MujocoPlant &plant, const MujocoAdapter &adapter
-) : plant_(plant), adapter_(adapter) {
+namespace {
+
+bc_controller_config_t default_controller_config() {
     bc_controller_config_t config{};
     bc_controller_default_config(&config);
+    return config;
+}
+
+} // namespace
+
+SimulationRunner::SimulationRunner(
+    MujocoPlant &plant, const MujocoAdapter &adapter
+) : SimulationRunner(plant, adapter, default_controller_config()) {}
+
+SimulationRunner::SimulationRunner(
+    MujocoPlant &plant,
+    const MujocoAdapter &adapter,
+    const bc_controller_config_t &config
+) : plant_(plant), adapter_(adapter) {
     bc_controller_init(&controller_, &config);
     bc_controller_capture_snapshot(&controller_, &snapshot_);
 }
