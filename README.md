@@ -3,6 +3,8 @@
 Minimal MuJoCo host for the wheel-legged balance robot. The runtime is split into
 a C11 control core and a C++17 simulation layer. The current controller uses
 virtual-leg kinematics, Jacobian-transpose actuation, and a gain-scheduled LQR.
+PD and LQR implementations are isolated as control laws beneath the control
+core, distinct from the top-level controller facade.
 The demo keeps the system off while the robot settles, then enables it and
 sends a simulated balance-restart pulse so the controller can position the
 legs and enter balance control.

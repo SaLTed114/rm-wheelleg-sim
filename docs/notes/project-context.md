@@ -343,6 +343,7 @@ MuJoCo plant
 - control core 使用 C11，simulation core 使用 C++17，通过 `include/balance/types.h` 中的纯 C 数据结构连接；
 - 正式控制接口收口到 `bc_controller_t`，统一持有 state machine、control core、最新 operator command 和最近一次最终 actuation；operator command 是 `set_command` 与 `calculate` 之间待处理的输入；仿真与后续实车上层只调用 controller 的 `update -> set_command -> calculate -> execute`，不负责拼接内部模块；
 - controller 的 update 更新运动学与观测状态，set_command 只保存最新 operator command，calculate 是唯一推进状态机、时间计数并生成低层控制请求的阶段，execute 只根据顶层 system 状态做硬门控、力矩限幅和最终输出；
+- 顶层 `controller` 表示完整控制系统的 facade；PD 与 LQR 是由 control core 调用的具体控制律，集中放在 `control_law/` 子目录，且不依赖 controller、state machine 或 observer；
 - control core 不暴露六路扁平 actuator 顺序；sensor feedback 按左右侧拆分为腿部前/后关节反馈、轮反馈和 IMU，actuation 对应拆分为腿关节力矩与轮力矩；
 - 独立的 `controller_snapshot` 模块通过 `bc_controller_capture_snapshot()` 按需读取 controller 的 system/motion、observer、tick count 和最近一次最终 actuation，生成由调用者持有的 `bc_controller_snapshot_t`；controller 不持续缓存第二份同步状态，旧 snapshot 也不会被后续控制周期改写；该结构是 GUI、测试以及未来实车遥测、日志、故障诊断和命令确认的统一观察面，不参与实时安全决策，也不是可直接发送的 UART 线格式；
 - `SimulationRunner` 持有最近一次 snapshot，在构造、reset 后以及每次 execute 后刷新，只公开 `snapshot()`，不再读取或暴露 state machine/control core 内部字段及分散的 state/leg/actuation getter；未来实车应由控制线程在 execute 后捕获，再把副本交给串口或日志线程，其他线程不直接读取 controller；

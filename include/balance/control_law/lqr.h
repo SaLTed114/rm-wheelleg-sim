@@ -1,5 +1,5 @@
-#ifndef BALANCE_LQR_CONTROLLER_H
-#define BALANCE_LQR_CONTROLLER_H
+#ifndef BALANCE_CONTROL_LAW_LQR_H
+#define BALANCE_CONTROL_LAW_LQR_H
 
 #include "balance/types.h"
 

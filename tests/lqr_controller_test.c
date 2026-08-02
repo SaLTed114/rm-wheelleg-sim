@@ -1,4 +1,4 @@
-#include "balance/lqr_controller.h"
+#include "balance/control_law/lqr.h"
 
 #include <math.h>
 #include <stdio.h>

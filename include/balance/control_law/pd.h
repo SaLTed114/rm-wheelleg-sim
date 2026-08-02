@@ -1,5 +1,5 @@
-#ifndef BALANCE_PD_CONTROLLER_H
-#define BALANCE_PD_CONTROLLER_H
+#ifndef BALANCE_CONTROL_LAW_PD_H
+#define BALANCE_CONTROL_LAW_PD_H
 
 #ifdef __cplusplus
 extern "C" {

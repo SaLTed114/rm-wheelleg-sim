@@ -1,4 +1,4 @@
-#include "balance/lqr_controller.h"
+#include "balance/control_law/lqr.h"
 #include "balance/math_utils.h"
 
 #include "current_model_schedule.h"

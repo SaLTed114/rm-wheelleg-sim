@@ -1,8 +1,8 @@
 #ifndef BALANCE_CONTROL_CORE_H
 #define BALANCE_CONTROL_CORE_H
 
+#include "balance/control_law/pd.h"
 #include "balance/observer.h"
-#include "balance/pd_controller.h"
 #include "balance/types.h"
 
 #ifdef __cplusplus

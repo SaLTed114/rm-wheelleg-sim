@@ -1,4 +1,4 @@
-#include "balance/pd_controller.h"
+#include "balance/control_law/pd.h"
 
 float bc_pd_calculate(
     const bc_pd_controller_t *controller,

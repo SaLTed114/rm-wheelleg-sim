@@ -1,5 +1,5 @@
 #include "balance/control_core.h"
-#include "balance/lqr_controller.h"
+#include "balance/control_law/lqr.h"
 #include "balance/math_utils.h"
 #include "balance/observer.h"
 
@@ -85,31 +85,47 @@ void bc_control_core_calculate(
         bc_leg_request_t *request = &core->actuation_request.leg[side];
 
         float axial_force = 0.0F;
-        if (leg_command->length_strategy == BC_LEG_LENGTH_POSITION ||
-            leg_command->length_strategy ==
-                BC_LEG_LENGTH_POSITION_SUPPORT) {
+        switch (leg_command->length_strategy) {
+        case BC_LEG_LENGTH_DISABLED:
+            break;
+
+        case BC_LEG_LENGTH_POSITION:
+        case BC_LEG_LENGTH_POSITION_SUPPORT:
             axial_force = bc_pd_calculate(
                 &core->config.length_controller,
                 target->length - leg->length, -leg->length_velocity);
-        }
-        if (leg_command->length_strategy ==
-            BC_LEG_LENGTH_POSITION_SUPPORT) {
-            axial_force += core->config.support_force;
+            if (leg_command->length_strategy ==
+                BC_LEG_LENGTH_POSITION_SUPPORT) {
+                axial_force += core->config.support_force;
+            }
+            break;
         }
 
         float leg_torque = 0.0F;
-        if (leg_command->angle_strategy == BC_LEG_ANGLE_POSITION) {
+        switch (leg_command->angle_strategy) {
+        case BC_LEG_ANGLE_DISABLED:
+            break;
+
+        case BC_LEG_ANGLE_POSITION:
             leg_torque = bc_pd_calculate(
                 &core->config.angle_controller,
                 bc_wrap_anglef(target->angle_body - leg->angle_body),
                 -leg->angular_velocity);
-        } else if (leg_command->angle_strategy == BC_LEG_ANGLE_LQR) {
+            break;
+
+        case BC_LEG_ANGLE_LQR:
             leg_torque = lqr_output.leg_torque[side];
+            break;
         }
 
-        if (command->wheel_strategy == BC_WHEEL_LQR) {
+        switch (command->wheel_strategy) {
+        case BC_WHEEL_DISABLED:
+            break;
+
+        case BC_WHEEL_LQR:
             core->actuation_request.wheel_torque[side] =
                 lqr_output.wheel_torque[side];
+            break;
         }
 
         for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {

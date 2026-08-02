@@ -1,4 +1,4 @@
-#include "balance/pd_controller.h"
+#include "balance/control_law/pd.h"
 
 #include <math.h>
 #include <stdio.h>
