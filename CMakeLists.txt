@@ -60,9 +60,12 @@ add_library(balance_control_core STATIC
   src/control/reference_ramp.c
   src/control/state_machine/motion.c
   src/control/state_machine/system.c)
+set(BALANCE_LQR_SCHEDULE_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/tools/lqr/generated"
+  CACHE PATH "Directory containing current_model_schedule.h")
 target_include_directories(balance_control_core
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tools/lqr/generated")
+  PRIVATE "${BALANCE_LQR_SCHEDULE_DIR}")
 if(NOT MSVC)
   target_link_libraries(balance_control_core PUBLIC m)
 endif()

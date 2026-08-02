@@ -29,8 +29,9 @@ from verify_lqr import verify_legacy
 
 DEFAULT_MODEL = Path("models/MJCF/COD-2026RoboMaster-Balance.xml")
 DEFAULT_OUTPUT = Path("tools/lqr/generated")
-Q_DIAGONAL = (180, 60, 40, 15, 30, 0.8, 30, 0.8, 800, 120)
+Q_DIAGONAL = (90, 60, 40, 15, 240, 4, 240, 4, 300, 60)
 R_DIAGONAL = (3.2, 3.2, 0.7, 0.7)
+CONTROLLER_LENGTH_MINIMUM = 0.16
 
 
 def make_leg_provider(
@@ -42,9 +43,11 @@ def make_leg_provider(
         lengths = np.asarray([sample["length"] for sample in samples])
         interpolators[side] = {
             "com": PchipInterpolator(
-                lengths, [sample["com_distance"] for sample in samples]),
+                lengths, [sample["com_distance"] for sample in samples],
+                extrapolate=True),
             "inertia": PchipInterpolator(
-                lengths, [sample["inertia"] for sample in samples]),
+                lengths, [sample["inertia"] for sample in samples],
+                extrapolate=True),
         }
 
     def provider(length: float) -> LegParameters:
@@ -150,20 +153,29 @@ def physical_to_dict(physical: PhysicalParameters) -> dict[str, float]:
     }
 
 
-def build_result(model_path: Path) -> dict[str, object]:
+def build_result(
+    model_path: Path,
+    q_diagonal: tuple[float, ...] = Q_DIAGONAL,
+    r_diagonal: tuple[float, ...] = R_DIAGONAL,
+    extracted: dict[str, object] | None = None,
+) -> dict[str, object]:
     legacy_metrics = verify_legacy(
         Path("references/rm2026cb-balance-chassis/Tasks/balance_chassis/"
              "bc_lqr_schedule.c"))
-    extracted = ModelParameterExtractor(model_path).extract(sample_count=31)
+    if extracted is None:
+        extracted = ModelParameterExtractor(model_path).extract(sample_count=31)
     leg_provider = make_leg_provider(extracted)
-    length_minimum, length_maximum = extracted["safe_length_range"]
+    extracted_minimum, length_maximum = extracted["safe_length_range"]
+    if CONTROLLER_LENGTH_MINIMUM < extracted["scan"]["minimum"]:
+        raise RuntimeError(
+            "controller LQR minimum is below the model extraction scan")
     settings = LqrSettings(
-        length_min=length_minimum,
+        length_min=CONTROLLER_LENGTH_MINIMUM,
         length_max=length_maximum,
         sample_count=31,
         timestep=0.001,
-        q_diagonal=Q_DIAGONAL,
-        r_diagonal=R_DIAGONAL,
+        q_diagonal=q_diagonal,
+        r_diagonal=r_diagonal,
     )
 
     physical = make_physical_parameters(extracted, yaw_scale=1.0)
@@ -197,6 +209,9 @@ def build_result(model_path: Path) -> dict[str, object]:
             "r_diagonal": list(settings.r_diagonal),
             "sample_count": settings.sample_count,
             "length_range": [settings.length_min, settings.length_max],
+            "model_parameter_range": [extracted_minimum, length_maximum],
+            "parameter_extrapolation_range": [
+                settings.length_min, extracted_minimum],
             "physical_parameters": physical_to_dict(physical),
         },
         "schedule": {
@@ -311,8 +326,12 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 
 ## 当前模型参数
 
-- 左右共同安全腿长范围：`{controller['length_range'][0]:.3f}` 至
+- 控制器 LQR 调度腿长范围：`{controller['length_range'][0]:.3f}` 至
   `{controller['length_range'][1]:.3f} m`。
+- 模型可直接提取参数的机械范围：`{controller['model_parameter_range'][0]:.3f}` 至
+  `{controller['model_parameter_range'][1]:.3f} m`。
+- 下段模型参数拟合延伸范围：`{controller['parameter_extrapolation_range'][0]:.3f}` 至
+  `{controller['parameter_extrapolation_range'][1]:.3f} m`。
 - 控制周期：`{1000.0 * controller['timestep']:.1f} ms`。
 - 机体质量：`{rigid['body_mass']:.6f} kg`。
 - 机体俯仰惯量：`{rigid['body_pitch_inertia']:.9f} kg*m^2`。
@@ -344,6 +363,10 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 
 ## 当前增益调度验证
 
+- 状态顺序：`{', '.join(controller['state_order'])}`。
+- Q 对角线：`{controller['q_diagonal']}`。
+- 输入顺序：`{', '.join(controller['input_order'])}`。
+- R 对角线：`{controller['r_diagonal']}`。
 - 多项式阶数：`{schedule['polynomial_order']}`。
 - 所有采样点的可控矩阵秩：`{current['minimum_controllability_rank']}`。
 - 原始增益闭环特征值模最大值：
@@ -355,8 +378,9 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 - float Horner 求值最大误差：
   `{current['maximum_float_horner_error']:.6e}`。
 
-当前模型的第一版调度有意保留旧实车 Q/R 权重，只改变物理参数。它按照用户
-指定的 1 ms 仿真控制周期生成，不能直接用于现有 3 ms 实车控制循环。
+当前 Q/R 由 MuJoCo 正反向加速与原地旋转扫描选定，重点覆盖 `0.16 m` 与
+`0.18 m` 腿长；旧实车权重仅保留为生成器 golden test。调度按照 1 ms
+仿真控制周期生成，不能直接用于现有 3 ms 实车控制循环。
 """
     path.write_text(text, encoding="utf-8")
 
@@ -368,9 +392,27 @@ def main() -> int:
     parser.add_argument(
         "--report", type=Path,
         default=Path("docs/notes/lqr-validation.md"))
+    parser.add_argument(
+        "--reuse-model-parameters", type=Path,
+        help="reuse the model section from a prior generated JSON")
+    parser.add_argument(
+        "--q-diagonal", type=float, nargs=len(Q_DIAGONAL),
+        default=Q_DIAGONAL)
+    parser.add_argument(
+        "--r-diagonal", type=float, nargs=len(R_DIAGONAL),
+        default=R_DIAGONAL)
     arguments = parser.parse_args()
 
-    result = build_result(arguments.model)
+    extracted = None
+    if arguments.reuse_model_parameters is not None:
+        cached = json.loads(
+            arguments.reuse_model_parameters.read_text(encoding="ascii"))
+        extracted = cached["model"] if "model" in cached else cached
+    result = build_result(
+        arguments.model,
+        tuple(arguments.q_diagonal),
+        tuple(arguments.r_diagonal),
+        extracted)
     arguments.output.mkdir(parents=True, exist_ok=True)
     json_path = arguments.output / "current_model_schedule.json"
     header_path = arguments.output / "current_model_schedule.h"
@@ -382,9 +424,13 @@ def main() -> int:
 
     validation = result["validation"]["current"]
     print(
-        "Safe leg-length range: "
+        "Controller LQR leg-length range: "
         f"{result['controller']['length_range'][0]:.3f} .. "
         f"{result['controller']['length_range'][1]:.3f} m")
+    print(
+        "Direct model-parameter range: "
+        f"{result['controller']['model_parameter_range'][0]:.3f} .. "
+        f"{result['controller']['model_parameter_range'][1]:.3f} m")
     print(
         "Generated polynomial order: "
         f"{result['schedule']['polynomial_order']}")
