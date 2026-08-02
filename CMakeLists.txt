@@ -71,6 +71,7 @@ balance_enable_warnings(balance_control_core)
 add_library(balance_simulation STATIC
   src/sim/mujoco_adapter.cpp
   src/sim/mujoco_plant.cpp
+  src/sim/performance_scenario.cpp
   src/sim/simulation_runner.cpp)
 target_include_directories(balance_simulation
   PUBLIC
@@ -79,6 +80,12 @@ target_include_directories(balance_simulation
 target_link_libraries(balance_simulation
   PUBLIC balance_control_core mujoco::mujoco)
 balance_enable_warnings(balance_simulation)
+
+add_executable(rm_balance_performance
+  benchmarks/mujoco_performance.cpp)
+target_link_libraries(rm_balance_performance PRIVATE balance_simulation)
+balance_enable_warnings(rm_balance_performance)
+balance_configure_mujoco_runtime(rm_balance_performance)
 
 if(BALANCE_BUILD_GUI)
   add_executable(rm_balance_sim

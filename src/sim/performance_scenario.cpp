@@ -1,0 +1,323 @@
+#include "performance_scenario.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+
+#include "balance/math_utils.h"
+
+namespace balance::sim {
+namespace {
+
+constexpr double kDisabledSettleSeconds = 2.0;
+constexpr double kEngagementTimeoutSeconds = 8.0;
+constexpr double kStandingSeconds = 2.0;
+constexpr double kTargetHoldSeconds = 3.0;
+constexpr double kStopSettleSeconds = 2.0;
+constexpr double kEvaluationSeconds = 1.0;
+constexpr double kForwardRateLimit = 5.0;
+constexpr double kYawRateLimit = 15.0;
+constexpr double kTerminationAngle = 45.0 * BC_PI / 180.0;
+
+constexpr std::array<PerformanceCaseSpec, 14> kCases{{
+    {"forward_pos_1", PerformanceAxis::forward, 1.0},
+    {"forward_neg_1", PerformanceAxis::forward, -1.0},
+    {"forward_pos_2", PerformanceAxis::forward, 2.0},
+    {"forward_neg_2", PerformanceAxis::forward, -2.0},
+    {"forward_pos_3", PerformanceAxis::forward, 3.0},
+    {"forward_neg_3", PerformanceAxis::forward, -3.0},
+    {"yaw_pos_1pi", PerformanceAxis::yaw, BC_PI},
+    {"yaw_neg_1pi", PerformanceAxis::yaw, -BC_PI},
+    {"yaw_pos_2pi", PerformanceAxis::yaw, 2.0 * BC_PI},
+    {"yaw_neg_2pi", PerformanceAxis::yaw, -2.0 * BC_PI},
+    {"yaw_pos_3pi", PerformanceAxis::yaw, 3.0 * BC_PI},
+    {"yaw_neg_3pi", PerformanceAxis::yaw, -3.0 * BC_PI},
+    {"yaw_pos_4pi", PerformanceAxis::yaw, 4.0 * BC_PI},
+    {"yaw_neg_4pi", PerformanceAxis::yaw, -4.0 * BC_PI},
+}};
+
+int require_id(
+    const mjModel &model, const mjtObj type, const char *name
+) {
+    const int id = mj_name2id(&model, type, name);
+    if (id < 0) {
+        throw std::runtime_error(
+            "missing MuJoCo object '" + std::string(name) + "'");
+    }
+    return id;
+}
+
+bool finite_actuation(const bc_actuation_t &actuation) {
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        if (!std::isfinite(actuation.wheel_torque[side])) return false;
+        for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+            if (!std::isfinite(
+                    actuation.leg[side].joint_torque[joint])) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+const std::array<PerformanceCaseSpec, 14> &
+performance_cases() noexcept {
+    return kCases;
+}
+
+const PerformanceCaseSpec *find_performance_case(
+    const std::string_view name
+) noexcept {
+    const auto found = std::find_if(
+        kCases.begin(), kCases.end(),
+        [name](const PerformanceCaseSpec &spec) {
+            return spec.name == name;
+        });
+    return found == kCases.end() ? nullptr : &*found;
+}
+
+const char *performance_axis_name(const PerformanceAxis axis) noexcept {
+    return axis == PerformanceAxis::forward ? "forward" : "yaw";
+}
+
+const char *performance_phase_name(const PerformancePhase phase) noexcept {
+    switch (phase) {
+    case PerformancePhase::disabled_settle: return "disabled_settle";
+    case PerformancePhase::engaging: return "engaging";
+    case PerformancePhase::standing: return "standing";
+    case PerformancePhase::target_ramp: return "target_ramp";
+    case PerformancePhase::target_hold: return "target_hold";
+    case PerformancePhase::stop_ramp: return "stop_ramp";
+    case PerformancePhase::stop_settle: return "stop_settle";
+    case PerformancePhase::complete: return "complete";
+    case PerformancePhase::failed: return "failed";
+    }
+    return "unknown";
+}
+
+PerformanceScenario::PerformanceScenario(
+    const PerformanceCaseSpec &spec
+) : spec_(spec) {
+    reset();
+}
+
+void PerformanceScenario::reset(const double simulation_time) noexcept {
+    phase_ = PerformancePhase::disabled_settle;
+    command_ = {};
+    phase_start_time_ = simulation_time;
+    simulation_time_ = simulation_time;
+    failure_reason_ = "none";
+}
+
+void PerformanceScenario::enter(
+    const PerformancePhase phase, const double simulation_time
+) noexcept {
+    phase_ = phase;
+    phase_start_time_ = simulation_time;
+}
+
+double PerformanceScenario::phase_elapsed() const noexcept {
+    return simulation_time_ - phase_start_time_;
+}
+
+void PerformanceScenario::update(
+    const bc_controller_snapshot_t &snapshot,
+    const double simulation_time
+) noexcept {
+    simulation_time_ = simulation_time;
+
+    switch (phase_) {
+    case PerformancePhase::disabled_settle:
+        if (phase_elapsed() >= kDisabledSettleSeconds) {
+            enter(PerformancePhase::engaging, simulation_time);
+        }
+        break;
+
+    case PerformancePhase::engaging:
+        if (snapshot.state_machine.motion == BC_MOTION_BALANCE_ENGAGING) {
+            enter(PerformancePhase::standing, simulation_time);
+        } else if (phase_elapsed() >= kEngagementTimeoutSeconds) {
+            enter(PerformancePhase::failed, simulation_time);
+            failure_reason_ = "engagement_timeout";
+        }
+        break;
+
+    case PerformancePhase::standing:
+        if (snapshot.state_machine.system != BC_SYSTEM_ON ||
+            snapshot.state_machine.motion !=
+                BC_MOTION_BALANCE_ENGAGING) {
+            enter(PerformancePhase::failed, simulation_time);
+            failure_reason_ = "standing_state_lost";
+        } else if (phase_elapsed() >= kStandingSeconds) {
+            enter(PerformancePhase::target_ramp, simulation_time);
+        }
+        break;
+
+    case PerformancePhase::target_ramp: {
+        const double rate = spec_.axis == PerformanceAxis::forward ?
+            kForwardRateLimit : kYawRateLimit;
+        if (phase_elapsed() >= std::abs(spec_.target) / rate) {
+            enter(PerformancePhase::target_hold, simulation_time);
+        }
+        break;
+    }
+
+    case PerformancePhase::target_hold:
+        if (phase_elapsed() >= kTargetHoldSeconds) {
+            enter(PerformancePhase::stop_ramp, simulation_time);
+        }
+        break;
+
+    case PerformancePhase::stop_ramp: {
+        const double rate = spec_.axis == PerformanceAxis::forward ?
+            kForwardRateLimit : kYawRateLimit;
+        if (phase_elapsed() >= std::abs(spec_.target) / rate) {
+            enter(PerformancePhase::stop_settle, simulation_time);
+        }
+        break;
+    }
+
+    case PerformancePhase::stop_settle:
+        if (phase_elapsed() >= kStopSettleSeconds) {
+            enter(PerformancePhase::complete, simulation_time);
+        }
+        break;
+
+    case PerformancePhase::complete:
+    case PerformancePhase::failed:
+        break;
+    }
+
+    command_ = {};
+    if (phase_ == PerformancePhase::disabled_settle || finished()) return;
+
+    command_.system_enabled = 1U;
+    if (phase_ == PerformancePhase::engaging) {
+        command_.balance_restart = static_cast<uint8_t>(
+            snapshot.state_machine.system == BC_SYSTEM_OFF);
+    }
+    if (phase_ == PerformancePhase::target_ramp ||
+        phase_ == PerformancePhase::target_hold) {
+        if (spec_.axis == PerformanceAxis::forward) {
+            command_.forward_velocity = static_cast<float>(spec_.target);
+        } else {
+            command_.yaw_rate = static_cast<float>(spec_.target);
+        }
+    }
+}
+
+bool PerformanceScenario::monitored() const noexcept {
+    return phase_ == PerformancePhase::target_ramp ||
+        phase_ == PerformancePhase::target_hold ||
+        phase_ == PerformancePhase::stop_ramp ||
+        phase_ == PerformancePhase::stop_settle;
+}
+
+bool PerformanceScenario::tracking_evaluation() const noexcept {
+    return phase_ == PerformancePhase::target_hold &&
+        phase_elapsed() >= kTargetHoldSeconds - kEvaluationSeconds;
+}
+
+bool PerformanceScenario::settle_evaluation() const noexcept {
+    return phase_ == PerformancePhase::stop_settle &&
+        phase_elapsed() >= kStopSettleSeconds - kEvaluationSeconds;
+}
+
+bool PerformanceScenario::finished() const noexcept {
+    return phase_ == PerformancePhase::complete ||
+        phase_ == PerformancePhase::failed;
+}
+
+PerformanceContactMonitor::PerformanceContactMonitor(const mjModel &model)
+    : model_(model) {
+    ground_ = require_id(model_, mjOBJ_GEOM, "ground");
+    wheel_ = {{
+        require_id(model_, mjOBJ_GEOM, "Right_wheel_collision"),
+        require_id(model_, mjOBJ_GEOM, "Left_wheel_collision"),
+    }};
+}
+
+PerformanceContactState PerformanceContactMonitor::read(
+    const mjData &data
+) const {
+    PerformanceContactState state{};
+    for (int index = 0; index < data.ncon; ++index) {
+        const mjContact &contact = data.contact[index];
+        const bool has_ground =
+            contact.geom[0] == ground_ || contact.geom[1] == ground_;
+        if (!has_ground) {
+            state.other = true;
+            if (state.unexpected.empty()) {
+                state.unexpected = contact_name(contact);
+            }
+            continue;
+        }
+
+        bool wheel_contact = false;
+        for (int side = 0; side < BC_SIDE_NUM; ++side) {
+            const bool pair =
+                (contact.geom[0] == ground_ &&
+                 contact.geom[1] == wheel_[side]) ||
+                (contact.geom[1] == ground_ &&
+                 contact.geom[0] == wheel_[side]);
+            state.wheel[side] = state.wheel[side] || pair;
+            wheel_contact = wheel_contact || pair;
+        }
+        state.other = state.other || !wheel_contact;
+        if (!wheel_contact && state.unexpected.empty()) {
+            state.unexpected = contact_name(contact);
+        }
+    }
+    return state;
+}
+
+std::string PerformanceContactMonitor::contact_name(
+    const mjContact &contact
+) const {
+    std::string description;
+    for (int pair = 0; pair < 2; ++pair) {
+        if (!description.empty()) description += '+';
+        const char *name = mj_id2name(
+            &model_, mjOBJ_GEOM, contact.geom[pair]);
+        if (name != nullptr) {
+            description += name;
+        } else {
+            const int body = model_.geom_bodyid[contact.geom[pair]];
+            const char *body_name = mj_id2name(
+                &model_, mjOBJ_BODY, body);
+            description += body_name != nullptr ? body_name :
+                "geom_" + std::to_string(contact.geom[pair]);
+        }
+    }
+    return description;
+}
+
+std::string performance_termination_reason(
+    const bc_controller_snapshot_t &snapshot,
+    const PerformanceContactState &contact
+) {
+    bool finite = std::isfinite(snapshot.roll) &&
+        std::isfinite(snapshot.roll_rate) &&
+        finite_actuation(snapshot.actuation_request) &&
+        finite_actuation(snapshot.actuation);
+    for (int index = 0; index < BC_STATE_NUM; ++index) {
+        finite = finite && std::isfinite(snapshot.state.value[index]) &&
+            std::isfinite(snapshot.state_reference.value[index]);
+    }
+    if (!finite) return "non_finite_telemetry";
+    if (contact.other) {
+        return "non_wheel_contact:" + contact.unexpected;
+    }
+
+    const double pitch = std::abs(static_cast<double>(
+        snapshot.state.value[BC_STATE_THETA_B]));
+    const double roll = std::abs(static_cast<double>(snapshot.roll));
+    if (pitch > kTerminationAngle || roll > kTerminationAngle) {
+        return "attitude_termination";
+    }
+    return {};
+}
+
+} // namespace balance::sim
