@@ -10,10 +10,15 @@ void bc_controller_capture_snapshot(
     snapshot->state_machine.system = controller->system.state;
     snapshot->state_machine.motion = controller->system.motion.state;
     snapshot->state = controller->control_core.observer.state;
+    snapshot->state_reference = controller->system.motion.state_reference;
+    snapshot->roll = controller->control_core.observer.roll;
+    snapshot->roll_rate = controller->control_core.observer.roll_rate;
     memcpy(
         snapshot->leg,
         controller->control_core.observer.leg,
         sizeof(snapshot->leg));
+    snapshot->actuation_request =
+        controller->control_core.actuation_request;
     snapshot->actuation = controller->last_actuation;
     snapshot->tick_count = controller->control_core.tick_count;
 }

@@ -168,12 +168,15 @@ void MujocoAdapter::read(
     double rotation[9];
     mju_quat2Mat(rotation, quaternion);
 
+    feedback.imu.roll = static_cast<float>(
+        std::atan2(rotation[7], rotation[8]));
     feedback.imu.pitch = static_cast<float>(
         std::asin(std::clamp(-rotation[6], -1.0, 1.0)));
     feedback.imu.yaw = static_cast<float>(
         std::atan2(rotation[3], rotation[0]));
 
     const double *gyro = data.sensordata + imu_gyro_address_;
+    feedback.imu.roll_rate = static_cast<float>(gyro[0]);
     feedback.imu.pitch_rate = static_cast<float>(gyro[1]);
     feedback.imu.yaw_rate = static_cast<float>(gyro[2]);
 }

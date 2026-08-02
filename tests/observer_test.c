@@ -45,6 +45,8 @@ int main() {
     feedback.wheel[BC_R].angular_velocity = 5.0F;
     feedback.imu.yaw = -3.0F;
     feedback.imu.yaw_rate = 0.7F;
+    feedback.imu.roll = -0.4F;
+    feedback.imu.roll_rate = 0.6F;
     feedback.imu.pitch = 0.2F;
     feedback.imu.pitch_rate = -0.3F;
 
@@ -62,6 +64,8 @@ int main() {
         expect_near("ds", observer.state.value[BC_STATE_DS], 0.24F) ||
         expect_near("psi", observer.state.value[BC_STATE_PSI], 0.4831853F) ||
         expect_near("dpsi", observer.state.value[BC_STATE_DPSI], 0.7F) ||
+        expect_near("roll", observer.roll, -0.4F) ||
+        expect_near("roll rate", observer.roll_rate, 0.6F) ||
         expect_near("theta left", observer.state.value[BC_STATE_THETA_L], 0.3F) ||
         expect_near("dtheta left", observer.state.value[BC_STATE_DTHETA_L], 0.1F) ||
         expect_near("theta right", observer.state.value[BC_STATE_THETA_R], -0.05F) ||
@@ -82,6 +86,10 @@ int main() {
     }
 
     bc_observer_reset(&observer);
+    if (expect_near("reset roll", observer.roll, 0.0F) ||
+        expect_near("reset roll rate", observer.roll_rate, 0.0F)) {
+        return 1;
+    }
     bc_observer_update(&observer, &feedback, 0.01F);
     if (expect_near("reset s", observer.state.value[BC_STATE_S], 0.0F) ||
         expect_near("reset psi", observer.state.value[BC_STATE_PSI], 0.0F)) {

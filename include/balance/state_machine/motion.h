@@ -1,6 +1,7 @@
 #ifndef BALANCE_STATE_MACHINE_MOTION_H
 #define BALANCE_STATE_MACHINE_MOTION_H
 
+#include "balance/reference_ramp.h"
 #include "balance/state_machine/condition_hold.h"
 #include "balance/state_machine/input.h"
 
@@ -24,12 +25,16 @@ typedef struct {
     float angle_tolerance;
     float angular_velocity_tolerance;
     float stable_duration;
+    bc_reference_ramp_config_t forward_velocity_ramp;
+    bc_reference_ramp_config_t yaw_rate_ramp;
 } bc_motion_config_t;
 
 typedef struct {
     bc_motion_config_t config;
     bc_motion_state_t state;
     bc_state_vector_t state_reference;
+    bc_reference_ramp_t forward_velocity_ramp;
+    bc_reference_ramp_t yaw_rate_ramp;
     bc_condition_hold_t leg_stable_hold;
 } bc_motion_t;
 

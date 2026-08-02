@@ -54,10 +54,12 @@ typedef struct {
 } bc_wheel_feedback_t;
 
 typedef struct {
-    float yaw;
+    float roll;
     float pitch;
-    float yaw_rate;
+    float yaw;
+    float roll_rate;
     float pitch_rate;
+    float yaw_rate;
 } bc_imu_feedback_t;
 
 typedef struct {

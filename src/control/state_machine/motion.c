@@ -92,23 +92,33 @@ static void bc_motion_action(
             output);
         break;
 
-    case BC_MOTION_BALANCE_ENGAGING:
+    case BC_MOTION_BALANCE_ENGAGING: {
         bc_motion_set_leg_control(
             motion,
             BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_LQR,
             output);
         output->wheel_strategy = BC_WHEEL_LQR;
+        const float forward_velocity = bc_reference_ramp_update(
+            &motion->forward_velocity_ramp,
+            &motion->config.forward_velocity_ramp,
+            input->operator_command->forward_velocity,
+            input->timestep_seconds);
+        const float yaw_rate = bc_reference_ramp_update(
+            &motion->yaw_rate_ramp,
+            &motion->config.yaw_rate_ramp,
+            input->operator_command->yaw_rate,
+            input->timestep_seconds);
         motion->state_reference.value[BC_STATE_S] +=
-            input->operator_command->forward_velocity *
-            input->timestep_seconds;
+            forward_velocity * input->timestep_seconds;
         motion->state_reference.value[BC_STATE_DS] =
-            input->operator_command->forward_velocity;
+            forward_velocity;
         motion->state_reference.value[BC_STATE_PSI] +=
-            input->operator_command->yaw_rate * input->timestep_seconds;
+            yaw_rate * input->timestep_seconds;
         motion->state_reference.value[BC_STATE_DPSI] =
-            input->operator_command->yaw_rate;
+            yaw_rate;
         output->state_reference = motion->state_reference;
         break;
+    }
 
     case BC_MOTION_ACTIVE:
         break;
@@ -124,6 +134,14 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .angle_tolerance            = 8.0F * BC_PI_F / 180.0F,
         .angular_velocity_tolerance = 0.15F,
         .stable_duration            = 0.25F,
+        .forward_velocity_ramp = {
+            .value_limit = 3.0F,
+            .rate_limit = 5.0F,
+        },
+        .yaw_rate_ramp = {
+            .value_limit = 4.0F * BC_PI_F,
+            .rate_limit = 15.0F,
+        },
     };
 }
 
@@ -140,6 +158,8 @@ void bc_motion_reset(bc_motion_t *motion) {
     memset(
         &motion->state_reference, 0,
         sizeof(motion->state_reference));
+    bc_reference_ramp_reset(&motion->forward_velocity_ramp);
+    bc_reference_ramp_reset(&motion->yaw_rate_ramp);
     bc_condition_hold_reset(&motion->leg_stable_hold);
 }
 

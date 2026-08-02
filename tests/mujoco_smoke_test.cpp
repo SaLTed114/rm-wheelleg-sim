@@ -76,6 +76,21 @@ int main(int argc, char **argv) {
         }
 
         balance::sim::MujocoAdapter adapter(plant.model());
+        const char *wheel_actuator_names[] = {
+            "Left_Wheel_joint_actuator",
+            "Right_Wheel_joint_actuator",
+        };
+        for (const char *name : wheel_actuator_names) {
+            const int actuator = mj_name2id(
+                &plant.model(), mjOBJ_ACTUATOR, name);
+            if (actuator < 0 ||
+                !plant.model().actuator_ctrllimited[actuator] ||
+                plant.model().actuator_ctrlrange[2 * actuator] != -6.32 ||
+                plant.model().actuator_ctrlrange[2 * actuator + 1] != 6.32) {
+                std::cerr << name << " has incorrect torque limits\n";
+                return EXIT_FAILURE;
+            }
+        }
         bc_sensor_feedback_t feedback{};
         adapter.read(plant.data(), feedback);
         const double expected_joint_angles[BC_SIDE_NUM][BC_JOINT_NUM] = {
@@ -178,6 +193,20 @@ int main(int argc, char **argv) {
             &plant.model(), mjOBJ_JOINT, "base_free_joint");
         const int base_qpos = plant.model().jnt_qposadr[base_joint];
         const int base_dof = plant.model().jnt_dofadr[base_joint];
+        plant.reset();
+        const double roll_axis[] = {1.0, 0.0, 0.0};
+        mju_axisAngle2Quat(
+            plant.data().qpos + base_qpos + 3, roll_axis, 0.25);
+        plant.data().qvel[base_dof + 3] = 0.6;
+        mj_forward(&plant.model(), &plant.data());
+        adapter.read(plant.data(), feedback);
+        if (std::abs(feedback.imu.roll - 0.25F) > 1.0e-6F ||
+            std::abs(feedback.imu.roll_rate - 0.6F) > 1.0e-6F) {
+            std::cerr << "positive roll mapping is incorrect\n";
+            return EXIT_FAILURE;
+        }
+
+        plant.reset();
         const double pitch_axis[] = {0.0, 1.0, 0.0};
         mju_axisAngle2Quat(
             plant.data().qpos + base_qpos + 3, pitch_axis, 0.2);

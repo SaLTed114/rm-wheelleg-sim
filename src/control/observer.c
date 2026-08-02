@@ -16,6 +16,8 @@ void bc_observer_init(
 void bc_observer_reset(bc_observer_t *observer) {
     memset(observer->leg, 0, sizeof(observer->leg));
     memset(&observer->state, 0, sizeof(observer->state));
+    observer->roll = 0.0F;
+    observer->roll_rate = 0.0F;
     observer->previous_yaw = 0.0F;
     observer->yaw = 0.0F;
     observer->initialized = 0U;
@@ -34,6 +36,8 @@ void bc_observer_update(
     observer->yaw += bc_wrap_anglef(
         feedback->imu.yaw - observer->previous_yaw);
     observer->previous_yaw = feedback->imu.yaw;
+    observer->roll = bc_wrap_anglef(feedback->imu.roll);
+    observer->roll_rate = feedback->imu.roll_rate;
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         bc_leg_kinematics_calculate(

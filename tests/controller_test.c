@@ -1,5 +1,6 @@
 #include "balance/controller_snapshot.h"
 
+#include <math.h>
 #include <stdio.h>
 
 static int actuation_is_zero(const bc_actuation_t *actuation) {
@@ -27,12 +28,15 @@ int main() {
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||
         snapshot.state_machine.motion != BC_MOTION_IDLE ||
         snapshot.tick_count != 0U ||
+        !actuation_is_zero(&snapshot.actuation_request) ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("reset controller snapshot is incorrect\n", stderr);
         return 1;
     }
 
     feedback.imu.pitch = 0.1F;
+    feedback.imu.roll = 0.25F;
+    feedback.imu.roll_rate = -0.4F;
     bc_controller_update(&controller, &feedback, 0.001F);
     bc_controller_set_command(&controller, &command);
     bc_controller_calculate(&controller);
@@ -41,6 +45,8 @@ int main() {
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||
         snapshot.state_machine.motion != BC_MOTION_IDLE ||
         snapshot.state.value[BC_STATE_THETA_B] != 0.1F ||
+        snapshot.roll != 0.25F ||
+        snapshot.roll_rate != -0.4F ||
         snapshot.tick_count != 1U ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("disabled controller snapshot or output is incorrect\n", stderr);
@@ -79,8 +85,14 @@ int main() {
     }
     bc_controller_execute(&controller, &actuation);
     bc_controller_capture_snapshot(&controller, &snapshot);
+    if (!actuation_is_zero(&disabled_snapshot.actuation_request)) {
+        fputs("new request modified an old snapshot\n", stderr);
+        return 1;
+    }
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        if (snapshot.actuation.wheel_torque[side] !=
+        if (snapshot.actuation_request.wheel_torque[side] !=
+                2.0F * config.control.wheel_torque_limit ||
+            snapshot.actuation.wheel_torque[side] !=
                 config.control.wheel_torque_limit ||
             snapshot.actuation.wheel_torque[side] ==
                 controller.control_core.actuation_request
@@ -89,7 +101,10 @@ int main() {
             return 1;
         }
         for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
-            if (snapshot.actuation.leg[side].joint_torque[joint] !=
+            if (snapshot.actuation_request.leg[side]
+                    .joint_torque[joint] !=
+                    -2.0F * config.control.joint_torque_limit ||
+                snapshot.actuation.leg[side].joint_torque[joint] !=
                 -config.control.joint_torque_limit) {
                 fputs("snapshot did not capture limited joint output\n", stderr);
                 return 1;
@@ -107,6 +122,8 @@ int main() {
         return 1;
     }
     command.balance_restart = 0U;
+    command.forward_velocity = 10.0F;
+    command.yaw_rate = 20.0F;
 
     for (int step = 0; step < 2; ++step) {
         bc_controller_update(&controller, &feedback, 0.001F);
@@ -122,6 +139,10 @@ int main() {
     }
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.motion != BC_MOTION_BALANCE_ENGAGING ||
+        fabsf(snapshot.state_reference.value[BC_STATE_DS] - 0.005F) >
+            1.0e-7F ||
+        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.015F) >
+            1.0e-7F ||
         snapshot.tick_count != 5U) {
         fputs("stable legs did not engage balance control\n", stderr);
         return 1;
@@ -174,6 +195,11 @@ int main() {
     bc_controller_reset(&controller);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.tick_count != 0U ||
+        snapshot.state_reference.value[BC_STATE_S] != 0.0F ||
+        snapshot.state_reference.value[BC_STATE_PSI] != 0.0F ||
+        snapshot.roll != 0.0F ||
+        snapshot.roll_rate != 0.0F ||
+        !actuation_is_zero(&snapshot.actuation_request) ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("reset did not clear the captured output\n", stderr);
         return 1;

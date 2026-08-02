@@ -15,7 +15,11 @@ typedef struct {
 typedef struct {
     bc_state_machine_snapshot_t state_machine;
     bc_state_vector_t state;
+    bc_state_vector_t state_reference;
+    float roll;
+    float roll_rate;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];
+    bc_actuation_t actuation_request;
     bc_actuation_t actuation;
     uint32_t tick_count;
 } bc_controller_snapshot_t;

@@ -57,6 +57,7 @@ add_library(balance_control_core STATIC
   src/control/controller_snapshot.c
   src/control/leg_kinematics.c
   src/control/observer.c
+  src/control/reference_ramp.c
   src/control/state_machine/motion.c
   src/control/state_machine/system.c)
 target_include_directories(balance_control_core
@@ -109,6 +110,11 @@ if(BUILD_TESTING)
   target_link_libraries(pd_controller_test PRIVATE balance_control_core)
   balance_enable_warnings(pd_controller_test)
   add_test(NAME pd_controller COMMAND pd_controller_test)
+
+  add_executable(reference_ramp_test tests/reference_ramp_test.c)
+  target_link_libraries(reference_ramp_test PRIVATE balance_control_core)
+  balance_enable_warnings(reference_ramp_test)
+  add_test(NAME reference_ramp COMMAND reference_ramp_test)
 
   add_executable(lqr_controller_test tests/lqr_controller_test.c)
   target_link_libraries(lqr_controller_test PRIVATE balance_control_core)

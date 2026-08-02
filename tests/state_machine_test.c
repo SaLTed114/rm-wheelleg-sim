@@ -116,11 +116,24 @@ int main() {
         }
     }
 
+    operator_command.forward_velocity = 10.0F;
+    operator_command.yaw_rate = 20.0F;
+    bc_system_update(&system, &input, &command);
+    if (fabsf(command.state_reference.value[BC_STATE_S] - 1.09F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_DS] - 0.7F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.41F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_DPSI] - 1.2F) > 1.0e-6F) {
+        fputs("balance reference did not use rate-limited targets\n", stderr);
+        return 1;
+    }
+
     operator_command.balance_restart = 1U;
     bc_system_update(&system, &input, &command);
     if (system.motion.state != BC_MOTION_LEG_POSITIONING ||
         system.motion.state_reference.value[BC_STATE_S] != 0.0F ||
         system.motion.state_reference.value[BC_STATE_PSI] != 0.0F ||
+        system.motion.forward_velocity_ramp.value != 0.0F ||
+        system.motion.yaw_rate_ramp.value != 0.0F ||
         !control_uses_strategies(
             &command,
             BC_LEG_LENGTH_POSITION, BC_LEG_ANGLE_POSITION,

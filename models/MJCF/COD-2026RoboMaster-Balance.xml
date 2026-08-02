@@ -161,10 +161,10 @@
   <actuator>
     <general name="Left_front_joint_actuator" joint="Left_front_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
     <general name="Left_rear_joint_actuator" joint="Left_rear_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
-    <general name="Left_Wheel_joint_actuator" joint="Left_Wheel_joint" gainprm="1" />
+    <general name="Left_Wheel_joint_actuator" joint="Left_Wheel_joint" gainprm="1" ctrllimited="true" ctrlrange="-6.32 6.32" />
     <general name="Right_front_joint_actuator" joint="Right_front_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
     <general name="Right_rear_joint_actuator" joint="Right_rear_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
-    <general name="Right_Wheel_joint_actuator" joint="Right_Wheel_joint" gainprm="1" ctrlrange="-3.14 3.14" />
+    <general name="Right_Wheel_joint_actuator" joint="Right_Wheel_joint" gainprm="1" ctrllimited="true" ctrlrange="-6.32 6.32" />
   </actuator>
   <keyframe>
     <key name="home" qpos="0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
