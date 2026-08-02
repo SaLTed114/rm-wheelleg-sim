@@ -6,9 +6,11 @@ virtual-leg kinematics, Jacobian-transpose actuation, and a gain-scheduled LQR.
 The demo keeps the system off while the robot settles, then enables it and
 sends a simulated balance-restart pulse so the controller can position the
 legs and enter balance control.
-The simulation talks to the C controller through one operator-command input and
-one read-only status snapshot; the state machine and low-level control remain
-internal.
+The simulation talks to the C controller through one operator-command input.
+Observability is provided by an on-demand, caller-owned controller snapshot;
+the state machine and low-level control remain internal. `SimulationRunner`
+captures its latest snapshot after construction, reset, and each controller
+execution, so the GUI and tests never need to read controller internals.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See

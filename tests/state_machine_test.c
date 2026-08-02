@@ -141,5 +141,19 @@ int main() {
         return 1;
     }
 
+    system.state = BC_SYSTEM_FAULT;
+    system.motion.state = BC_MOTION_BALANCE_ENGAGING;
+    operator_command.system_enabled = 1U;
+    bc_system_update(&system, &input, &command);
+    if (system.state != BC_SYSTEM_OFF ||
+        system.motion.state != BC_MOTION_IDLE ||
+        !control_uses_strategies(
+            &command,
+            BC_LEG_LENGTH_DISABLED, BC_LEG_ANGLE_DISABLED,
+            BC_WHEEL_DISABLED)) {
+        fputs("fault placeholder did not fall back to off\n", stderr);
+        return 1;
+    }
+
     return 0;
 }

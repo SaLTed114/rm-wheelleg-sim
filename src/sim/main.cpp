@@ -20,17 +20,20 @@ struct MotionTarget {
 };
 
 MotionTarget make_motion_target(
-    const bc_controller_status_t &status,
+    const bc_controller_snapshot_t &snapshot,
     const double balance_start_time,
     const double simulation_time
 ) {
-    if (status.system_state == BC_SYSTEM_OFF) {
-        return {0.0F, 0.0F, bc_system_state_name(status.system_state)};
-    }
-    if (status.motion_state != BC_MOTION_BALANCE_ENGAGING) {
+    if (snapshot.state_machine.system == BC_SYSTEM_OFF) {
         return {
             0.0F, 0.0F,
-            bc_motion_state_name(status.motion_state),
+            bc_system_state_name(snapshot.state_machine.system),
+        };
+    }
+    if (snapshot.state_machine.motion != BC_MOTION_BALANCE_ENGAGING) {
+        return {
+            0.0F, 0.0F,
+            bc_motion_state_name(snapshot.state_machine.motion),
         };
     }
     if (balance_start_time < 0.0) return {0.0F, 0.0F, "standing"};
@@ -86,7 +89,7 @@ int main(int argc, char **argv) {
         bc_motion_state_t previous_motion = BC_MOTION_IDLE;
         MotionTarget motion{
             0.0F, 0.0F,
-            bc_system_state_name(runner.status().system_state),
+            bc_system_state_name(runner.snapshot().state_machine.system),
         };
 
         while (!viewer.should_close()) {
@@ -99,7 +102,8 @@ int main(int argc, char **argv) {
                 runner.reset();
                 motion = {
                     0.0F, 0.0F,
-                    bc_system_state_name(runner.status().system_state),
+                    bc_system_state_name(
+                        runner.snapshot().state_machine.system),
                 };
                 accumulated_time = 0.0;
                 next_state_print = 0.0;
@@ -113,20 +117,21 @@ int main(int argc, char **argv) {
                 accumulated_time += std::clamp(
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant.timestep()) {
-                    const auto &status = runner.status();
+                    const auto &snapshot = runner.snapshot();
                     if (previous_motion != BC_MOTION_BALANCE_ENGAGING &&
-                        status.motion_state == BC_MOTION_BALANCE_ENGAGING) {
+                        snapshot.state_machine.motion ==
+                            BC_MOTION_BALANCE_ENGAGING) {
                         balance_start_time = plant.data().time;
                     }
-                    previous_motion = status.motion_state;
+                    previous_motion = snapshot.state_machine.motion;
                     motion = make_motion_target(
-                        status, balance_start_time, plant.data().time);
+                        snapshot, balance_start_time, plant.data().time);
                     bc_operator_command_t command{};
                     command.system_enabled = static_cast<uint8_t>(
                         plant.data().time >= 2.0);
                     command.balance_restart =
                         command.system_enabled &&
-                        status.system_state == BC_SYSTEM_OFF;
+                        snapshot.state_machine.system == BC_SYSTEM_OFF;
                     command.forward_velocity = motion.forward_velocity;
                     command.yaw_rate = motion.yaw_rate;
                     runner.step(command);
@@ -135,7 +140,7 @@ int main(int argc, char **argv) {
             }
 
             if (plant.data().time >= next_state_print) {
-                print_state(motion.phase, runner.status().state);
+                print_state(motion.phase, runner.snapshot().state);
                 next_state_print += 0.5;
             }
 

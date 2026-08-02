@@ -14,19 +14,10 @@ typedef struct {
 } bc_controller_config_t;
 
 typedef struct {
-    bc_system_state_t system_state;
-    bc_motion_state_t motion_state;
-    bc_state_vector_t state;
-    bc_leg_kinematics_t leg[BC_SIDE_NUM];
-    bc_actuation_t actuation;
-    uint32_t tick_count;
-} bc_controller_status_t;
-
-typedef struct {
     bc_control_core_t control_core;
     bc_system_t system;
     bc_operator_command_t operator_command;
-    bc_controller_status_t status;
+    bc_actuation_t last_actuation;
     float timestep_seconds;
 } bc_controller_t;
 
@@ -47,9 +38,6 @@ void bc_controller_calculate(bc_controller_t *controller);
 void bc_controller_execute(
     bc_controller_t *controller,
     bc_actuation_t *actuation);
-
-const bc_controller_status_t *bc_controller_get_status(
-    const bc_controller_t *controller);
 
 #ifdef __cplusplus
 }

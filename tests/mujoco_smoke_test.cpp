@@ -205,9 +205,16 @@ int main(int argc, char **argv) {
 
         balance::sim::SimulationRunner runner(plant, adapter);
         runner.reset();
+        if (runner.snapshot().state_machine.system != BC_SYSTEM_OFF ||
+            runner.snapshot().state_machine.motion != BC_MOTION_IDLE ||
+            runner.snapshot().tick_count != 0U) {
+            std::cerr << "runner reset snapshot is incorrect\n";
+            return EXIT_FAILURE;
+        }
         const auto stats = runner.run_for(kDurationSeconds);
 
-        if (stats.physics_steps != 10 || stats.control_ticks != 10) {
+        if (stats.physics_steps != 10 || stats.control_ticks != 10 ||
+            runner.snapshot().tick_count != 10U) {
             std::cerr << "unexpected step counts\n";
             return EXIT_FAILURE;
         }
@@ -224,6 +231,14 @@ int main(int argc, char **argv) {
                 std::cerr << "actuator " << actuator << " was not zero\n";
                 return EXIT_FAILURE;
             }
+        }
+
+        runner.reset();
+        if (runner.snapshot().tick_count != 0U ||
+            runner.snapshot().state_machine.system != BC_SYSTEM_OFF ||
+            plant.data().time != 0.0) {
+            std::cerr << "runner did not refresh snapshot on reset\n";
+            return EXIT_FAILURE;
         }
     } catch (const std::exception &error) {
         std::cerr << "mujoco_smoke_test: " << error.what() << '\n';

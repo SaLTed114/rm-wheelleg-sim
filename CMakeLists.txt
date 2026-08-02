@@ -52,6 +52,7 @@ endfunction()
 add_library(balance_control_core STATIC
   src/control/control_core.c
   src/control/controller.c
+  src/control/controller_snapshot.c
   src/control/leg_kinematics.c
   src/control/lqr_controller.c
   src/control/observer.c

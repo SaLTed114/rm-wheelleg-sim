@@ -18,6 +18,10 @@ static void bc_system_transition(
             system->state = BC_SYSTEM_OFF;
         }
         break;
+
+    case BC_SYSTEM_FAULT:
+        system->state = BC_SYSTEM_OFF;
+        break;
     }
 }
 
@@ -28,6 +32,7 @@ static void bc_system_action(
 ) {
     switch (system->state) {
     case BC_SYSTEM_OFF:
+    case BC_SYSTEM_FAULT:
         bc_motion_reset(&system->motion);
         break;
 
@@ -70,6 +75,8 @@ const char *bc_system_state_name(const bc_system_state_t state) {
         return "off";
     case BC_SYSTEM_ON:
         return "on";
+    case BC_SYSTEM_FAULT:
+        return "fault";
     }
     return "unknown";
 }

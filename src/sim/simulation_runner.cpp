@@ -13,11 +13,13 @@ SimulationRunner::SimulationRunner(
     bc_controller_config_t config{};
     bc_controller_default_config(&config);
     bc_controller_init(&controller_, &config);
+    bc_controller_capture_snapshot(&controller_, &snapshot_);
 }
 
 void SimulationRunner::reset() {
     plant_.reset();
     bc_controller_reset(&controller_);
+    bc_controller_capture_snapshot(&controller_, &snapshot_);
 }
 
 void SimulationRunner::step(const bc_operator_command_t &command) {
@@ -31,6 +33,7 @@ void SimulationRunner::step(const bc_operator_command_t &command) {
     bc_controller_set_command(&controller_, &command);
     bc_controller_calculate(&controller_);
     bc_controller_execute(&controller_, &actuation);
+    bc_controller_capture_snapshot(&controller_, &snapshot_);
     adapter_.write(plant_.data(), actuation);
     plant_.step();
 }
@@ -67,7 +70,7 @@ SimulationStats SimulationRunner::run_for(
 
     return SimulationStats{
         rounded_steps,
-        static_cast<std::size_t>(status().tick_count),
+        static_cast<std::size_t>(snapshot().tick_count),
         plant_.data().time,
     };
 }

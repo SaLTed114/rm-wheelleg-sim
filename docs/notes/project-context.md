@@ -335,25 +335,27 @@ MuJoCo plant
     -> C bc_controller_set_command（每个控制周期）
     -> C bc_controller_calculate
     -> C bc_controller_execute
+    -> C bc_controller_capture_snapshot
     -> C++ MujocoAdapter::write
     -> MuJoCo step
 ```
 
 - control core 使用 C11，simulation core 使用 C++17，通过 `include/balance/types.h` 中的纯 C 数据结构连接；
-- 正式外部接口收口到 `bc_controller_t`，统一持有 state machine、control core、最新 operator command 和只读 status；operator command 是 `set_command` 与 `calculate` 之间待处理的输入；仿真与后续实车上层只调用 controller 的 `update -> set_command -> calculate -> execute`，不负责拼接内部模块；
+- 正式控制接口收口到 `bc_controller_t`，统一持有 state machine、control core、最新 operator command 和最近一次最终 actuation；operator command 是 `set_command` 与 `calculate` 之间待处理的输入；仿真与后续实车上层只调用 controller 的 `update -> set_command -> calculate -> execute`，不负责拼接内部模块；
 - controller 的 update 更新运动学与观测状态，set_command 只保存最新 operator command，calculate 是唯一推进状态机、时间计数并生成低层控制请求的阶段，execute 只根据顶层 system 状态做硬门控、力矩限幅和最终输出；
 - control core 不暴露六路扁平 actuator 顺序；sensor feedback 按左右侧拆分为腿部前/后关节反馈、轮反馈和 IMU，actuation 对应拆分为腿关节力矩与轮力矩；
-- controller 通过单一只读 status 分别提供 system/motion 状态、十维状态、左右腿运动学、最近 actuation 和 tick count；`SimulationRunner` 不再读取 state machine/control core 内部字段，也不再分别暴露 state/leg/actuation getter；
+- 独立的 `controller_snapshot` 模块通过 `bc_controller_capture_snapshot()` 按需读取 controller 的 system/motion、observer、tick count 和最近一次最终 actuation，生成由调用者持有的 `bc_controller_snapshot_t`；controller 不持续缓存第二份同步状态，旧 snapshot 也不会被后续控制周期改写；该结构是 GUI、测试以及未来实车遥测、日志、故障诊断和命令确认的统一观察面，不参与实时安全决策，也不是可直接发送的 UART 线格式；
+- `SimulationRunner` 持有最近一次 snapshot，在构造、reset 后以及每次 execute 后刷新，只公开 `snapshot()`，不再读取或暴露 state machine/control core 内部字段及分散的 state/leg/actuation getter；未来实车应由控制线程在 execute 后捕获，再把副本交给串口或日志线程，其他线程不直接读取 controller；
 - state machine 和 control core 的低层 API 继续供各自单元测试与内部调试使用，但正式仿真路径只使用 controller facade；MuJoCo 腿部定姿等低层集成验证使用测试文件内的专用 harness，不污染 runner 的生产接口；
 - MuJoCo 中六个关节和 actuator 的名称、索引、排列、符号及关节零偏只由 C++ adapter 管理；左右腿进入 control core 后共用同一套坐标；
 - operator command 使用持续电平 `system_enabled` 和单周期事件 `balance_restart`：顶层 `SYSTEM_OFF` 时 control core 的 execute 无条件输出零；使能只进入 `SYSTEM_ON/MOTION_IDLE`，不会在状态机内部隐式启动恢复流程，必须由外部发送 restart；开启状态下 restart 会清除计时和 LQR 参考并重新整理腿部，关闭状态下忽略 restart；
-- 第一版分层 C 状态机使用 `system -> motion -> task` 命名：当前已建立 `SYSTEM_OFF/ON` 和 `MOTION_IDLE/SELF_RIGHTING/LEG_POSITIONING/BALANCE_ENGAGING/ACTIVE`；restart 令 motion 进入 `SELF_RIGHTING`，当前因仿真不会完全翻倒而在同一周期默认跳过到 `LEG_POSITIONING`，稳定摆腿后进入 `BALANCE_ENGAGING`；GUI 和无界面静态测试在首次使能时从输入侧显式模拟一次 restart，尚未实现真正的自扶正动作、进入 ACTIVE 的判据及其下任务状态机；
-- system 与 motion 位于 `state_machine/` 子目录：system 的转移和动作只负责 `OFF/ON` 及下层启动/复位，motion 使用先转移、再按转移后状态执行动作的两个 switch，不再把两级转移和平衡控制输出混在一条 if 链中；
+- 第一版分层 C 状态机使用 `system -> motion -> task` 命名：当前已建立 `SYSTEM_OFF/ON/FAULT` 和 `MOTION_IDLE/SELF_RIGHTING/LEG_POSITIONING/BALANCE_ENGAGING/ACTIVE`；`SYSTEM_FAULT` 目前只是为后续实车电机在线检测预留的枚举占位，没有任何输入会触发它；若内部状态被置为 `FAULT`，下一次 system update 会直接回到 `OFF`、复位 motion 并保持零控制输出。真正的故障来源、锁存和恢复流程以后单独设计；restart 令 motion 进入 `SELF_RIGHTING`，当前因仿真不会完全翻倒而在同一周期默认跳过到 `LEG_POSITIONING`，稳定摆腿后进入 `BALANCE_ENGAGING`；GUI 和无界面静态测试在首次使能时从输入侧显式模拟一次 restart，尚未实现真正的自扶正动作、进入 ACTIVE 的判据及其下任务状态机；
+- system 与 motion 位于 `state_machine/` 子目录：system 的转移和动作只负责 `OFF/ON`、预留的 `FAULT -> OFF` 回退及下层启动/复位，motion 使用先转移、再按转移后状态执行动作的两个 switch，不再把两级转移和平衡控制输出混在一条 if 链中；
 - controller 每周期组装一份只读 `bc_state_machine_input_t`，集中提供 operator command、观测状态、双腿运动学和 timestep，system 向 motion 传递同一份输入；持久配置、状态和计时器仍属于各状态机对象，控制策略与目标仍通过独立的 `bc_control_command_t` 输出，不使用可写的大 context；
 - controller config 只提供实际生效的 `control` 与 `motion` 两组配置，不在 controller 内保存副本，也不使用仅包装 motion 的空 `system` config；control core 和 motion 初始化时各自复制并持有自己的有效配置；
 - 状态转移中“条件连续成立指定时长”的公共逻辑使用头文件内联工具 `bc_condition_hold_t`；条件不成立时自动清零累计时间，各状态机为每个独立条件持有自己的 hold，不把普通延时、超时、锁存或滞回混入这一原语；
 - 后续平衡失败不自动恢复，而是回到 `MOTION_IDLE` 等待新的 restart；ACTIVE 下预留 `NORMAL/STAIR_CLIMB/JUMP/RAMP_JUMP` 任务层，`AIRBORNE` 是由接触观测派生、可供跳跃和飞坡共用的状态，不能仅因轮子离地就判定平衡失败；
-- 当前不保留独立 scenario 抽象；GUI 入口直接根据仿真时间和 controller status 生成 operator command，headless 测试使用文件内局部辅助函数生成输入。等出现多套可复现实验、扰动或回放需求后再引入场景层；
+- 当前不保留独立 scenario 抽象；GUI 入口直接根据仿真时间和 controller snapshot 生成 operator command，headless 测试使用文件内局部辅助函数生成输入。等出现多套可复现实验、扰动或回放需求后再引入场景层；
 - control command 不再使用粗粒度的 `POSTURE/BALANCE` 模式，而是由状态机为左右腿自动生成独立的腿长、腿角策略及目标，并生成车轮策略；operator command 只提供系统使能、平衡重启和运动意图，不能从顶层指定低层控制策略；
 - control core 使用 `l1=0.215 m`、`l2=0.254 m` 计算虚拟腿运动学、解析雅可比和 `J*qdot`；`LEG_POSITIONING` 选择腿长/腿角位置 PD 和车轮禁用，`ENGAGING` 选择腿长位置 PD + 每腿 `54 N` 支撑前馈、腿角 LQR 和车轮 LQR，最后通过 `J^T` 输出关节力矩；
 - LQR 按左右平均腿长调用三次增益调度，误差定义为 `reference - state`；轮力矩限制为实车电机参数换算得到的 `6.32 N*m`，真实关节力矩限制为 `40 N*m`；

@@ -2,16 +2,6 @@
 
 #include <string.h>
 
-static void bc_controller_update_observer_status(
-    bc_controller_t *controller
-) {
-    controller->status.state = controller->control_core.observer.state;
-    memcpy(
-        controller->status.leg,
-        controller->control_core.observer.leg,
-        sizeof(controller->status.leg));
-}
-
 void bc_controller_default_config(bc_controller_config_t *config) {
     bc_control_default_config(&config->control);
     bc_motion_default_config(&config->motion);
@@ -32,11 +22,10 @@ void bc_controller_reset(bc_controller_t *controller) {
     memset(
         &controller->operator_command, 0,
         sizeof(controller->operator_command));
-    memset(&controller->status, 0, sizeof(controller->status));
-    controller->status.system_state = controller->system.state;
-    controller->status.motion_state = controller->system.motion.state;
+    memset(
+        &controller->last_actuation, 0,
+        sizeof(controller->last_actuation));
     controller->timestep_seconds = 0.0F;
-    bc_controller_update_observer_status(controller);
 }
 
 void bc_controller_update(
@@ -47,7 +36,6 @@ void bc_controller_update(
     controller->timestep_seconds = timestep_seconds;
     bc_control_core_update(
         &controller->control_core, feedback, timestep_seconds);
-    bc_controller_update_observer_status(controller);
 }
 
 void bc_controller_set_command(
@@ -68,9 +56,6 @@ void bc_controller_calculate(bc_controller_t *controller) {
     };
     bc_system_update(&controller->system, &input, &control_command);
     bc_control_core_calculate(&controller->control_core, &control_command);
-    controller->status.system_state = controller->system.state;
-    controller->status.motion_state = controller->system.motion.state;
-    controller->status.tick_count = controller->control_core.tick_count;
 }
 
 void bc_controller_execute(
@@ -81,11 +66,5 @@ void bc_controller_execute(
         &controller->control_core,
         controller->system.state == BC_SYSTEM_ON,
         actuation);
-    controller->status.actuation = *actuation;
-}
-
-const bc_controller_status_t *bc_controller_get_status(
-    const bc_controller_t *controller
-) {
-    return &controller->status;
+    controller->last_actuation = *actuation;
 }

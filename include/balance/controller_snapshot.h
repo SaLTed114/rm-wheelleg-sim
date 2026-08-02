@@ -1,0 +1,31 @@
+#ifndef BALANCE_CONTROLLER_SNAPSHOT_H
+#define BALANCE_CONTROLLER_SNAPSHOT_H
+
+#include "balance/controller.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct {
+    bc_system_state_t system;
+    bc_motion_state_t motion;
+} bc_state_machine_snapshot_t;
+
+typedef struct {
+    bc_state_machine_snapshot_t state_machine;
+    bc_state_vector_t state;
+    bc_leg_kinematics_t leg[BC_SIDE_NUM];
+    bc_actuation_t actuation;
+    uint32_t tick_count;
+} bc_controller_snapshot_t;
+
+void bc_controller_capture_snapshot(
+    const bc_controller_t *controller,
+    bc_controller_snapshot_t *snapshot);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

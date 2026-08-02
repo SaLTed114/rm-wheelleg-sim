@@ -9,7 +9,8 @@ extern "C" {
 
 typedef enum {
     BC_SYSTEM_OFF,
-    BC_SYSTEM_ON
+    BC_SYSTEM_ON,
+    BC_SYSTEM_FAULT
 } bc_system_state_t;
 
 typedef struct {
