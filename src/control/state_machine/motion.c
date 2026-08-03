@@ -108,8 +108,13 @@ static void bc_motion_action(
             &motion->config.yaw_rate_ramp,
             input->operator_command->yaw_rate,
             input->timestep_seconds);
-        motion->state_reference.value[BC_STATE_S] +=
-            forward_velocity * input->timestep_seconds;
+        if (motion->config.position_feedback_enabled) {
+            motion->state_reference.value[BC_STATE_S] +=
+                forward_velocity * input->timestep_seconds;
+        } else {
+            motion->state_reference.value[BC_STATE_S] =
+                input->state->value[BC_STATE_S];
+        }
         motion->state_reference.value[BC_STATE_DS] =
             forward_velocity;
         motion->state_reference.value[BC_STATE_PSI] +=
@@ -127,13 +132,14 @@ static void bc_motion_action(
 
 void bc_motion_default_config(bc_motion_config_t *config) {
     *config = (bc_motion_config_t){
-        .leg_length                 = 0.16F,
+        .leg_length                 = 0.18F,
         .leg_angle_body             = -0.5F * BC_PI_F,
         .length_tolerance           = 0.025F,
         .length_velocity_tolerance  = 0.03F,
         .angle_tolerance            = 8.0F * BC_PI_F / 180.0F,
         .angular_velocity_tolerance = 0.15F,
         .stable_duration            = 0.25F,
+        .position_feedback_enabled  = 1U,
         .forward_velocity_ramp = {
             .value_limit = 3.0F,
             .rate_limit = 5.0F,

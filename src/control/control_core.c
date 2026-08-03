@@ -24,6 +24,9 @@ void bc_control_default_config(bc_control_config_t *config) {
             .kd           = 6.0F,
             .output_limit = 30.0F,
         },
+        .lqr_compensation = {
+            .leg_angle_trim = 5.5F * BC_PI_F / 180.0F,
+        },
         .support_force      = 54.0F,
         .wheel_torque_limit = 6.32F,
         .joint_torque_limit = 40.0F,
@@ -72,9 +75,15 @@ void bc_control_core_calculate(
         const float average_length = 0.5F * (
             core->observer.leg[BC_L].length +
             core->observer.leg[BC_R].length);
+        bc_state_vector_t effective_reference = command->state_reference;
+        effective_reference.value[BC_STATE_THETA_L] +=
+            core->config.lqr_compensation.leg_angle_trim;
+        effective_reference.value[BC_STATE_THETA_R] +=
+            core->config.lqr_compensation.leg_angle_trim;
+
         bc_lqr_calculate(
             average_length, &core->observer.state,
-            &command->state_reference, &lqr_output);
+            &effective_reference, &lqr_output);
     }
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {

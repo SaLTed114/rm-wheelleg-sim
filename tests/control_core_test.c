@@ -1,4 +1,6 @@
 #include "balance/control_core.h"
+#include "balance/control_law/lqr.h"
+#include "balance/math_utils.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -12,6 +14,12 @@ int main() {
     bc_actuation_t actuation;
 
     bc_control_default_config(&config);
+    if (fabsf(
+            config.lqr_compensation.leg_angle_trim -
+            5.5F * BC_PI_F / 180.0F) > 1.0e-7F) {
+        fputs("default LQR leg-angle trim is incorrect\n", stderr);
+        return 1;
+    }
     bc_control_core_init(&core, &config);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         actuation.wheel_torque[side] = 42.0F;
@@ -89,6 +97,38 @@ int main() {
                     side, joint);
                 return 1;
             }
+        }
+    }
+
+    bc_control_config_t trim_config = config;
+    trim_config.lqr_compensation.leg_angle_trim = 0.12F;
+    bc_control_core_t trim_core;
+    bc_control_core_init(&trim_core, &trim_config);
+    bc_control_core_update(&trim_core, &feedback, 0.001F);
+
+    bc_control_command_t trim_command = {
+        .wheel_strategy = BC_WHEEL_LQR,
+    };
+    bc_control_core_calculate(&trim_core, &trim_command);
+
+    bc_state_vector_t effective_reference = {0};
+    effective_reference.value[BC_STATE_THETA_L] = 0.12F;
+    effective_reference.value[BC_STATE_THETA_R] = 0.12F;
+    bc_lqr_output_t expected_lqr = {0};
+    const float trim_length = 0.5F * (
+        trim_core.observer.leg[BC_L].length +
+        trim_core.observer.leg[BC_R].length);
+    bc_lqr_calculate(
+        trim_length, &trim_core.observer.state,
+        &effective_reference, &expected_lqr);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        if (fabsf(
+                trim_core.actuation_request.wheel_torque[side] -
+                expected_lqr.wheel_torque[side]) > 1.0e-6F) {
+            fprintf(
+                stderr, "wheel %d did not apply the LQR compensation\n",
+                side);
+            return 1;
         }
     }
 

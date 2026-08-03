@@ -55,7 +55,7 @@ Space to pause, and Backspace or `R` to reset.
 The interactive simulator first keeps `SYSTEM_OFF` for two seconds while the
 robot falls and settles. It then enables the system and emits one simulated
 balance-restart event. `LEG_POSITIONING` moves both virtual legs toward
-`0.16 m / -pi/2`; once stable, `ENGAGING` enables the current-model LQR and
+`0.18 m / -pi/2`; once stable, `ENGAGING` enables the current-model LQR and
 `54 N` axial support per leg. No mocap support or pose teleport is used. The
 simulator then repeats standing, `+/-0.25 m/s` travel, and `+/-1.57 rad/s` yaw
 phases. It prints the current phase and ten-element state vector every 0.5 s.
@@ -154,6 +154,23 @@ This writes an ideal-model `summary.csv` and 1 kHz `trace.csv`. Passing one or
 more benchmark traces with `--mujoco-trace` also compares perturbations around
 the measured pre-ramp standing trim. It does not run MuJoCo or change the
 generated controller schedule.
+
+To identify the common leg-angle reference without allowing the position
+channel to hide steady drift, run the dedicated trim scan:
+
+```powershell
+.\build\Release\rm_balance_trim_scan.exe `
+  .\models\MJCF\COD-2026RoboMaster-Balance.xml `
+  .\build\performance\leg-trim `
+  --leg-length 0.18
+```
+
+The default scan covers `-5` through `+15 deg` in `1 deg` steps. Each case uses
+the normal free-drop and balance-engagement path, sets the LQR `S` error to
+zero while retaining `DS`, and writes `summary.csv` plus a 100 Hz `trace.csv`.
+The controller defaults use the calibrated `+5.5 deg` trim at the `0.18 m`
+baseline leg length. The scanner overrides that value for each case; use the
+range and step options shown by the executable to refine another interval.
 
 This suite always runs the complete timed schedule. Contact, attitude, and
 state-machine problems are annotated in the console and CSV instead of ending

@@ -90,6 +90,12 @@ target_link_libraries(rm_balance_performance PRIVATE balance_simulation)
 balance_enable_warnings(rm_balance_performance)
 balance_configure_mujoco_runtime(rm_balance_performance)
 
+add_executable(rm_balance_trim_scan
+  benchmarks/mujoco_leg_trim.cpp)
+target_link_libraries(rm_balance_trim_scan PRIVATE balance_simulation)
+balance_enable_warnings(rm_balance_trim_scan)
+balance_configure_mujoco_runtime(rm_balance_trim_scan)
+
 if(BALANCE_BUILD_GUI)
   add_executable(rm_balance_sim
     src/sim/main.cpp

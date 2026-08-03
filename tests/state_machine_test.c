@@ -33,6 +33,11 @@ int main() {
     };
 
     bc_motion_default_config(&config);
+    if (config.leg_length != 0.18F ||
+        !config.position_feedback_enabled) {
+        fputs("default motion config is incorrect\n", stderr);
+        return 1;
+    }
     bc_system_init(&system, &config);
 
     operator_command.balance_restart = 1U;
@@ -124,6 +129,23 @@ int main() {
         fabsf(command.state_reference.value[BC_STATE_PSI] + 0.41F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DPSI] - 1.2F) > 1.0e-6F) {
         fputs("balance reference did not use rate-limited targets\n", stderr);
+        return 1;
+    }
+
+    system.motion.config.position_feedback_enabled = 0U;
+    state.value[BC_STATE_S] = 2.0F;
+    operator_command.forward_velocity = 0.2F;
+    operator_command.yaw_rate = 0.0F;
+    bc_system_update(&system, &input, &command);
+    if (command.state_reference.value[BC_STATE_S] != 2.0F ||
+        fabsf(command.state_reference.value[BC_STATE_DS] - 0.2F) > 1.0e-6F ||
+        command.state_reference.value[BC_STATE_THETA_L] != 0.0F ||
+        command.state_reference.value[BC_STATE_THETA_R] != 0.0F ||
+        command.state_reference.value[BC_STATE_DTHETA_L] != 0.0F ||
+        command.state_reference.value[BC_STATE_DTHETA_R] != 0.0F ||
+        command.state_reference.value[BC_STATE_THETA_B] != 0.0F ||
+        command.state_reference.value[BC_STATE_DTHETA_B] != 0.0F) {
+        fputs("position-channel config polluted nominal reference\n", stderr);
         return 1;
     }
 
