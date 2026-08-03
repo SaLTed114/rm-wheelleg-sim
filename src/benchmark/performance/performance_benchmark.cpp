@@ -17,7 +17,9 @@ constexpr double kYawBaseTolerance = 0.20;
 constexpr double kRelativeTrackingTolerance = 0.10;
 
 bc_controller_config_t controller_config(
-    const std::optional<double> leg_length
+    const std::optional<double> leg_length,
+    const bool position_feedback_enabled,
+    const bool velocity_feedback_enabled
 ) {
     bc_controller_config_t config{};
     bc_controller_default_config(&config);
@@ -28,6 +30,10 @@ bc_controller_config_t controller_config(
         }
         config.motion.leg_length = static_cast<float>(*leg_length);
     }
+    config.motion.position_feedback_enabled =
+        static_cast<uint8_t>(position_feedback_enabled);
+    config.motion.velocity_feedback_enabled =
+        static_cast<uint8_t>(velocity_feedback_enabled);
     return config;
 }
 
@@ -36,19 +42,33 @@ bc_controller_config_t controller_config(
 PerformanceBenchmark::PerformanceBenchmark(
     const std::filesystem::path &model_path,
     const std::filesystem::path &output_directory,
-    const std::optional<double> leg_length,
-    const std::size_t trace_stride
+    const PerformanceBenchmarkConfig &config
 ) : plant_(model_path, kTimestepSeconds),
     adapter_(plant_.model()),
-    runner_(plant_, adapter_, controller_config(leg_length)),
+    runner_(plant_, adapter_, controller_config(
+        config.leg_length, config.position_feedback_enabled,
+        config.velocity_feedback_enabled)),
     sampler_(plant_.model()),
+    roll_restraint_(plant_.model(), config.roll_restrained),
+    forward_velocity_(
+        config.forward_velocity_observation,
+        controller_config(
+            config.leg_length,
+            config.position_feedback_enabled,
+            config.velocity_feedback_enabled).control.observer.wheel_radius),
+    position_feedback_enabled_(config.position_feedback_enabled),
+    velocity_feedback_enabled_(config.velocity_feedback_enabled),
     summary_(output_directory / "summary.csv", {
         "case", "axis", "target", "command_rate", "leg_length_target",
-        "completed", "balance_engaged", "leg_length_valid", "finite",
+        "forward_velocity_observation", "roll_restrained",
+        "position_feedback_enabled", "velocity_feedback_enabled",
+        "completed", "balance_engaged",
+        "leg_length_valid", "finite",
         "tracked", "settled", "issue", "issue_phase",
         "wheel_contact_ratio", "other_contact_steps", "max_pitch_deg",
         "max_roll_deg", "max_leg_common_deg", "max_leg_difference_deg",
-        "min_vertical_l", "min_vertical_r", "initial_s_error",
+        "peak_roll_restraint_torque", "min_vertical_l", "min_vertical_r",
+        "initial_s_error",
         "tracking_mean_error", "tracking_rmse", "settle_mean_ds",
         "settle_rmse_ds", "settle_mean_dpsi", "settle_rmse_dpsi",
         "peak_raw_wheel_l", "peak_raw_wheel_r",
@@ -60,35 +80,52 @@ PerformanceBenchmark::PerformanceBenchmark(
     }),
     trace_(output_directory / "trace.csv", {
         "case", "phase", "simulation_time", "command_rate",
-        "leg_length_target", "base_x", "base_z", "base_forward_velocity",
+        "leg_length_target", "forward_velocity_observation",
+        "position_feedback_enabled", "velocity_feedback_enabled",
+        "base_x", "base_y", "base_z", "base_forward_velocity",
         "base_vertical_velocity", "command_forward", "command_yaw",
         "system", "motion", "s", "ds", "psi", "dpsi", "theta_l",
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
         "ref_s", "ref_ds", "ref_psi", "ref_dpsi", "ref_theta_l",
         "ref_dtheta_l", "ref_theta_r", "ref_dtheta_r", "ref_theta_b",
-        "ref_dtheta_b", "roll", "roll_rate", "leg_l_length",
-        "leg_l_angle", "leg_l_length_rate", "leg_l_angle_rate",
+        "ref_dtheta_b", "roll", "roll_rate", "roll_restraint_torque",
+        "leg_l_length", "leg_l_angle", "leg_l_length_rate",
+        "leg_l_angle_rate",
         "leg_r_length", "leg_r_angle", "leg_r_length_rate",
-        "leg_r_angle_rate", "raw_wheel_l", "raw_wheel_r",
+        "leg_r_angle_rate", "wheel_encoder_velocity_l",
+        "wheel_encoder_velocity_r", "wheel_center_velocity_l",
+        "wheel_center_velocity_r", "raw_wheel_l", "raw_wheel_r",
         "raw_joint_l_front", "raw_joint_l_rear", "raw_joint_r_front",
         "raw_joint_r_rear", "wheel_l", "wheel_r", "joint_l_front",
         "joint_l_rear", "joint_r_front", "joint_r_rear",
         "contact_wheel_l", "contact_wheel_r", "other_contact",
         "normal_force_l", "normal_force_r",
     }),
-    trace_stride_(trace_stride) {
-    const bc_controller_config_t config = controller_config(leg_length);
-    leg_length_target_ = config.motion.leg_length;
+    trace_stride_(config.trace_stride) {
+    if (trace_stride_ == 0U) {
+        throw std::invalid_argument("trace stride must be positive");
+    }
+    const bc_controller_config_t controller =
+        controller_config(
+            config.leg_length, config.position_feedback_enabled,
+            config.velocity_feedback_enabled);
+    leg_length_target_ = controller.motion.leg_length;
 }
 
 PerformanceResult PerformanceBenchmark::run(
     const PerformanceCaseSpec &spec
 ) {
     runner_.reset();
+    roll_restraint_.reset();
+    forward_velocity_.reset();
     sample_index_ = 0U;
     PerformanceResult result{};
     result.spec = spec;
     result.leg_length_target = leg_length_target_;
+    result.forward_velocity_observation = forward_velocity_.observation();
+    result.roll_restrained = roll_restraint_.enabled();
+    result.position_feedback_enabled = position_feedback_enabled_;
+    result.velocity_feedback_enabled = velocity_feedback_enabled_;
     PerformanceScenario scenario(spec);
     scenario.reset(plant_.data().time);
 
@@ -128,6 +165,11 @@ void PerformanceBenchmark::write_summary(
         .value(result.spec.target)
         .value(result.spec.command_rate)
         .value(result.leg_length_target)
+        .value(forward_observation_name(
+            result.forward_velocity_observation))
+        .value(result.roll_restrained)
+        .value(result.position_feedback_enabled)
+        .value(result.velocity_feedback_enabled)
         .value(result.completed)
         .value(result.balance_engaged)
         .value(result.leg_length_valid)
@@ -142,6 +184,7 @@ void PerformanceBenchmark::write_summary(
         .value(result.maximum_roll * 180.0 / BC_PI)
         .value(result.maximum_leg_common * 180.0 / BC_PI)
         .value(result.maximum_leg_difference * 180.0 / BC_PI)
+        .value(result.maximum_roll_restraint_torque)
         .value(result.minimum_vertical_projection[BC_L])
         .value(result.minimum_vertical_projection[BC_R])
         .value(result.initial_position_error)
@@ -177,7 +220,10 @@ bool PerformanceBenchmark::step(
     const bc_operator_command_t &command, PerformanceResult *result,
     const bool evaluate_tracking, const bool evaluate_settle
 ) {
-    runner_.step(command);
+    roll_restraint_.apply(
+        plant_.data(), runner_.snapshot().roll,
+        runner_.snapshot().roll_rate);
+    step_runner(command);
     const SimulationSample sample = sampler_.read(
         plant_.data(), runner_.snapshot());
     if (sample_index_ % trace_stride_ == 0U) {
@@ -188,6 +234,23 @@ bool PerformanceBenchmark::step(
     if (result == nullptr) return true;
     return collect(
         *result, phase, sample, evaluate_tracking, evaluate_settle);
+}
+
+void PerformanceBenchmark::step_runner(
+    const bc_operator_command_t &command
+) {
+    if (forward_velocity_.observation() ==
+        ForwardVelocityObservation::wheel_odometry) {
+        runner_.step(command);
+        return;
+    }
+
+    bc_sensor_feedback_t feedback{};
+    adapter_.read(plant_.data(), feedback);
+    forward_velocity_.apply(
+        plant_.data(), sampler_,
+        runner_.snapshot().state.value[BC_STATE_DS], feedback);
+    runner_.step_with_feedback(command, feedback);
 }
 
 bool PerformanceBenchmark::collect(
@@ -203,6 +266,9 @@ bool PerformanceBenchmark::collect(
     const double roll = std::abs(static_cast<double>(snapshot.roll));
     result.maximum_pitch = std::max(result.maximum_pitch, pitch);
     result.maximum_roll = std::max(result.maximum_roll, roll);
+    result.maximum_roll_restraint_torque = std::max(
+        result.maximum_roll_restraint_torque,
+        std::abs(roll_restraint_.torque()));
 
     if (!result.initial_position_error_captured) {
         result.initial_position_error =
@@ -287,7 +353,11 @@ void PerformanceBenchmark::write_trace(
         .value(sample.time)
         .value(spec.command_rate)
         .value(leg_length_target_)
+        .value(forward_observation_name(forward_velocity_.observation()))
+        .value(position_feedback_enabled_)
+        .value(velocity_feedback_enabled_)
         .value(sample.base.x)
+        .value(sample.base.y)
         .value(sample.base.z)
         .value(sample.base.forward_velocity)
         .value(sample.base.vertical_velocity)
@@ -299,13 +369,23 @@ void PerformanceBenchmark::write_trace(
     for (const float value : snapshot.state_reference.value) {
         trace_.value(value);
     }
-    trace_.value(snapshot.roll).value(snapshot.roll_rate);
+    trace_.value(snapshot.roll)
+        .value(snapshot.roll_rate)
+        .value(roll_restraint_.torque());
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const bc_leg_kinematics_t &leg = snapshot.leg[side];
         trace_.value(leg.length)
             .value(leg.angle_body)
             .value(leg.length_velocity)
             .value(leg.angular_velocity);
+    }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        trace_.value(
+            forward_velocity_.wheel_radius() *
+            runner_.feedback().wheel[side].angular_velocity);
+    }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        trace_.value(sample.wheel.forward_velocity[side]);
     }
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         trace_.value(snapshot.actuation_request.wheel_torque[side]);

@@ -26,6 +26,9 @@ public:
 
     void reset();
     void step(const bc_operator_command_t &command);
+    void step_with_feedback(
+        const bc_operator_command_t &command,
+        const bc_sensor_feedback_t &feedback);
     [[nodiscard]] SimulationStats run_for(double duration_seconds);
     [[nodiscard]] SimulationStats run_for(
         double duration_seconds,
@@ -33,12 +36,16 @@ public:
     [[nodiscard]] const bc_controller_snapshot_t &snapshot() const noexcept {
         return snapshot_;
     }
+    [[nodiscard]] const bc_sensor_feedback_t &feedback() const noexcept {
+        return feedback_;
+    }
 
 private:
     MujocoPlant &plant_;
     const MujocoAdapter &adapter_;
     bc_controller_t controller_{};
     bc_controller_snapshot_t snapshot_{};
+    bc_sensor_feedback_t feedback_{};
 };
 
 } // namespace balance::sim

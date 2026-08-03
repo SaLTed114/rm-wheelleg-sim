@@ -25,10 +25,15 @@ SimulationSampler::SimulationSampler(const mjModel &model) : model_(model) {
         model_, mjOBJ_JOINT, "base_free_joint");
     base_qpos_ = model_.jnt_qposadr[base_joint];
     base_dof_ = model_.jnt_dofadr[base_joint];
+    base_body_ = require_id(model_, mjOBJ_BODY, "base_link");
     ground_ = require_id(model_, mjOBJ_GEOM, "ground");
     wheel_ = {{
         require_id(model_, mjOBJ_GEOM, "Right_wheel_collision"),
         require_id(model_, mjOBJ_GEOM, "Left_wheel_collision"),
+    }};
+    wheel_axis_ = {{
+        require_id(model_, mjOBJ_SITE, "Right_wheel_axis_site"),
+        require_id(model_, mjOBJ_SITE, "Left_wheel_axis_site"),
     }};
 }
 
@@ -36,21 +41,48 @@ SimulationSample SimulationSampler::read(
     const mjData &data,
     const bc_controller_snapshot_t &controller
 ) const {
-    const double yaw = controller.state.value[BC_STATE_PSI];
-    const BaseState base = {
-        data.qpos[base_qpos_],
-        data.qpos[base_qpos_ + 1],
-        data.qpos[base_qpos_ + 2],
-        data.qvel[base_dof_] * std::cos(yaw) +
-            data.qvel[base_dof_ + 1] * std::sin(yaw),
-        data.qvel[base_dof_ + 2],
-    };
     return SimulationSample{
         data.time,
         controller,
-        base,
+        read_base(data),
+        read_wheel_motion(data),
         read_contacts(data),
     };
+}
+
+BaseState SimulationSampler::read_base(const mjData &data) const {
+    const mjtNum *rotation = data.xmat + 9 * base_body_;
+    const double heading_norm = std::hypot(rotation[0], rotation[3]);
+    const double heading_x = rotation[0] / heading_norm;
+    const double heading_y = rotation[3] / heading_norm;
+
+    return BaseState{
+        data.qpos[base_qpos_],
+        data.qpos[base_qpos_ + 1],
+        data.qpos[base_qpos_ + 2],
+        data.qvel[base_dof_] * heading_x +
+            data.qvel[base_dof_ + 1] * heading_y,
+        data.qvel[base_dof_ + 2],
+    };
+}
+
+WheelMotionState SimulationSampler::read_wheel_motion(
+    const mjData &data
+) const {
+    const mjtNum *rotation = data.xmat + 9 * base_body_;
+    const double heading_norm = std::hypot(rotation[0], rotation[3]);
+    const double heading_x = rotation[0] / heading_norm;
+    const double heading_y = rotation[3] / heading_norm;
+    WheelMotionState state{};
+
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        mjtNum velocity[6]{};
+        mj_objectVelocity(
+            &model_, &data, mjOBJ_SITE, wheel_axis_[side], velocity, 0);
+        state.forward_velocity[side] =
+            velocity[3] * heading_x + velocity[4] * heading_y;
+    }
+    return state;
 }
 
 GroundContactState SimulationSampler::read_contacts(

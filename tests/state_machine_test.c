@@ -34,7 +34,8 @@ int main() {
 
     bc_motion_default_config(&config);
     if (config.leg_length != 0.18F ||
-        !config.position_feedback_enabled) {
+        !config.position_feedback_enabled ||
+        !config.velocity_feedback_enabled) {
         fputs("default motion config is incorrect\n", stderr);
         return 1;
     }
@@ -133,19 +134,21 @@ int main() {
     }
 
     system.motion.config.position_feedback_enabled = 0U;
+    system.motion.config.velocity_feedback_enabled = 0U;
     state.value[BC_STATE_S] = 2.0F;
+    state.value[BC_STATE_DS] = -0.4F;
     operator_command.forward_velocity = 0.2F;
     operator_command.yaw_rate = 0.0F;
     bc_system_update(&system, &input, &command);
     if (command.state_reference.value[BC_STATE_S] != 2.0F ||
-        fabsf(command.state_reference.value[BC_STATE_DS] - 0.2F) > 1.0e-6F ||
+        command.state_reference.value[BC_STATE_DS] != -0.4F ||
         command.state_reference.value[BC_STATE_THETA_L] != 0.0F ||
         command.state_reference.value[BC_STATE_THETA_R] != 0.0F ||
         command.state_reference.value[BC_STATE_DTHETA_L] != 0.0F ||
         command.state_reference.value[BC_STATE_DTHETA_R] != 0.0F ||
         command.state_reference.value[BC_STATE_THETA_B] != 0.0F ||
         command.state_reference.value[BC_STATE_DTHETA_B] != 0.0F) {
-        fputs("position-channel config polluted nominal reference\n", stderr);
+        fputs("forward-channel config polluted nominal reference\n", stderr);
         return 1;
     }
 

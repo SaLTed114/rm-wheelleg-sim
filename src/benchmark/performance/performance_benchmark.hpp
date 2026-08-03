@@ -11,6 +11,8 @@
 #include "common/csv_writer.hpp"
 #include "common/simulation_sample.hpp"
 #include "common/statistics.hpp"
+#include "base_roll_restraint.hpp"
+#include "forward_velocity_diagnostic.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "performance_scenario.hpp"
@@ -18,9 +20,23 @@
 
 namespace balance::benchmark {
 
+struct PerformanceBenchmarkConfig {
+    std::optional<double> leg_length;
+    std::size_t trace_stride{10U};
+    ForwardVelocityObservation forward_velocity_observation{
+        ForwardVelocityObservation::wheel_odometry};
+    bool roll_restrained{};
+    bool position_feedback_enabled{true};
+    bool velocity_feedback_enabled{true};
+};
+
 struct PerformanceResult {
     PerformanceCaseSpec spec;
     double leg_length_target{};
+    ForwardVelocityObservation forward_velocity_observation{};
+    bool roll_restrained{};
+    bool position_feedback_enabled{};
+    bool velocity_feedback_enabled{};
     bool completed{};
     bool balance_engaged{};
     bool leg_length_valid{true};
@@ -32,6 +48,7 @@ struct PerformanceResult {
     double maximum_roll{};
     double maximum_leg_common{};
     double maximum_leg_difference{};
+    double maximum_roll_restraint_torque{};
     std::array<double, BC_SIDE_NUM> minimum_vertical_projection{{
         std::numeric_limits<double>::infinity(),
         std::numeric_limits<double>::infinity(),
@@ -49,8 +66,7 @@ public:
     PerformanceBenchmark(
         const std::filesystem::path &model_path,
         const std::filesystem::path &output_directory,
-        std::optional<double> leg_length,
-        std::size_t trace_stride);
+        const PerformanceBenchmarkConfig &config);
 
     [[nodiscard]] PerformanceResult run(const PerformanceCaseSpec &spec);
     void write_summary(const PerformanceResult &result);
@@ -64,6 +80,7 @@ private:
         PerformanceResult &result, const char *phase,
         const SimulationSample &sample,
         bool evaluate_tracking, bool evaluate_settle) const;
+    void step_runner(const bc_operator_command_t &command);
     void finish_result(PerformanceResult &result) const;
     void write_trace(
         const PerformanceCaseSpec &spec, const char *phase,
@@ -74,6 +91,10 @@ private:
     sim::MujocoAdapter adapter_;
     sim::SimulationRunner runner_;
     SimulationSampler sampler_;
+    BaseRollRestraint roll_restraint_;
+    ForwardVelocityDiagnostic forward_velocity_;
+    bool position_feedback_enabled_{};
+    bool velocity_feedback_enabled_{};
     CsvWriter summary_;
     CsvWriter trace_;
     double leg_length_target_{};

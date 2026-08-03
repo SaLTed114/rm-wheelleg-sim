@@ -141,6 +141,24 @@ The matching in-place yaw sweep fixes the target at `+/-2*pi rad/s` and tests
   --suite yaw-acceleration --leg-length 0.18
 ```
 
+The benchmark also provides isolated observer and plant diagnostics. These
+options do not change the controller defaults:
+
+- `--forward-observation base-truth` replaces only the common wheel-speed
+  observation with the MuJoCo base forward velocity.
+- `--forward-observation contact-gated` freezes the common wheel-speed
+  observation for 50 ms after either wheel loses contact.
+- `--position-feedback off` removes only the LQR position error while retaining
+  forward-speed feedback.
+- `--velocity-feedback off` removes only the LQR forward-speed error while
+  retaining the measured `DS` in telemetry. Pass both feedback options to
+  isolate yaw control from the longitudinal LQR channels.
+- `--roll-restraint on` applies a benchmark-only ideal base roll restraint.
+
+At trace level, `wheel_encoder_velocity_l/r` and
+`wheel_center_velocity_l/r` separate encoder slip from motion of the wheel
+axis. These fields are diagnostic telemetry and are not control inputs.
+
 Generate the fixed-length, unsaturated `A/B + K` prior for the same positive
 yaw cases with the LQR Python environment:
 

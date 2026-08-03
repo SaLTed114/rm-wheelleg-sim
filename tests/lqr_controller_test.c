@@ -1,5 +1,7 @@
 #include "balance/control_law/lqr.h"
 
+#include "current_model_schedule.h"
+
 #include <math.h>
 #include <stdio.h>
 
@@ -15,6 +17,20 @@ static int expect_near(
     return 1;
 }
 
+static float expected_gain(
+    const int input, const int state, const float normalized_length
+) {
+    const float *coefficient =
+        bc_lqr_generated_coefficients[input][state];
+    float gain = coefficient[0];
+
+    for (int index = 1;
+         index < BC_LQR_GENERATED_COEFFICIENT_COUNT; ++index) {
+        gain = gain * normalized_length + coefficient[index];
+    }
+    return gain;
+}
+
 int main() {
     bc_state_vector_t state = {0};
     bc_state_vector_t reference = {0};
@@ -22,20 +38,46 @@ int main() {
     state.value[BC_STATE_THETA_B] = 0.1F;
 
     bc_lqr_calculate(0.20F, &state, &reference, &output);
+    const float normalized_length =
+        (0.20F - bc_lqr_generated_length_midpoint) /
+            bc_lqr_generated_length_scale;
+    const float expected[BC_LQR_GENERATED_INPUT_COUNT] = {
+        -0.1F * expected_gain(0, BC_STATE_THETA_B, normalized_length),
+        -0.1F * expected_gain(1, BC_STATE_THETA_B, normalized_length),
+        -0.1F * expected_gain(2, BC_STATE_THETA_B, normalized_length),
+        -0.1F * expected_gain(3, BC_STATE_THETA_B, normalized_length),
+    };
     if (expect_near(
             "left wheel", output.wheel_torque[BC_L],
-            0.8971487F, 2.0e-6F) ||
+            expected[0], 2.0e-6F) ||
         expect_near(
             "right wheel", output.wheel_torque[BC_R],
-            0.8974479F, 2.0e-6F) ||
+            expected[1], 2.0e-6F) ||
         expect_near(
             "left leg", output.leg_torque[BC_L],
-            1.0302552F, 2.0e-6F) ||
+            expected[2], 2.0e-6F) ||
         expect_near(
             "right leg", output.leg_torque[BC_R],
+            expected[3], 2.0e-6F)) {
+        return 1;
+    }
+
+#ifdef BALANCE_DEFAULT_LQR_SCHEDULE
+    if (expect_near(
+            "default left wheel", output.wheel_torque[BC_L],
+            0.8971487F, 2.0e-6F) ||
+        expect_near(
+            "default right wheel", output.wheel_torque[BC_R],
+            0.8974479F, 2.0e-6F) ||
+        expect_near(
+            "default left leg", output.leg_torque[BC_L],
+            1.0302552F, 2.0e-6F) ||
+        expect_near(
+            "default right leg", output.leg_torque[BC_R],
             1.0339374F, 2.0e-6F)) {
         return 1;
     }
+#endif
 
     bc_lqr_output_t below_range = {0};
     bc_lqr_output_t at_minimum = {0};

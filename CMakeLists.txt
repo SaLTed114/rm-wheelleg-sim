@@ -87,6 +87,8 @@ add_library(balance_benchmark_support STATIC
   src/benchmark/common/common_diagnostics.cpp
   src/benchmark/common/csv_writer.cpp
   src/benchmark/common/simulation_sample.cpp
+  src/benchmark/performance/base_roll_restraint.cpp
+  src/benchmark/performance/forward_velocity_diagnostic.cpp
   src/benchmark/performance/performance_benchmark.cpp
   src/benchmark/performance/performance_scenario.cpp
   src/benchmark/trim/trim_scanner.cpp)
@@ -146,6 +148,13 @@ if(BUILD_TESTING)
 
   add_executable(lqr_controller_test tests/lqr_controller_test.c)
   target_link_libraries(lqr_controller_test PRIVATE balance_control_core)
+  target_include_directories(lqr_controller_test
+    PRIVATE "${BALANCE_LQR_SCHEDULE_DIR}")
+  if(BALANCE_LQR_SCHEDULE_DIR STREQUAL
+      "${CMAKE_CURRENT_SOURCE_DIR}/tools/lqr/generated")
+    target_compile_definitions(lqr_controller_test
+      PRIVATE BALANCE_DEFAULT_LQR_SCHEDULE=1)
+  endif()
   balance_enable_warnings(lqr_controller_test)
   add_test(NAME lqr_controller COMMAND lqr_controller_test)
 

@@ -25,10 +25,15 @@ struct GroundContactState {
     std::string unexpected;
 };
 
+struct WheelMotionState {
+    std::array<double, BC_SIDE_NUM> forward_velocity{};
+};
+
 struct SimulationSample {
     double time;
     const bc_controller_snapshot_t &controller;
     BaseState base;
+    WheelMotionState wheel;
     GroundContactState contact;
 };
 
@@ -36,12 +41,16 @@ class SimulationSampler {
 public:
     explicit SimulationSampler(const mjModel &model);
 
+    [[nodiscard]] BaseState read_base(
+        const mjData &data) const;
+    [[nodiscard]] GroundContactState read_contacts(
+        const mjData &data) const;
     [[nodiscard]] SimulationSample read(
         const mjData &data,
         const bc_controller_snapshot_t &controller) const;
 
 private:
-    [[nodiscard]] GroundContactState read_contacts(
+    [[nodiscard]] WheelMotionState read_wheel_motion(
         const mjData &data) const;
     [[nodiscard]] std::string contact_name(
         const mjContact &contact) const;
@@ -49,8 +58,10 @@ private:
     const mjModel &model_;
     int base_qpos_{};
     int base_dof_{};
+    int base_body_{};
     int ground_{};
     std::array<int, BC_SIDE_NUM> wheel_{};
+    std::array<int, BC_SIDE_NUM> wheel_axis_{};
 };
 
 } // namespace balance::benchmark

@@ -32,6 +32,7 @@ DEFAULT_OUTPUT = Path("tools/lqr/generated")
 Q_DIAGONAL = (90, 60, 40, 15, 240, 4, 240, 4, 300, 60)
 R_DIAGONAL = (3.2, 3.2, 0.7, 0.7)
 CONTROLLER_LENGTH_MINIMUM = 0.16
+YAW_INERTIA_SOURCES = ("base-link", "assembly")
 
 
 def make_leg_provider(
@@ -153,11 +154,24 @@ def physical_to_dict(physical: PhysicalParameters) -> dict[str, float]:
     }
 
 
+def yaw_inertia_scale(
+    extracted: dict[str, object], source: str,
+) -> float:
+    rigid = extracted["rigid"]
+    if source == "base-link": return 1.0
+    if source == "assembly":
+        return (
+            rigid["assembly_yaw_inertia_diagnostic"] /
+            rigid["body_yaw_inertia_actual"])
+    raise ValueError(f"unknown yaw inertia source: {source}")
+
+
 def build_result(
     model_path: Path,
     q_diagonal: tuple[float, ...] = Q_DIAGONAL,
     r_diagonal: tuple[float, ...] = R_DIAGONAL,
     extracted: dict[str, object] | None = None,
+    yaw_inertia_source: str = "base-link",
 ) -> dict[str, object]:
     legacy_metrics = verify_legacy(
         Path("references/rm2026cb-balance-chassis/Tasks/balance_chassis/"
@@ -178,7 +192,8 @@ def build_result(
         r_diagonal=r_diagonal,
     )
 
-    physical = make_physical_parameters(extracted, yaw_scale=1.0)
+    selected_scale = yaw_inertia_scale(extracted, yaw_inertia_source)
+    physical = make_physical_parameters(extracted, selected_scale)
     samples = compute_gain_samples(physical, settings, leg_provider)
     if samples.minimum_controllability_rank != len(STATE_NAMES):
         raise RuntimeError(
@@ -193,10 +208,15 @@ def build_result(
     if horner_error > 1.0e-5:
         raise RuntimeError("float Horner evaluation exceeds tolerance")
 
-    doubled = replace(physical, body_yaw_inertia_scale=2.0)
-    doubled_samples = compute_gain_samples(doubled, settings, leg_provider)
-    doubled_difference = float(np.max(np.abs(
-        samples.gains - doubled_samples.gains)))
+    comparison_source = (
+        "2x-base-link" if yaw_inertia_source == "base-link" else "base-link")
+    comparison_scale = 2.0 if yaw_inertia_source == "base-link" else 1.0
+    comparison = replace(
+        physical, body_yaw_inertia_scale=comparison_scale)
+    comparison_samples = compute_gain_samples(
+        comparison, settings, leg_provider)
+    comparison_difference = float(np.max(np.abs(
+        samples.gains - comparison_samples.gains)))
 
     return {
         "schema_version": 1,
@@ -233,17 +253,16 @@ def build_result(
                 "maximum_float_horner_error": horner_error,
             },
             "yaw_inertia_sensitivity": {
-                "selected_scale": 1.0,
+                "selected_source": yaw_inertia_source,
+                "selected_scale": selected_scale,
                 "selected_model_inertia": physical.body_yaw_inertia_model,
-                "comparison_scale": 2.0,
-                "comparison_model_inertia": doubled.body_yaw_inertia_model,
+                "comparison_source": comparison_source,
+                "comparison_scale": comparison_scale,
+                "comparison_model_inertia": (
+                    comparison.body_yaw_inertia_model),
                 "comparison_maximum_raw_eigenvalue": (
-                    doubled_samples.maximum_eigenvalue),
-                "maximum_raw_gain_difference": doubled_difference,
-                "conclusion": (
-                    "Use 1x base_link Izz: equ5 and equ7 reduce to the full "
-                    "-I_z*D2psi term; 2x is a sensitivity case, not a hidden "
-                    "factor correction."),
+                    comparison_samples.maximum_eigenvalue),
+                "maximum_raw_gain_difference": comparison_difference,
             },
         },
     }
@@ -295,6 +314,14 @@ def emit_report(result: dict[str, object], path: Path) -> None:
     schedule = result["schedule"]
     left_fit = model["fit_diagnostics"]["left"]
     right_fit = model["fit_diagnostics"]["right"]
+    if sensitivity["selected_source"] == "base-link":
+        yaw_conclusion = (
+            "正式调度采用 `base_link` 实际惯量。两倍惯量只保留为敏感性对照，"
+            "不能在其他位置再次乘二。")
+    else:
+        yaw_conclusion = (
+            "本调度采用整机偏航惯量，仅用于诊断控制器与 plant 的惯量匹配，"
+            "不能替代正式的 `base-link` 调度。")
 
     text = f"""# LQR 参数生成与验证
 
@@ -314,15 +341,17 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 `I * D2psi = R_l * (-N_f,l + N_f,r)` 将 `I` 定义为完整的机体偏航惯量，
 方程中没有遗留的二分之一系数。
 
-- `base_link` 实际 Izz：`{sensitivity['selected_model_inertia']:.9f} kg*m^2`。
-- 正式模型倍率：`{sensitivity['selected_scale']:.1f}x`。
-- 敏感性对照倍率：`{sensitivity['comparison_scale']:.1f}x`，对应
+- `base_link` 实际 Izz：`{rigid['body_yaw_inertia_actual']:.9f} kg*m^2`。
+- 选定来源：`{sensitivity['selected_source']}`，倍率：
+  `{sensitivity['selected_scale']:.9f}x`，建模值：
+  `{sensitivity['selected_model_inertia']:.9f} kg*m^2`。
+- 对照来源：`{sensitivity['comparison_source']}`，倍率：
+  `{sensitivity['comparison_scale']:.9f}x`，对应
   `{sensitivity['comparison_model_inertia']:.9f} kg*m^2`。
 - 两种情况的原始增益最大差：
   `{sensitivity['maximum_raw_gain_difference']:.9f}`。
 
-正式调度采用一倍实际惯量。两倍惯量只保留为敏感性对照，不能在其他位置
-再次乘二。
+{yaw_conclusion}
 
 ## 当前模型参数
 
@@ -401,6 +430,10 @@ def main() -> int:
     parser.add_argument(
         "--r-diagonal", type=float, nargs=len(R_DIAGONAL),
         default=R_DIAGONAL)
+    parser.add_argument(
+        "--yaw-inertia-source", choices=YAW_INERTIA_SOURCES,
+        default="base-link",
+        help="yaw inertia used by the reduced controller model")
     arguments = parser.parse_args()
 
     extracted = None
@@ -412,7 +445,8 @@ def main() -> int:
         arguments.model,
         tuple(arguments.q_diagonal),
         tuple(arguments.r_diagonal),
-        extracted)
+        extracted,
+        arguments.yaw_inertia_source)
     arguments.output.mkdir(parents=True, exist_ok=True)
     json_path = arguments.output / "current_model_schedule.json"
     header_path = arguments.output / "current_model_schedule.h"
@@ -434,6 +468,11 @@ def main() -> int:
     print(
         "Generated polynomial order: "
         f"{result['schedule']['polynomial_order']}")
+    sensitivity = result["validation"]["yaw_inertia_sensitivity"]
+    print(
+        "Yaw inertia source: "
+        f"{sensitivity['selected_source']} "
+        f"({sensitivity['selected_model_inertia']:.9f} kg*m^2)")
     print(
         "Dense fitted closed-loop max |eigenvalue|: "
         f"{validation['maximum_fitted_eigenvalue']:.9f}")

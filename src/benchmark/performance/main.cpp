@@ -15,8 +15,10 @@ namespace {
 constexpr std::size_t kDefaultTraceStride = 10U;
 
 using balance::benchmark::PerformanceBenchmark;
+using balance::benchmark::PerformanceBenchmarkConfig;
 using balance::benchmark::PerformanceCaseSpec;
 using balance::benchmark::PerformanceResult;
+using balance::benchmark::ForwardVelocityObservation;
 
 enum class Suite {
     baseline,
@@ -68,6 +70,11 @@ int main(int argc, char **argv) {
     Suite suite = Suite::baseline;
     std::optional<double> leg_length;
     std::optional<std::size_t> trace_stride;
+    bool roll_restrained = false;
+    ForwardVelocityObservation forward_observation =
+        ForwardVelocityObservation::wheel_odometry;
+    bool position_feedback_enabled = true;
+    bool velocity_feedback_enabled = true;
     const PerformanceCaseSpec *selected_case = nullptr;
     bool arguments_valid = argc >= 3 && (argc - 3) % 2 == 0;
     for (int index = 3; arguments_valid && index < argc; index += 2) {
@@ -100,6 +107,29 @@ int main(int argc, char **argv) {
         } else if (option == "--case" && selected_case == nullptr) {
             selected_case = balance::benchmark::find_performance_case(value);
             arguments_valid = selected_case != nullptr;
+        } else if (option == "--roll-restraint" && !roll_restrained) {
+            roll_restrained = value == "on";
+            arguments_valid = roll_restrained;
+        } else if (option == "--forward-observation" &&
+                   forward_observation ==
+                       ForwardVelocityObservation::wheel_odometry) {
+            if (value == "base-truth") {
+                forward_observation =
+                    ForwardVelocityObservation::base_truth;
+            } else if (value == "contact-gated") {
+                forward_observation =
+                    ForwardVelocityObservation::contact_gated;
+            } else {
+                arguments_valid = false;
+            }
+        } else if (option == "--position-feedback" &&
+                   position_feedback_enabled) {
+            position_feedback_enabled = value != "off";
+            arguments_valid = !position_feedback_enabled;
+        } else if (option == "--velocity-feedback" &&
+                   velocity_feedback_enabled) {
+            velocity_feedback_enabled = value != "off";
+            arguments_valid = !velocity_feedback_enabled;
         } else {
             arguments_valid = false;
         }
@@ -111,14 +141,23 @@ int main(int argc, char **argv) {
             << "usage: rm_balance_performance <model.xml> <output-directory> "
                "[--suite forward-acceleration|yaw-acceleration] "
                "[--case <case-name>] "
-               "[--leg-length <metres>] [--trace-stride <steps>]\n";
+               "[--leg-length <metres>] [--trace-stride <steps>] "
+               "[--roll-restraint on] "
+               "[--forward-observation base-truth|contact-gated] "
+               "[--position-feedback off] [--velocity-feedback off]\n";
         return EXIT_FAILURE;
     }
 
     try {
-        PerformanceBenchmark benchmark(
-            argv[1], argv[2], leg_length,
-            trace_stride.value_or(kDefaultTraceStride));
+        const PerformanceBenchmarkConfig config{
+            leg_length,
+            trace_stride.value_or(kDefaultTraceStride),
+            forward_observation,
+            roll_restrained,
+            position_feedback_enabled,
+            velocity_feedback_enabled,
+        };
+        PerformanceBenchmark benchmark(argv[1], argv[2], config);
         std::vector<PerformanceCaseSpec> cases;
         if (selected_case != nullptr) {
             cases.push_back(*selected_case);

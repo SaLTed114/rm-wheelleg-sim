@@ -34,15 +34,24 @@ void SimulationRunner::reset() {
     plant_.reset();
     bc_controller_reset(&controller_);
     bc_controller_capture_snapshot(&controller_, &snapshot_);
+    feedback_ = {};
 }
 
 void SimulationRunner::step(const bc_operator_command_t &command) {
     bc_sensor_feedback_t feedback{};
+    adapter_.read(plant_.data(), feedback);
+    step_with_feedback(command, feedback);
+}
+
+void SimulationRunner::step_with_feedback(
+    const bc_operator_command_t &command,
+    const bc_sensor_feedback_t &feedback
+) {
     bc_actuation_t actuation{};
 
-    adapter_.read(plant_.data(), feedback);
+    feedback_ = feedback;
     bc_controller_update(
-        &controller_, &feedback,
+        &controller_, &feedback_,
         static_cast<float>(plant_.timestep()));
     bc_controller_set_command(&controller_, &command);
     bc_controller_calculate(&controller_);
