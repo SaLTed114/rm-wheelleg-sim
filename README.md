@@ -131,6 +131,30 @@ To separate acceleration capability from top speed, run the dedicated
   --suite forward-acceleration
 ```
 
+The matching in-place yaw sweep fixes the target at `+/-2*pi rad/s` and tests
+`1, 2, 3, 5, 7.5, 10, 15 rad/s^2`:
+
+```powershell
+.\build\Release\rm_balance_performance.exe `
+  .\models\MJCF\COD-2026RoboMaster-Balance.xml `
+  .\build\performance\yaw-acceleration `
+  --suite yaw-acceleration --leg-length 0.18
+```
+
+Generate the fixed-length, unsaturated `A/B + K` prior for the same positive
+yaw cases with the LQR Python environment:
+
+```bash
+python tools/lqr/yaw_response.py \
+  --output build/performance/yaw-prior \
+  --leg-length 0.18
+```
+
+This writes an ideal-model `summary.csv` and 1 kHz `trace.csv`. Passing one or
+more benchmark traces with `--mujoco-trace` also compares perturbations around
+the measured pre-ramp standing trim. It does not run MuJoCo or change the
+generated controller schedule.
+
 This suite always runs the complete timed schedule. Contact, attitude, and
 state-machine problems are annotated in the console and CSV instead of ending
 the case early; only non-finite simulation data stops a run. The output also
@@ -165,7 +189,7 @@ The GUI can replay any one of the exact same benchmark cases:
 Valid names are `forward_pos_1` through `forward_pos_3`, their `forward_neg_*`
 counterparts, and `yaw_pos_1pi` through `yaw_pos_4pi` with matching
 `yaw_neg_*` cases. Acceleration cases use names such as
-`forward_pos_2_a0p5`, `forward_neg_2_a2`, and `forward_pos_2_a5`. The camera
-follows the chassis. Playback notes problems in the title and continues to the
-scheduled end; press `R` to replay the case and use Space to pause or resume
-while it is running.
+`forward_pos_2_a0p5`, `forward_neg_2_a2`, `yaw_pos_2pi_a3`, and
+`yaw_neg_2pi_a7p5`. The camera follows the chassis. Playback notes problems in
+the title and continues to the scheduled end; press `R` to replay the case and
+use Space to pause or resume while it is running.

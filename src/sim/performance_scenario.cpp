@@ -51,6 +51,23 @@ constexpr std::array<PerformanceCaseSpec, 10> kForwardAccelerationCases{{
     {"forward_neg_2_a5", PerformanceAxis::forward, -2.0, 5.0},
 }};
 
+constexpr std::array<PerformanceCaseSpec, 14> kYawAccelerationCases{{
+    {"yaw_pos_2pi_a1", PerformanceAxis::yaw, 2.0 * BC_PI, 1.0},
+    {"yaw_neg_2pi_a1", PerformanceAxis::yaw, -2.0 * BC_PI, 1.0},
+    {"yaw_pos_2pi_a2", PerformanceAxis::yaw, 2.0 * BC_PI, 2.0},
+    {"yaw_neg_2pi_a2", PerformanceAxis::yaw, -2.0 * BC_PI, 2.0},
+    {"yaw_pos_2pi_a3", PerformanceAxis::yaw, 2.0 * BC_PI, 3.0},
+    {"yaw_neg_2pi_a3", PerformanceAxis::yaw, -2.0 * BC_PI, 3.0},
+    {"yaw_pos_2pi_a5", PerformanceAxis::yaw, 2.0 * BC_PI, 5.0},
+    {"yaw_neg_2pi_a5", PerformanceAxis::yaw, -2.0 * BC_PI, 5.0},
+    {"yaw_pos_2pi_a7p5", PerformanceAxis::yaw, 2.0 * BC_PI, 7.5},
+    {"yaw_neg_2pi_a7p5", PerformanceAxis::yaw, -2.0 * BC_PI, 7.5},
+    {"yaw_pos_2pi_a10", PerformanceAxis::yaw, 2.0 * BC_PI, 10.0},
+    {"yaw_neg_2pi_a10", PerformanceAxis::yaw, -2.0 * BC_PI, 10.0},
+    {"yaw_pos_2pi_a15", PerformanceAxis::yaw, 2.0 * BC_PI, 15.0},
+    {"yaw_neg_2pi_a15", PerformanceAxis::yaw, -2.0 * BC_PI, 15.0},
+}};
+
 int require_id(
     const mjModel &model, const mjtObj type, const char *name
 ) {
@@ -87,6 +104,11 @@ forward_acceleration_cases() noexcept {
     return kForwardAccelerationCases;
 }
 
+const std::array<PerformanceCaseSpec, 14> &
+yaw_acceleration_cases() noexcept {
+    return kYawAccelerationCases;
+}
+
 const PerformanceCaseSpec *find_performance_case(
     const std::string_view name
 ) noexcept {
@@ -103,8 +125,17 @@ const PerformanceCaseSpec *find_performance_case(
         [name](const PerformanceCaseSpec &spec) {
             return spec.name == name;
         });
-    return acceleration_found == kForwardAccelerationCases.end() ?
-        nullptr : &*acceleration_found;
+    if (acceleration_found != kForwardAccelerationCases.end()) {
+        return &*acceleration_found;
+    }
+
+    const auto yaw_acceleration_found = std::find_if(
+        kYawAccelerationCases.begin(), kYawAccelerationCases.end(),
+        [name](const PerformanceCaseSpec &spec) {
+            return spec.name == name;
+        });
+    return yaw_acceleration_found == kYawAccelerationCases.end() ?
+        nullptr : &*yaw_acceleration_found;
 }
 
 const char *performance_axis_name(const PerformanceAxis axis) noexcept {
@@ -312,6 +343,11 @@ PerformanceContactState PerformanceContactMonitor::read(
                 (contact.geom[1] == ground_ &&
                  contact.geom[0] == wheel_[side]);
             state.wheel[side] = state.wheel[side] || pair;
+            if (pair) {
+                mjtNum force[6] = {};
+                mj_contactForce(&model_, &data, index, force);
+                state.wheel_normal_force[side] += std::max(0.0, force[0]);
+            }
             wheel_contact = wheel_contact || pair;
         }
         state.other = state.other || !wheel_contact;

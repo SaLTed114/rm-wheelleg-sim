@@ -38,6 +38,8 @@ struct PerformanceCaseSpec {
 performance_cases() noexcept;
 [[nodiscard]] const std::array<PerformanceCaseSpec, 10> &
 forward_acceleration_cases() noexcept;
+[[nodiscard]] const std::array<PerformanceCaseSpec, 14> &
+yaw_acceleration_cases() noexcept;
 [[nodiscard]] const PerformanceCaseSpec *find_performance_case(
     std::string_view name) noexcept;
 [[nodiscard]] const char *performance_axis_name(
@@ -82,6 +84,7 @@ private:
 
 struct PerformanceContactState {
     std::array<bool, BC_SIDE_NUM> wheel{};
+    std::array<double, BC_SIDE_NUM> wheel_normal_force{};
     bool other{};
     std::string unexpected;
 };

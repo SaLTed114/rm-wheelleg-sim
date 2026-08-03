@@ -1,7 +1,7 @@
 # rm-balance-sim 项目上下文
 
 > 本文是给后续 Codex/开发会话快速恢复上下文用的工作笔记，不是对外设计文档。
-> 最近更新：2026-08-02。
+> 最近更新：2026-08-03。
 
 ## 首要约束
 
@@ -13,10 +13,10 @@
 
 ## 已验证：LQR 偏航惯量与生成链
 
-- Python 生成器以旧参数复现当前实车 `bc_lqr_schedule.c`，最大系数误差为 `4.974874e-10`，确认该固件表就是 `lqr.m` 当前参数的生成结果。
+- Python 生成器以旧参数复现当前实车 `bc_lqr_schedule.c`；Windows 自动报告与 Linux 复跑的最大系数误差分别为 `4.962484e-10` 和 `4.974874e-10`，都远低于 `1e-6` golden 阈值，确认该固件表就是 `lqr.m` 当前参数的生成结果。两端重新生成的当前模型 C header 完全一致；
 - `equ5` 中全部 `I_z/(2*R_l)` 项结合 `equ7` 后严格化简为 `-I_z*D2psi`；参考 PDF 的原始方程也把 `I` 定义为机体绕竖直轴的完整惯量。式中不存在尚未处理的 `1/2`。
 - 当前模型正式采用 `I_z_model_scale=1`，即 `I_z_model=I_z_body_actual=3.047199970 kg*m^2`。两倍值 `6.094399941 kg*m^2` 只作为敏感性对照，不能在其他位置再次乘二。
-- 当前模型两种惯量生成的原始增益最大差为 `1.178199615`。完整参数、误差、物理依据及 1 ms 调度验证见 `docs/notes/lqr-validation.md`。
+- 当前模型两种惯量生成的原始增益最大差为 `1.484358039`。完整参数、误差、物理依据及 1 ms 调度验证见 `docs/notes/lqr-validation.md`。
 - 工具仍须显式区分 `body_yaw_inertia_actual`、`body_yaw_inertia_scale` 和 `body_yaw_inertia_model`，避免以后重新引入歧义。
 
 ## 项目目标
@@ -26,7 +26,7 @@
 预期总体数据流：
 
 ```text
-MuJoCo/Isaac Sim 实际闭链 plant
+MuJoCo 实际闭链 plant
     -> 仿真传感器适配
     -> 虚拟腿运动学与状态估计
     -> 行为状态机和参考量
@@ -192,6 +192,9 @@ L = l1*cos(delta) + sqrt(l2^2 - l1^2*sin(delta)^2)
 - mocap `base_support` 与 weld 仍保留，但模型默认关闭该约束；测试或后续“托住—起控—释放”流程可显式启用；
 - 已加入 `z=-0.43 m` 的地面，机体、腿部连杆和轮均与地面碰撞，但机器人内部自碰撞保持关闭；
 - 已加入机体姿态、gyro、左右虚拟髋点、轮轴点和 `framepos` sensor；
+- 物理右腿闭链连接点存在约 `1.95 mm` 固定横向错位；参数提取器按每侧
+  固有闭合误差再加 `0.5 mm` 判断姿态可行性，不能把它误判为求解失败或
+  悄悄把模型对称化；
 - 上游 USD 文件已移至 `references/`，当前项目不把 Isaac Sim 作为运行后端。
 
 ## 用户实车控制架构
@@ -217,7 +220,9 @@ while (1) {
 2. `set_command`：行为状态机、参考量、LQR、轮和腿控制；
 3. `execute`：关节力矩与轮电流下发。
 
-仿真中应保留这套边界，用仿真传感器/执行器适配器替换硬件层。
+仿真中保留这套职责边界，并把实车 `set_command/execute` 之间混合的计算与
+下发进一步拆成独立 `calculate/execute`；这属于本项目接口演化，不是实车
+原代码已有的第四阶段。
 
 ### 聚合状态
 
@@ -322,7 +327,8 @@ u = [T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]
 
 也是约 1 ms 的独立底盘线程，流水线清楚，但具体业务步骤直接平铺在顶层。
 
-用户自己的 `update -> set_command -> calculate -> execute` 抽象层级更高，适合作为仿真控制器接口。
+本项目在用户实车三阶段边界基础上形成的
+`update -> set_command -> calculate -> execute` 适合作为仿真控制器接口。
 
 ## 当前最小运行骨架
 
@@ -365,7 +371,7 @@ MuJoCo plant
 - GUI 启动后保持所有执行器关闭，让机器人自由落地 `2 s`；随后由行为层用腿长/腿角 PD 将双腿调至目标长度和 `angle_body=-pi/2`，姿态连续稳定 `0.25 s` 后切入完整 LQR/支撑前馈。整个过程不使用 mocap weld，也不人为搬动机体或把轮轴对齐地面；
 - 若自由落地 `2 s` 后直接开启完整 LQR，起控瞬间两轮和机体同时接地，但被动腿已塌到约 `0.158/0.145 m`，左右腿角状态约 `-0.72/-0.74 rad`；之后轮和四个关节力矩长期饱和、轮子离地，无法自行站起。加入上述腿部姿态预备后约在 `3.711 s` 切入平衡并成功站立，因此当前 LQR 的恢复域不包含未经整理的被动落地姿态；
 - 腿长目标已由 `0.20 m` 改为 `0.16 m`，行为层约在 `2.775 s` 切入平衡；末段双轮接触率 `100%`、无其他部件触地，最大机体俯仰约 `1.95 deg`。最初出现的缓慢回正和机体持续触地并非腿长不足，而是行为层切换时误把整个当前状态复制为 LQR 参考，导致 `theta_l/theta_r/theta_b` 及其角速度参考非零；现已改为参考向量先清零、只捕获当前 `S/PSI`，并由单元测试保证六个姿态参考保持零；
-- 不能在轮子仍悬空时直接开启完整 LQR：当前观测器会把轮自转积分为底盘位移，实测可迅速产生约 `-27 m/s` 的错误里程计速度并把腿打到角度限位。第一版静态场景通过接地高度释放规避，后续应由接触状态或融合观测器正式处理；
+- 不能在轮子仍悬空时直接开启完整 LQR：当前观测器会把轮自转积分为底盘位移，实测可迅速产生约 `-27 m/s` 的错误里程计速度并把腿打到角度限位。已经删除的早期静态 scenario 曾用人为对齐接地高度规避；当前自由落地流程不再使用该做法，后续应由接触状态或融合观测器正式处理；
 - 腿长目标为 `0.20 m` 时，无界面静态站立测试在约 `3.711 s` 切入平衡，最后 `3 s` 双轮接触率为 `100%`、无其他部件触地，最大机体俯仰约 `1.48 deg`，最大俯仰角速度约 `0.00065 rad/s`；
 - 平衡场景支持前进速度和偏航速度参考；每个控制周期分别积分为 `s_ref` 和 `psi_ref`，同时设置 `ds_ref` 和 `dpsi_ref`。GUI 循环演示静止、`+/-0.25 m/s` 前后运动和 `+/-1.57 rad/s` 左右偏航；
 - 无界面运动验证中，前进/后退稳态速度约为 `+0.258/-0.258 m/s`，三秒真实位移约为 `+0.742/-0.769 m`；`+/-1.57 rad/s` 偏航目标实际约为 `+1.88/-1.85 rad/s`，存在约 18 至 20% 超调。四个阶段双轮接触率均为 `100%`，无其他部件触地；
@@ -379,14 +385,17 @@ MuJoCo plant
 - 当前 yaw 观测不是简单的 `[-pi, pi]` 回绕角：adapter 输出回绕姿态，observer 对相邻帧差值 wrap 后持续累加，因此连续积分的 `psi_ref` 与连续展开的 `psi` 对齐，跨过 `pi` 不会凭空产生 `2*pi` 误差；
 - 用生成器的同一组离散 `A/B` 和正式 `K(0.18 m)` 直接运行无接触、无饱和闭环 `x[k+1]=A_d*x[k]+B_d*K*(r[k]-x[k])` 后，`pi/2*pi/4*pi rad/s`、`15 rad/s^2` 的理想半差分腿角峰值分别约为 `12.0/21.6/31.3 deg`，共同腿角小于 `0.03 deg`，匀速稳定后两腿回零。MuJoCo 的 `pi` 档半差分峰值约 `11.4 deg`，与线性模型吻合，说明低速旋转时左右腿反向摆动是当前 yaw 模型和 LQR 控制分配主动产生的，不是单纯的仿真符号错误；
 - `0.18 m / +2*pi` 的异常发生顺序为：目标 ramp 后约 `0.28 s` 单侧轮力矩先达到 `6.32 N*m`，约 `0.30 s` 一侧轮子离地，约 `0.36 s` 半差分腿角超过线性模型的 `21.6 deg` 峰值，约 `0.40 s` 关节开始饱和并带动共同腿角失控；腿差分超过理想峰值时 roll 仍仅约 `0.2 deg`。因此小幅劈叉属于理想控制动作，继续扩大则首先与接触不对称和饱和相关；缺少 roll 补偿会妨碍后续恢复，但在该正向案例中不是最早触发源；
-- 线性响应预测 `0.18 m / 2*pi` 的 yaw 加速度降为 `3/5/7.5/10 rad/s^2` 时，半差分腿角峰值约降为 `6.6/11.0/15.6/18.6 deg`，对应 `15 rad/s^2` 为 `21.6 deg`。下一轮应先扫这些加速度并对齐线性与 MuJoCo trace，不要立即继续改整套 LQR；若低加速度下仍需压制腿差分，应在 common/differential 坐标中单独提高腿差分角或差分腿力矩代价，避免破坏已经验证的直行共同模态；
+- `2*pi rad/s` 偏航加速度扫描已经落地为 `yaw-acceleration` suite，并由 `tools/lqr/yaw_response.py` 使用正式 schedule 的同一组离散 `A/B + K` 生成无接触、无限幅先验。线性模型在 `0.18 m` 的 `1/2/3/5/7.5/10/15 rad/s^2` 全部档位都预测单轮峰值低于 `6.32 N*m`；MuJoCo 双向可用边界位于 `2-3 rad/s^2`：`1 rad/s^2` 正负两向跟踪和停止稳定均通过，`2 rad/s^2` 两向可跟踪但停止窗口仍有残余振荡，`3 rad/s^2` 正向失效而负向通过；
+- `0.18 m / a3` 的 1 kHz trace 表明最早接触丢失主要是 `1-3 ms` 闪断，不是持续静态卸载。正向约在 `1.79 s` 同时进入接触丢失、法向力冲击和轮力矩饱和的正反馈，不能把第一帧闪断或轮力矩饱和单独解释为根因；
+- `0.18 m` 静态站立共同腿角约 `+7.15 deg`；实际腿约 `65 mm` 垂直 COM 偏置对应约 `2.0 N*m` 常值重力矩和约 `+8 deg` 自然 trim。当前生成器只把轴向 COM 投影和等效惯量带入齐次零点 `A/B`，没有表示该仿射常值项。MuJoCo 对照现已改为围绕 ramp 前一秒站立均值预测扰动，不能再把实际非零状态直接当作零平衡模型的绝对状态；
+- trim 对齐后，`0.18 m / a3` 正向的半差分/共同模态误差分别约在 `1.272/1.714 s` 超过 `2 deg`，负向分别约在 `1.410/2.009 s`。即使全程接触且无饱和的 `a1`，高偏航速度下仍有约 `2-3 deg` 误差；因为当前线性方程不含速度乘积项，`A/B` 只适合初期力矩和腿摆量级先验，不能覆盖高偏航率科氏、离心和陀螺耦合；
 - 纯 PD 在固定 `0.30 m / -pi/2` 的 8 秒测试中稳态误差约为 `12 mm / 2.1 deg`，暂未加入积分或重力前馈；
 - 解析运动学与 MuJoCo `framepos` 多姿态对照的已知最大偏差约为 `9.1 mm / 1.8 deg`，该偏差保留为当前实际闭链模型的可见特性；
 - C++ 侧分为 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner` 和 `MujocoViewer`；正常入口实时无限运行到用户关闭 GUI，`run_for()` 只供 headless 测试使用；
 - 物理和控制周期暂定均为 1 ms。加载后只在内存中覆盖 `mjModel.opt.timestep`，不修改原始 MJCF；
 - 当前机体具有自由基座、上游 USD 惯性参数、地面和轮地接触；mocap weld 默认关闭，只在测试中显式启用；
 - CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；Windows 原生链接还需要 `lib/mujoco.lib`，当前检查到的 `armsim` Python wheel 只有头文件和 `mujoco.dll`，不能单独作为 Windows C++ SDK；
-- 此前 Linux 环境的官方 MuJoCo 3.9.0 SDK 位于 `/home/l/.local/opt/mujoco-3.9.0`，并已用于验证 C 运动学/雅可比、模型接线与功率方向、site 几何对照和 8 秒悬空定姿测试；该路径只是历史机器记录，不是跨平台默认值；
+- Linux 环境的官方 MuJoCo 3.9.0 SDK 位于 `/home/l/.local/opt/mujoco-3.9.0`；当前 `470e08f` 已在该环境完成构建和 11/11 CTest，并再次验证 C 运动学/雅可比、模型接线与功率方向、site 几何对照和 8 秒悬空定姿测试。该路径只是本机记录，不是跨平台默认值；
 - 当前 Windows 环境把不入库的本地依赖放在 `third_party/mujoco-3.9.0` 与 `third_party/glfw`，使用 MSVC 19.44、Windows SDK 10.0.26100 和 MuJoCo 3.9.0 完成 Release 构建，11 个 CTest 全部通过，GUI 已实际启动并运行站立、前后运动与左右偏航阶段；
 - Windows 配置应同时显式传入 `-DMUJOCO_ROOT=<third_party/mujoco-3.9.0>` 与 `-DFETCHCONTENT_SOURCE_DIR_GLFW=<third_party/glfw>`。只设置 `MUJOCO_ROOT` 不会阻止 GLFW FetchContent 联网；中断 Git clone 可能留下仍在运行的子进程和 `build/_deps/glfw-src/.git/objects/pack/tmp_pack_*` 只读文件，导致后续删除 build 目录受阻；
 - MuJoCo 3.9.0 将尺寸类型 `mjtSize` 定义为 `int64_t`；adapter 的 actuator 数量缓存使用同一类型，避免将 `mjModel::nu` 收窄到 `int` 的 MSVC C4244 警告。
@@ -395,7 +404,7 @@ MuJoCo plant
 
 1. 以 MJCF/MuJoCo 为当前仿真后端；USD 只保留为外部参考资产。
 2. 核对当前模型每段质量、质心、惯量是否为目标参数；不要用旧 MATLAB 脚本覆盖。
-3. 将 `A/B + K` 理想闭环响应做成可复现工具，优先扫描 `0.16/0.18 m`、`2*pi rad/s` 下的 `3/5/7.5/10/15 rad/s^2`，并与 MuJoCo 的差分腿角、轮力矩饱和、轮接触和 roll 时序逐点对齐；先确定安全 yaw 加速度，再决定是否需要差分模态权重或 roll 补偿。
+3. 继续用 `yaw-acceleration` suite 区分 `0.18 m / 2*pi rad/s` 的左右闭链/轮接触不对称与缺少 roll 控制的贡献；`A/B + K` 只作为 trim 周围的初期先验，不用于替代高偏航率非线性验证。先解释正向 `a3` 为何比负向更早跨过接触恢复边界，再决定是否需要偏航包络、差分模态权重或 roll 补偿。
 4. 在无噪声十维状态方向验证完成后，再加入 IMU 与编码器速度融合和状态滤波。
 5. 将当前已验证的 MuJoCo 关节映射与后续实车 adapter 分开维护，避免把模型 joint axis 符号机械照搬到硬件。
 6. 修正明显偏大的腿部质量参数后，重新提取等效腿质心/惯量并生成 LQR 增益调度；当前 XML 单侧腿和轮共 `4 kg`，实车经验值约不超过 `2 kg`。
@@ -405,10 +414,12 @@ MuJoCo plant
 ## 快速恢复时优先阅读
 
 1. 本文件。
-2. `references/连杆示意/示意图.svg`。
-3. `models/MJCF/COD-2026RoboMaster-Balance.xml`。
-4. `references/rm2026cb-balance-chassis/Tasks/balance_chassis.c`。
-5. `references/rm2026cb-balance-chassis/Tasks/balance_chassis/bc_control.c`。
-6. `references/rm2026cb-balance-chassis/Tasks/balance_chassis/bc_behavior2.c`。
-7. `references/rm2026cb-balance-chassis/Tasks/balance_chassis/bc_estimator.c`。
-8. `references/matlab_scripts/lqr.m`（仅参考生成方法）。
+2. `docs/notes/performance-baseline.md`。
+3. `docs/notes/lqr-validation.md`。
+4. `references/连杆示意/示意图.svg`。
+5. `models/MJCF/COD-2026RoboMaster-Balance.xml`。
+6. `references/rm2026cb-balance-chassis/Tasks/balance_chassis.c`。
+7. `references/rm2026cb-balance-chassis/Tasks/balance_chassis/bc_control.c`。
+8. `references/rm2026cb-balance-chassis/Tasks/balance_chassis/bc_behavior2.c`。
+9. `references/rm2026cb-balance-chassis/Tasks/balance_chassis/bc_estimator.c`。
+10. `references/matlab_scripts/lqr.m`（仅参考生成方法）。

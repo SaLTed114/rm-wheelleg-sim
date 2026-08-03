@@ -21,7 +21,7 @@
 namespace {
 
 constexpr double kTimestepSeconds = 0.001;
-constexpr std::size_t kTraceStride = 10U;
+constexpr std::size_t kDefaultTraceStride = 10U;
 constexpr double kMinimumLegLength = 0.13;
 constexpr double kMaximumLegLength = 0.20;
 constexpr double kForwardBaseTolerance = 0.10;
@@ -146,11 +146,13 @@ public:
     PerformanceBenchmark(
         const std::filesystem::path &model_path,
         const std::filesystem::path &output_directory,
-        const std::optional<double> leg_length
+        const std::optional<double> leg_length,
+        const std::size_t trace_stride
     ) : plant_(model_path, kTimestepSeconds),
         adapter_(plant_.model()),
         runner_(plant_, adapter_, controller_config(leg_length)),
-        contact_monitor_(plant_.model()) {
+        contact_monitor_(plant_.model()),
+        trace_stride_(trace_stride) {
         const bc_controller_config_t config = controller_config(leg_length);
         leg_length_target_ = config.motion.leg_length;
         std::filesystem::create_directories(output_directory);
@@ -177,7 +179,8 @@ public:
     CaseResult run(const CaseSpec &spec) {
         runner_.reset();
         sample_index_ = 0U;
-        CaseResult result{spec};
+        CaseResult result{};
+        result.spec = spec;
         result.leg_length_target = leg_length_target_;
         balance::sim::PerformanceScenario scenario(spec);
         scenario.reset(plant_.data().time);
@@ -267,7 +270,7 @@ private:
     ) {
         runner_.step(command);
         const ContactState contact = contact_monitor_.read(plant_.data());
-        if (sample_index_ % kTraceStride == 0U) {
+        if (sample_index_ % trace_stride_ == 0U) {
             write_trace(spec, phase, command, contact);
         }
         ++sample_index_;
@@ -429,7 +432,8 @@ private:
     void write_trace_header() {
         trace_ << "case,phase,simulation_time,command_rate,leg_length_target,"
                   "base_x,base_z,"
-                  "base_forward_velocity,command_forward,command_yaw,"
+                  "base_forward_velocity,base_vertical_velocity,"
+                  "command_forward,command_yaw,"
                   "system,motion,s,ds,psi,dpsi,theta_l,dtheta_l,theta_r,"
                   "dtheta_r,theta_b,dtheta_b,ref_s,ref_ds,ref_psi,"
                   "ref_dpsi,ref_theta_l,ref_dtheta_l,ref_theta_r,"
@@ -440,7 +444,8 @@ private:
                   "raw_wheel_r,raw_joint_l_front,raw_joint_l_rear,"
                   "raw_joint_r_front,raw_joint_r_rear,wheel_l,wheel_r,"
                   "joint_l_front,joint_l_rear,joint_r_front,joint_r_rear,"
-                  "contact_wheel_l,contact_wheel_r,other_contact\n";
+                  "contact_wheel_l,contact_wheel_r,other_contact,"
+                  "normal_force_l,normal_force_r\n";
     }
 
     void write_trace(
@@ -461,6 +466,7 @@ private:
                << plant_.data().qpos[base_qpos_] << ','
                << plant_.data().qpos[base_qpos_ + 2] << ','
                << base_forward_velocity << ','
+               << plant_.data().qvel[base_dof_ + 2] << ','
                << command.forward_velocity << ',' << command.yaw_rate << ','
                << snapshot.state_machine.system << ','
                << snapshot.state_machine.motion;
@@ -498,7 +504,9 @@ private:
         }
         trace_ << ',' << contact.wheel[BC_L]
                << ',' << contact.wheel[BC_R]
-               << ',' << contact.other << '\n';
+               << ',' << contact.other
+               << ',' << contact.wheel_normal_force[BC_L]
+               << ',' << contact.wheel_normal_force[BC_R] << '\n';
     }
 
     balance::sim::MujocoPlant plant_;
@@ -510,6 +518,7 @@ private:
     double leg_length_target_{};
     std::ofstream summary_;
     std::ofstream trace_;
+    std::size_t trace_stride_{};
     std::size_t sample_index_{};
 };
 
@@ -554,16 +563,26 @@ void print_result(const CaseResult &result) {
 } // namespace
 
 int main(int argc, char **argv) {
-    bool acceleration_suite = false;
+    enum class Suite {
+        baseline,
+        forward_acceleration,
+        yaw_acceleration,
+    };
+
+    Suite suite = Suite::baseline;
     std::optional<double> leg_length;
+    std::optional<std::size_t> trace_stride;
     const CaseSpec *selected_case = nullptr;
     bool arguments_valid = argc >= 3 && (argc - 3) % 2 == 0;
     for (int index = 3; arguments_valid && index < argc; index += 2) {
         const std::string option = argv[index];
         const std::string value = argv[index + 1];
-        if (option == "--suite" && value == "forward-acceleration" &&
-            !acceleration_suite) {
-            acceleration_suite = true;
+        if (option == "--suite" && suite == Suite::baseline &&
+            value == "forward-acceleration") {
+            suite = Suite::forward_acceleration;
+        } else if (option == "--suite" && suite == Suite::baseline &&
+                   value == "yaw-acceleration") {
+            suite = Suite::yaw_acceleration;
         } else if (option == "--leg-length" && !leg_length) {
             std::size_t consumed = 0U;
             try {
@@ -573,6 +592,15 @@ int main(int argc, char **argv) {
                 break;
             }
             arguments_valid = consumed == value.size();
+        } else if (option == "--trace-stride" && !trace_stride) {
+            std::size_t consumed = 0U;
+            try {
+                trace_stride = std::stoul(value, &consumed);
+            } catch (const std::exception &) {
+                arguments_valid = false;
+                break;
+            }
+            arguments_valid = consumed == value.size() && *trace_stride > 0U;
         } else if (option == "--case" && selected_case == nullptr) {
             selected_case = balance::sim::find_performance_case(value);
             arguments_valid = selected_case != nullptr;
@@ -581,23 +609,31 @@ int main(int argc, char **argv) {
         }
     }
     arguments_valid = arguments_valid &&
-        !(acceleration_suite && selected_case != nullptr);
+        !(suite != Suite::baseline && selected_case != nullptr);
     if (!arguments_valid) {
         std::cerr
             << "usage: rm_balance_performance <model.xml> <output-directory> "
-               "[--suite forward-acceleration] [--case <case-name>] "
-               "[--leg-length <metres>]\n";
+               "[--suite forward-acceleration|yaw-acceleration] "
+               "[--case <case-name>] "
+               "[--leg-length <metres>] [--trace-stride <steps>]\n";
         return EXIT_FAILURE;
     }
 
     try {
-        PerformanceBenchmark benchmark(argv[1], argv[2], leg_length);
+        PerformanceBenchmark benchmark(
+            argv[1], argv[2], leg_length,
+            trace_stride.value_or(kDefaultTraceStride));
         std::vector<CaseSpec> cases;
         if (selected_case != nullptr) {
             cases.push_back(*selected_case);
-        } else if (acceleration_suite) {
+        } else if (suite == Suite::forward_acceleration) {
             const auto &acceleration_cases =
                 balance::sim::forward_acceleration_cases();
+            cases.assign(
+                acceleration_cases.begin(), acceleration_cases.end());
+        } else if (suite == Suite::yaw_acceleration) {
+            const auto &acceleration_cases =
+                balance::sim::yaw_acceleration_cases();
             cases.assign(
                 acceleration_cases.begin(), acceleration_cases.end());
         } else {
