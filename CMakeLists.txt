@@ -74,7 +74,6 @@ balance_enable_warnings(balance_control_core)
 add_library(balance_simulation STATIC
   src/sim/mujoco_adapter.cpp
   src/sim/mujoco_plant.cpp
-  src/sim/performance_scenario.cpp
   src/sim/simulation_runner.cpp)
 target_include_directories(balance_simulation
   PUBLIC
@@ -84,15 +83,27 @@ target_link_libraries(balance_simulation
   PUBLIC balance_control_core mujoco::mujoco)
 balance_enable_warnings(balance_simulation)
 
+add_library(balance_benchmark_support STATIC
+  src/benchmark/common/common_diagnostics.cpp
+  src/benchmark/common/csv_writer.cpp
+  src/benchmark/common/simulation_sample.cpp
+  src/benchmark/performance/performance_benchmark.cpp
+  src/benchmark/performance/performance_scenario.cpp
+  src/benchmark/trim/trim_scanner.cpp)
+target_include_directories(balance_benchmark_support
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark")
+target_link_libraries(balance_benchmark_support PUBLIC balance_simulation)
+balance_enable_warnings(balance_benchmark_support)
+
 add_executable(rm_balance_performance
-  benchmarks/mujoco_performance.cpp)
-target_link_libraries(rm_balance_performance PRIVATE balance_simulation)
+  src/benchmark/performance/main.cpp)
+target_link_libraries(rm_balance_performance PRIVATE balance_benchmark_support)
 balance_enable_warnings(rm_balance_performance)
 balance_configure_mujoco_runtime(rm_balance_performance)
 
 add_executable(rm_balance_trim_scan
-  benchmarks/mujoco_leg_trim.cpp)
-target_link_libraries(rm_balance_trim_scan PRIVATE balance_simulation)
+  src/benchmark/trim/main.cpp)
+target_link_libraries(rm_balance_trim_scan PRIVATE balance_benchmark_support)
 balance_enable_warnings(rm_balance_trim_scan)
 balance_configure_mujoco_runtime(rm_balance_trim_scan)
 
@@ -100,7 +111,8 @@ if(BALANCE_BUILD_GUI)
   add_executable(rm_balance_sim
     src/sim/main.cpp
     src/sim/mujoco_viewer.cpp)
-  target_link_libraries(rm_balance_sim PRIVATE balance_simulation glfw)
+  target_link_libraries(rm_balance_sim
+    PRIVATE balance_benchmark_support glfw)
   balance_enable_warnings(rm_balance_sim)
   balance_configure_mujoco_runtime(rm_balance_sim)
 endif()
@@ -148,7 +160,7 @@ if(BUILD_TESTING)
   add_test(NAME observer_state_assembly COMMAND observer_test)
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
-  target_link_libraries(mujoco_smoke_test PRIVATE balance_simulation)
+  target_link_libraries(mujoco_smoke_test PRIVATE balance_benchmark_support)
   balance_enable_warnings(mujoco_smoke_test)
   balance_configure_mujoco_runtime(mujoco_smoke_test)
   add_test(NAME mujoco_model_smoke

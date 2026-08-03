@@ -6,7 +6,7 @@
 
 #include "balance/math_utils.h"
 
-namespace balance::sim {
+namespace balance::benchmark {
 namespace {
 
 constexpr double kDisabledSettleSeconds = 2.0;
@@ -17,7 +17,6 @@ constexpr double kStopSettleSeconds = 2.0;
 constexpr double kEvaluationSeconds = 1.0;
 constexpr double kForwardRateLimit = 5.0;
 constexpr double kYawRateLimit = 15.0;
-constexpr double kTerminationAngle = 45.0 * BC_PI / 180.0;
 
 constexpr std::array<PerformanceCaseSpec, 16> kCases{{
     {"forward_pos_1", PerformanceAxis::forward, 1.0, 5.0},
@@ -67,30 +66,6 @@ constexpr std::array<PerformanceCaseSpec, 14> kYawAccelerationCases{{
     {"yaw_pos_2pi_a15", PerformanceAxis::yaw, 2.0 * BC_PI, 15.0},
     {"yaw_neg_2pi_a15", PerformanceAxis::yaw, -2.0 * BC_PI, 15.0},
 }};
-
-int require_id(
-    const mjModel &model, const mjtObj type, const char *name
-) {
-    const int id = mj_name2id(&model, type, name);
-    if (id < 0) {
-        throw std::runtime_error(
-            "missing MuJoCo object '" + std::string(name) + "'");
-    }
-    return id;
-}
-
-bool finite_actuation(const bc_actuation_t &actuation) {
-    for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        if (!std::isfinite(actuation.wheel_torque[side])) return false;
-        for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
-            if (!std::isfinite(
-                    actuation.leg[side].joint_torque[joint])) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
 
 } // namespace
 
@@ -310,99 +285,4 @@ bool PerformanceScenario::finished() const noexcept {
     return phase_ == PerformancePhase::complete;
 }
 
-PerformanceContactMonitor::PerformanceContactMonitor(const mjModel &model)
-    : model_(model) {
-    ground_ = require_id(model_, mjOBJ_GEOM, "ground");
-    wheel_ = {{
-        require_id(model_, mjOBJ_GEOM, "Right_wheel_collision"),
-        require_id(model_, mjOBJ_GEOM, "Left_wheel_collision"),
-    }};
-}
-
-PerformanceContactState PerformanceContactMonitor::read(
-    const mjData &data
-) const {
-    PerformanceContactState state{};
-    for (int index = 0; index < data.ncon; ++index) {
-        const mjContact &contact = data.contact[index];
-        const bool has_ground =
-            contact.geom[0] == ground_ || contact.geom[1] == ground_;
-        if (!has_ground) {
-            state.other = true;
-            if (state.unexpected.empty()) {
-                state.unexpected = contact_name(contact);
-            }
-            continue;
-        }
-
-        bool wheel_contact = false;
-        for (int side = 0; side < BC_SIDE_NUM; ++side) {
-            const bool pair =
-                (contact.geom[0] == ground_ &&
-                 contact.geom[1] == wheel_[side]) ||
-                (contact.geom[1] == ground_ &&
-                 contact.geom[0] == wheel_[side]);
-            state.wheel[side] = state.wheel[side] || pair;
-            if (pair) {
-                mjtNum force[6] = {};
-                mj_contactForce(&model_, &data, index, force);
-                state.wheel_normal_force[side] += std::max(0.0, force[0]);
-            }
-            wheel_contact = wheel_contact || pair;
-        }
-        state.other = state.other || !wheel_contact;
-        if (!wheel_contact && state.unexpected.empty()) {
-            state.unexpected = contact_name(contact);
-        }
-    }
-    return state;
-}
-
-std::string PerformanceContactMonitor::contact_name(
-    const mjContact &contact
-) const {
-    std::string description;
-    for (int pair = 0; pair < 2; ++pair) {
-        if (!description.empty()) description += '+';
-        const char *name = mj_id2name(
-            &model_, mjOBJ_GEOM, contact.geom[pair]);
-        if (name != nullptr) {
-            description += name;
-        } else {
-            const int body = model_.geom_bodyid[contact.geom[pair]];
-            const char *body_name = mj_id2name(
-                &model_, mjOBJ_BODY, body);
-            description += body_name != nullptr ? body_name :
-                "geom_" + std::to_string(contact.geom[pair]);
-        }
-    }
-    return description;
-}
-
-std::string performance_diagnostic_issue(
-    const bc_controller_snapshot_t &snapshot,
-    const PerformanceContactState &contact
-) {
-    bool finite = std::isfinite(snapshot.roll) &&
-        std::isfinite(snapshot.roll_rate) &&
-        finite_actuation(snapshot.actuation_request) &&
-        finite_actuation(snapshot.actuation);
-    for (int index = 0; index < BC_STATE_NUM; ++index) {
-        finite = finite && std::isfinite(snapshot.state.value[index]) &&
-            std::isfinite(snapshot.state_reference.value[index]);
-    }
-    if (!finite) return "non_finite_telemetry";
-    if (contact.other) {
-        return "non_wheel_contact:" + contact.unexpected;
-    }
-
-    const double pitch = std::abs(static_cast<double>(
-        snapshot.state.value[BC_STATE_THETA_B]));
-    const double roll = std::abs(static_cast<double>(snapshot.roll));
-    if (pitch > kTerminationAngle || roll > kTerminationAngle) {
-        return "attitude_termination";
-    }
-    return {};
-}
-
-} // namespace balance::sim
+} // namespace balance::benchmark

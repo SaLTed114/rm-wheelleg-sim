@@ -395,6 +395,7 @@ MuJoCo plant
 - 纯 PD 在固定 `0.30 m / -pi/2` 的 8 秒测试中稳态误差约为 `12 mm / 2.1 deg`，暂未加入积分或重力前馈；
 - 解析运动学与 MuJoCo `framepos` 多姿态对照的已知最大偏差约为 `9.1 mm / 1.8 deg`，该偏差保留为当前实际闭链模型的可见特性；
 - C++ 侧分为 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner` 和 `MujocoViewer`；正常入口实时无限运行到用户关闭 GUI，`run_for()` 只供 headless 测试使用；
+- benchmark 已按 `common/performance/trim` 拆到 `src/benchmark`：`CsvWriter` 统一目录创建、转义和列数检查，`SimulationSampler` 统一基座自然坐标速度与轮地接触采样，`CommonDiagnostics` 统一有限性、接触、执行器饱和和峰值统计，`SampleStatistics/LinearTrend` 统一基础统计；`PerformanceBenchmark/PerformanceScenario` 与 `TrimScanner` 各自拥有具体实验实现，各自的 `main.cpp` 只保留 CLI、案例选择和打印。GUI 案例回放共用 performance scenario 和公共问题判定，仿真核心不再编译具体实验时序。重构后不再保留只有入口文件的顶层 `benchmarks` 目录；重构前后直线加速度 suite 及 `5.5 deg` trim 单点的 summary/trace 均字节一致；
 - 物理和控制周期暂定均为 1 ms。加载后只在内存中覆盖 `mjModel.opt.timestep`，不修改原始 MJCF；
 - 当前机体具有自由基座、上游 USD 惯性参数、地面和轮地接触；mocap weld 默认关闭，只在测试中显式启用；
 - CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；Windows 原生链接还需要 `lib/mujoco.lib`，当前检查到的 `armsim` Python wheel 只有头文件和 `mujoco.dll`，不能单独作为 Windows C++ SDK；

@@ -1,15 +1,12 @@
-#ifndef BALANCE_SIM_PERFORMANCE_SCENARIO_HPP
-#define BALANCE_SIM_PERFORMANCE_SCENARIO_HPP
+#ifndef BALANCE_BENCHMARK_PERFORMANCE_SCENARIO_HPP
+#define BALANCE_BENCHMARK_PERFORMANCE_SCENARIO_HPP
 
 #include <array>
-#include <string>
 #include <string_view>
-
-#include <mujoco/mujoco.h>
 
 #include "balance/controller_snapshot.h"
 
-namespace balance::sim {
+namespace balance::benchmark {
 
 enum class PerformanceAxis {
     forward,
@@ -82,32 +79,6 @@ private:
     double simulation_time_{};
 };
 
-struct PerformanceContactState {
-    std::array<bool, BC_SIDE_NUM> wheel{};
-    std::array<double, BC_SIDE_NUM> wheel_normal_force{};
-    bool other{};
-    std::string unexpected;
-};
-
-class PerformanceContactMonitor {
-public:
-    explicit PerformanceContactMonitor(const mjModel &model);
-
-    [[nodiscard]] PerformanceContactState read(const mjData &data) const;
-
-private:
-    [[nodiscard]] std::string contact_name(
-        const mjContact &contact) const;
-
-    const mjModel &model_;
-    int ground_{};
-    std::array<int, BC_SIDE_NUM> wheel_{};
-};
-
-[[nodiscard]] std::string performance_diagnostic_issue(
-    const bc_controller_snapshot_t &snapshot,
-    const PerformanceContactState &contact);
-
-} // namespace balance::sim
+} // namespace balance::benchmark
 
 #endif

@@ -7,7 +7,7 @@
 #include "balance/math_utils.h"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
-#include "performance_scenario.hpp"
+#include "performance/performance_scenario.hpp"
 #include "simulation_runner.hpp"
 
 int main(int argc, char **argv) {
@@ -17,11 +17,11 @@ int main(int argc, char **argv) {
     }
 
     try {
-        const auto &yaw_cases = balance::sim::yaw_acceleration_cases();
-        const auto *yaw_case = balance::sim::find_performance_case(
+        const auto &yaw_cases = balance::benchmark::yaw_acceleration_cases();
+        const auto *yaw_case = balance::benchmark::find_performance_case(
             "yaw_pos_2pi_a7p5");
         if (yaw_cases.size() != 14U || yaw_case == nullptr ||
-            yaw_case->axis != balance::sim::PerformanceAxis::yaw ||
+            yaw_case->axis != balance::benchmark::PerformanceAxis::yaw ||
             std::abs(yaw_case->target - 2.0 * BC_PI) > 1.0e-12 ||
             std::abs(yaw_case->command_rate - 7.5) > 1.0e-12) {
             std::cerr << "yaw acceleration cases are incorrect\n";

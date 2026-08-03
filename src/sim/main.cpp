@@ -8,10 +8,12 @@
 #include <optional>
 #include <string>
 
+#include "common/common_diagnostics.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "mujoco_viewer.hpp"
-#include "performance_scenario.hpp"
+#include "performance/performance_scenario.hpp"
+#include "common/simulation_sample.hpp"
 #include "simulation_runner.hpp"
 
 namespace {
@@ -70,10 +72,11 @@ void print_usage() {
         << "usage: rm_balance_sim <model.xml> [--case <case-name>] "
            "[--leg-length <metres>]\n"
         << "available performance cases:\n";
-    for (const auto &spec : balance::sim::performance_cases()) {
+    for (const auto &spec : balance::benchmark::performance_cases()) {
         std::cerr << "  " << spec.name << '\n';
     }
-    for (const auto &spec : balance::sim::forward_acceleration_cases()) {
+    for (const auto &spec :
+         balance::benchmark::forward_acceleration_cases()) {
         std::cerr << "  " << spec.name << '\n';
     }
 }
@@ -81,14 +84,15 @@ void print_usage() {
 } // namespace
 
 int main(int argc, char **argv) {
-    const balance::sim::PerformanceCaseSpec *selected_case = nullptr;
+    const balance::benchmark::PerformanceCaseSpec *selected_case = nullptr;
     std::optional<float> selected_leg_length;
     bool arguments_valid = argc >= 2 && (argc - 2) % 2 == 0;
     for (int index = 2; arguments_valid && index < argc; index += 2) {
         const std::string option = argv[index];
         const std::string value = argv[index + 1];
         if (option == "--case" && selected_case == nullptr) {
-            selected_case = balance::sim::find_performance_case(value);
+            selected_case =
+                balance::benchmark::find_performance_case(value);
             if (selected_case == nullptr) {
                 std::cerr << "unknown performance case: " << value << '\n';
                 arguments_valid = false;
@@ -128,9 +132,8 @@ int main(int argc, char **argv) {
         balance::sim::SimulationRunner runner(
             plant, adapter, controller_config);
         balance::sim::MujocoViewer viewer(plant.model());
-        balance::sim::PerformanceContactMonitor contact_monitor(
-            plant.model());
-        std::optional<balance::sim::PerformanceScenario>
+        balance::benchmark::SimulationSampler sampler(plant.model());
+        std::optional<balance::benchmark::PerformanceScenario>
             performance_scenario;
         if (selected_case != nullptr) {
             performance_scenario.emplace(*selected_case);
@@ -222,11 +225,11 @@ int main(int argc, char **argv) {
                         accumulated_time -= plant.timestep();
 
                         if (monitored) {
-                            const auto contact =
-                                contact_monitor.read(plant.data());
+                            const auto sample = sampler.read(
+                                plant.data(), runner.snapshot());
                             const std::string issue =
-                                balance::sim::performance_diagnostic_issue(
-                                    runner.snapshot(), contact);
+                                balance::benchmark::common_diagnostic_issue(
+                                    sample);
                             if (!issue.empty() && case_issue == "none") {
                                 case_issue = issue;
                                 std::cout
