@@ -140,6 +140,8 @@ MujocoAdapter::MujocoAdapter(const mjModel &model)
     imu_attitude_address_ = resolve_sensor(
         model, "imu_attitude_sensor", 4);
     imu_gyro_address_ = resolve_sensor(model, "imu_gyro_sensor", 3);
+    imu_acceleration_address_ = resolve_sensor(
+        model, "imu_acceleration_sensor", 3);
 }
 
 void MujocoAdapter::read(
@@ -179,6 +181,12 @@ void MujocoAdapter::read(
     feedback.imu.roll_rate = static_cast<float>(gyro[0]);
     feedback.imu.pitch_rate = static_cast<float>(gyro[1]);
     feedback.imu.yaw_rate = static_cast<float>(gyro[2]);
+
+    const double *specific_force =
+        data.sensordata + imu_acceleration_address_;
+    feedback.imu.specific_force_x = static_cast<float>(specific_force[0]);
+    feedback.imu.specific_force_y = static_cast<float>(specific_force[1]);
+    feedback.imu.specific_force_z = static_cast<float>(specific_force[2]);
 }
 
 void MujocoAdapter::write(

@@ -60,6 +60,10 @@ typedef struct {
     float roll_rate;
     float pitch_rate;
     float yaw_rate;
+    // Specific force in the FLU body frame; level rest measures about +g on Z.
+    float specific_force_x;
+    float specific_force_y;
+    float specific_force_z;
 } bc_imu_feedback_t;
 
 typedef struct {

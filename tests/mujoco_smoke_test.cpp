@@ -48,6 +48,12 @@ int main(int argc, char **argv) {
             &plant.model(), mjOBJ_BODY, "base_link");
         const int support_weld = mj_name2id(
             &plant.model(), mjOBJ_EQUALITY, "base_support_weld");
+        const int imu_site = mj_name2id(
+            &plant.model(), mjOBJ_SITE, "imu_site");
+        if (imu_site < 0) {
+            std::cerr << "IMU site is missing\n";
+            return EXIT_FAILURE;
+        }
         const double expected_base_com[] = {
             -0.019917, -0.00040396, 0.021412,
         };
@@ -65,6 +71,13 @@ int main(int argc, char **argv) {
                 std::abs(
                     plant.model().body_inertia[3 * base_body + axis] -
                     expected_base_inertia[axis]) > 1.0e-7;
+        }
+        const double expected_imu_position[] = {-0.10, 0.0, -0.03};
+        for (int axis = 0; axis < 3; ++axis) {
+            invalid_base_properties = invalid_base_properties ||
+                std::abs(
+                    plant.model().site_pos[3 * imu_site + axis] -
+                    expected_imu_position[axis]) > 1.0e-9;
         }
         if (invalid_base_properties) {
             std::cerr << "base physical properties or support state are incorrect\n";
@@ -121,6 +134,34 @@ int main(int argc, char **argv) {
                     return EXIT_FAILURE;
                 }
             }
+        }
+
+        const int acceleration_sensor = mj_name2id(
+            &plant.model(), mjOBJ_SENSOR, "imu_acceleration_sensor");
+        if (acceleration_sensor < 0 ||
+            plant.model().sensor_dim[acceleration_sensor] != 3) {
+            std::cerr << "IMU acceleration sensor is missing\n";
+            return EXIT_FAILURE;
+        }
+        const int acceleration_address =
+            plant.model().sensor_adr[acceleration_sensor];
+        const double expected_specific_force[] = {1.25, -2.5, 9.5};
+        for (int axis = 0; axis < 3; ++axis) {
+            plant.data().sensordata[acceleration_address + axis] =
+                expected_specific_force[axis];
+        }
+        adapter.read(plant.data(), feedback);
+        if (std::abs(
+                feedback.imu.specific_force_x -
+                expected_specific_force[0]) > 1.0e-6 ||
+            std::abs(
+                feedback.imu.specific_force_y -
+                expected_specific_force[1]) > 1.0e-6 ||
+            std::abs(
+                feedback.imu.specific_force_z -
+                expected_specific_force[2]) > 1.0e-6) {
+            std::cerr << "IMU specific-force mapping is incorrect\n";
+            return EXIT_FAILURE;
         }
 
         bc_actuation_t mapped_actuation{};

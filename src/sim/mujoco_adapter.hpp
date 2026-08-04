@@ -39,6 +39,7 @@ private:
     std::array<ChannelAddress, BC_SIDE_NUM> wheel_addresses_{};
     int imu_attitude_address_{};
     int imu_gyro_address_{};
+    int imu_acceleration_address_{};
     mjtSize actuator_count_{};
 };
 

@@ -37,7 +37,8 @@
       <freejoint name="base_free_joint"/>
       <inertial pos="-0.019917 -0.00040396 0.021412" quat="0.9995742 0.000019294397 -0.00019993757 -0.029182209" mass="11" diaginertia="2.8640678 2.8736324 3.0472"/>
       <geom type="mesh" rgba="1 1 1 1" mesh="base_link" />
-      <site name="imu_site" pos="0 0 0" size="0.006" rgba="0 0.8 1 1"/>
+      <!-- Placeholder until the physical IMU extrinsic is measured. -->
+      <site name="imu_site" pos="-0.10 0 -0.03" size="0.006" rgba="0 0.8 1 1"/>
       <site name="Left_virtual_hip_site" pos="-0.0193914 -0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
       <site name="Right_virtual_hip_site" pos="-0.0193914 0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
     
@@ -154,6 +155,7 @@
   <sensor>
     <framequat name="imu_attitude_sensor" objtype="site" objname="imu_site"/>
     <gyro name="imu_gyro_sensor" site="imu_site"/>
+    <accelerometer name="imu_acceleration_sensor" site="imu_site"/>
     <framepos name="Left_leg_position_sensor" objtype="site" objname="Left_wheel_axis_site" reftype="site" refname="Left_virtual_hip_site"/>
     <framepos name="Right_leg_position_sensor" objtype="site" objname="Right_wheel_axis_site" reftype="site" refname="Right_virtual_hip_site"/>
   </sensor>
