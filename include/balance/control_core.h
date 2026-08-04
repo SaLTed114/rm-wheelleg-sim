@@ -39,7 +39,8 @@ void bc_control_core_reset(bc_control_core_t *core);
 void bc_control_core_update(
     bc_control_core_t *core,
     const bc_sensor_feedback_t *feedback,
-    float timestep_seconds);
+    float timestep_seconds,
+    uint8_t wheel_velocity_update_enabled);
 void bc_control_core_calculate(
     bc_control_core_t *core,
     const bc_control_command_t *command);

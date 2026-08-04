@@ -23,6 +23,7 @@ int main() {
 
     bc_controller_default_config(&config);
     config.motion.stable_duration = 0.002F;
+    config.velocity_estimator_update_delay = 0.002F;
     bc_controller_init(&controller, &config);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||
@@ -153,6 +154,19 @@ int main() {
             fputs("snapshot did not capture the latest actuation\n", stderr);
             return 1;
         }
+    }
+
+    bc_controller_update(&controller, &feedback, 0.001F);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.velocity_estimator.measurement_accepted) {
+        fputs("wheel update started before its balance delay\n", stderr);
+        return 1;
+    }
+    bc_controller_update(&controller, &feedback, 0.001F);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (!snapshot.velocity_estimator.measurement_accepted) {
+        fputs("wheel update did not start after its balance delay\n", stderr);
+        return 1;
     }
 
     controller.system.motion.state = BC_MOTION_IDLE;

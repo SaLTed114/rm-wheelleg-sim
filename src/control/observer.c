@@ -3,19 +3,58 @@
 #include "balance/leg_kinematics.h"
 #include "balance/math_utils.h"
 
+#include <math.h>
 #include <string.h>
+
+static float wheel_velocity_at_imu(
+    const bc_observer_t *observer,
+    const bc_sensor_feedback_t *feedback
+) {
+    float axle_z = observer->config.hip_center_position.z;
+    float relative_velocity_x = 0.0F;
+
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        const bc_leg_kinematics_t *leg = &observer->leg[side];
+        const float sin_angle = sinf(leg->angle_body);
+        const float cos_angle = cosf(leg->angle_body);
+        axle_z += 0.5F * leg->length * sin_angle;
+        relative_velocity_x += 0.5F * (
+            -leg->length_velocity * cos_angle +
+            leg->length * leg->angular_velocity * sin_angle);
+    }
+
+    const float imu_to_axle_y =
+        observer->config.hip_center_position.y -
+        observer->config.imu_position.y;
+    const float imu_to_axle_z =
+        axle_z - observer->config.imu_position.z;
+    const float point_velocity_x =
+        feedback->imu.pitch_rate * imu_to_axle_z -
+        feedback->imu.yaw_rate * imu_to_axle_y +
+        relative_velocity_x;
+    const float common_wheel_velocity = 0.5F * (
+        feedback->wheel[BC_L].angular_velocity +
+        feedback->wheel[BC_R].angular_velocity);
+
+    return observer->config.wheel_radius * common_wheel_velocity -
+        point_velocity_x;
+}
 
 void bc_observer_init(
     bc_observer_t *observer,
     const bc_observer_config_t *config
 ) {
     observer->config = *config;
+    bc_velocity_estimator_init(
+        &observer->velocity_estimator,
+        &config->velocity_estimator);
     bc_observer_reset(observer);
 }
 
 void bc_observer_reset(bc_observer_t *observer) {
     memset(observer->leg, 0, sizeof(observer->leg));
     memset(&observer->state, 0, sizeof(observer->state));
+    bc_velocity_estimator_reset(&observer->velocity_estimator);
     observer->roll = 0.0F;
     observer->roll_rate = 0.0F;
     observer->previous_yaw = 0.0F;
@@ -26,7 +65,8 @@ void bc_observer_reset(bc_observer_t *observer) {
 void bc_observer_update(
     bc_observer_t *observer,
     const bc_sensor_feedback_t *feedback,
-    const float timestep_seconds
+    const float timestep_seconds,
+    const uint8_t wheel_velocity_update_enabled
 ) {
     if (!observer->initialized) {
         observer->previous_yaw = feedback->imu.yaw;
@@ -38,12 +78,23 @@ void bc_observer_update(
     observer->previous_yaw = feedback->imu.yaw;
     observer->roll = bc_wrap_anglef(feedback->imu.roll);
     observer->roll_rate = feedback->imu.roll_rate;
-
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         bc_leg_kinematics_calculate(
             &observer->config.leg_geometry, &feedback->leg[side],
             &observer->leg[side]);
     }
+
+    if (wheel_velocity_update_enabled) {
+        bc_velocity_estimator_update(
+            &observer->velocity_estimator,
+            wheel_velocity_at_imu(observer, feedback));
+    } else {
+        bc_velocity_estimator_skip_update(
+            &observer->velocity_estimator);
+    }
+    bc_velocity_estimator_predict(
+        &observer->velocity_estimator,
+        &feedback->imu, timestep_seconds);
 
     const float wheel_velocity = 0.5F * (
         feedback->wheel[BC_L].angular_velocity +

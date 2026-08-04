@@ -134,7 +134,7 @@ public:
         adapter_.read(plant_.data(), feedback);
         bc_control_core_update(
             &control_core_, &feedback,
-            static_cast<float>(plant_.timestep()));
+            static_cast<float>(plant_.timestep()), 0U);
         bc_control_core_calculate(&control_core_, &command_);
         bc_control_core_execute(&control_core_, 1U, &actuation);
         adapter_.write(plant_.data(), actuation);

@@ -28,7 +28,7 @@ int main() {
         }
     }
 
-    bc_control_core_update(&core, &feedback, 0.001F);
+    bc_control_core_update(&core, &feedback, 0.001F, 0U);
     if (core.tick_count != 0U) {
         fputs("update advanced the control tick\n", stderr);
         return 1;
@@ -69,7 +69,7 @@ int main() {
             config.observer.leg_geometry.wheel_link_length;
         command.leg[side].target.angle_body = -3.10F;
     }
-    bc_control_core_update(&core, &feedback, 0.001F);
+    bc_control_core_update(&core, &feedback, 0.001F, 0U);
     bc_control_core_calculate(&core, &command);
     bc_control_core_execute(&core, 1U, &actuation);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
@@ -104,7 +104,7 @@ int main() {
     trim_config.lqr_compensation.leg_angle_trim = 0.12F;
     bc_control_core_t trim_core;
     bc_control_core_init(&trim_core, &trim_config);
-    bc_control_core_update(&trim_core, &feedback, 0.001F);
+    bc_control_core_update(&trim_core, &feedback, 0.001F, 0U);
 
     bc_control_command_t trim_command = {
         .wheel_strategy = BC_WHEEL_LQR,
@@ -144,8 +144,8 @@ int main() {
     bc_control_core_t unsupported_core;
     bc_control_core_init(&supported_core, &supported_config);
     bc_control_core_init(&unsupported_core, &unsupported_config);
-    bc_control_core_update(&supported_core, &feedback, 0.001F);
-    bc_control_core_update(&unsupported_core, &feedback, 0.001F);
+    bc_control_core_update(&supported_core, &feedback, 0.001F, 0U);
+    bc_control_core_update(&unsupported_core, &feedback, 0.001F, 0U);
 
     command = (bc_control_command_t){
         .wheel_strategy = BC_WHEEL_LQR,

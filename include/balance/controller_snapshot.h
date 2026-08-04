@@ -18,6 +18,7 @@ typedef struct {
     bc_state_vector_t state_reference;
     float roll;
     float roll_rate;
+    bc_velocity_estimator_output_t velocity_estimator;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];
     bc_actuation_t actuation_request;
     bc_actuation_t actuation;

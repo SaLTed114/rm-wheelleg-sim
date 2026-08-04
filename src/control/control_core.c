@@ -12,6 +12,25 @@ void bc_control_default_config(bc_control_config_t *config) {
                 .hip_link_length   = 0.215F,
                 .wheel_link_length = 0.254F,
             },
+            .velocity_estimator = {
+                .gravity                   = 9.81F,
+                .initial_velocity_variance = 0.0004F,
+                .initial_bias_variance     = 0.000001F,
+                .acceleration_variance     = 0.02F,
+                .bias_walk_variance        = 0.00000001F,
+                .wheel_velocity_variance   = 0.0004F,
+                .nis_gate                  = 9.0F,
+            },
+            .imu_position = {
+                .x = -0.10F,
+                .y = 0.0F,
+                .z = -0.03F,
+            },
+            .hip_center_position = {
+                .x = -0.0193914F,
+                .y = 0.0F,
+                .z = -0.05F,
+            },
             .wheel_radius = 0.05806F,
         },
         .length_controller = {
@@ -51,9 +70,12 @@ void bc_control_core_reset(bc_control_core_t *core) {
 void bc_control_core_update(
     bc_control_core_t *core,
     const bc_sensor_feedback_t *feedback,
-    const float timestep_seconds
+    const float timestep_seconds,
+    const uint8_t wheel_velocity_update_enabled
 ) {
-    bc_observer_update(&core->observer, feedback, timestep_seconds);
+    bc_observer_update(
+        &core->observer, feedback, timestep_seconds,
+        wheel_velocity_update_enabled);
 }
 
 void bc_control_core_calculate(

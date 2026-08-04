@@ -57,6 +57,7 @@ add_library(balance_control_core STATIC
   src/control/controller_snapshot.c
   src/control/leg_kinematics.c
   src/control/observer.c
+  src/control/velocity_estimator.c
   src/control/reference_ramp.c
   src/control/state_machine/motion.c
   src/control/state_machine/system.c)
@@ -167,6 +168,13 @@ if(BUILD_TESTING)
   target_link_libraries(observer_test PRIVATE balance_control_core)
   balance_enable_warnings(observer_test)
   add_test(NAME observer_state_assembly COMMAND observer_test)
+
+  add_executable(velocity_estimator_test
+    tests/velocity_estimator_test.c)
+  target_link_libraries(
+    velocity_estimator_test PRIVATE balance_control_core)
+  balance_enable_warnings(velocity_estimator_test)
+  add_test(NAME velocity_estimator COMMAND velocity_estimator_test)
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_benchmark_support)
