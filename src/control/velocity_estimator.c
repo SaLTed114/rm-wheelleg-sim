@@ -27,6 +27,8 @@ static void capture_estimate(bc_velocity_estimator_t *estimator) {
     estimator->output.velocity_y = estimator->state[VELOCITY_Y];
     estimator->output.acceleration_bias_x = estimator->state[BIAS_X];
     estimator->output.acceleration_bias_y = estimator->state[BIAS_Y];
+    estimator->output.wheel_velocity_reliable =
+        estimator->wheel_velocity_reliable;
 }
 
 static void reset_covariance(bc_velocity_estimator_t *estimator) {
@@ -41,55 +43,17 @@ static void reset_covariance(bc_velocity_estimator_t *estimator) {
         estimator->config.initial_bias_variance;
 }
 
-void bc_velocity_estimator_init(
-    bc_velocity_estimator_t *estimator,
-    const bc_velocity_estimator_config_t *config
-) {
-    estimator->config = *config;
-    bc_velocity_estimator_reset(estimator);
-}
-
-void bc_velocity_estimator_reset(bc_velocity_estimator_t *estimator) {
-    memset(estimator->state, 0, sizeof(estimator->state));
-    memset(&estimator->output, 0, sizeof(estimator->output));
-    reset_covariance(estimator);
-    estimator->measurement_initialized = 0U;
-}
-
-void bc_velocity_estimator_skip_update(
-    bc_velocity_estimator_t *estimator
-) {
-    estimator->output.prior_velocity_x = estimator->state[VELOCITY_X];
-    estimator->output.prior_velocity_y = estimator->state[VELOCITY_Y];
-    estimator->output.wheel_velocity_measurement = 0.0F;
-    estimator->output.innovation = 0.0F;
-    estimator->output.innovation_variance = 0.0F;
-    estimator->output.nis = 0.0F;
-    estimator->output.measurement_accepted = 0U;
-    estimator->measurement_initialized = 0U;
-    capture_estimate(estimator);
-}
-
-void bc_velocity_estimator_update(
+static uint8_t calculate_innovation(
     bc_velocity_estimator_t *estimator,
     const float wheel_velocity_measurement
 ) {
-    if (!estimator->measurement_initialized) {
-        reset_covariance(estimator);
-        estimator->measurement_initialized = 1U;
-    }
-
     bc_velocity_estimator_output_t *output = &estimator->output;
-    output->prior_velocity_x = estimator->state[VELOCITY_X];
-    output->prior_velocity_y = estimator->state[VELOCITY_Y];
-    output->wheel_velocity_measurement = wheel_velocity_measurement;
-    output->measurement_accepted = 0U;
-
     const float measurement_variance =
         estimator->config.wheel_velocity_variance;
     const float innovation_variance =
         estimator->covariance[VELOCITY_X][VELOCITY_X] +
         measurement_variance;
+
     if (!isfinite(wheel_velocity_measurement) ||
         !isfinite(measurement_variance) || measurement_variance <= 0.0F ||
         !isfinite(innovation_variance) || innovation_variance <= 0.0F ||
@@ -98,8 +62,7 @@ void bc_velocity_estimator_update(
         output->innovation = 0.0F;
         output->innovation_variance = 0.0F;
         output->nis = 0.0F;
-        capture_estimate(estimator);
-        return;
+        return 0U;
     }
 
     const float innovation =
@@ -108,10 +71,58 @@ void bc_velocity_estimator_update(
     output->innovation = innovation;
     output->innovation_variance = innovation_variance;
     output->nis = nis;
-    if (!isfinite(nis) || nis > estimator->config.nis_gate) {
-        capture_estimate(estimator);
-        return;
+
+    return isfinite(nis) && nis <= estimator->config.nis_gate;
+}
+
+static uint8_t update_wheel_reliability(
+    bc_velocity_estimator_t *estimator,
+    const uint8_t innovation_is_inlier,
+    const float timestep_seconds
+) {
+    if (!isfinite(timestep_seconds) || timestep_seconds <= 0.0F) return 0U;
+
+    if (innovation_is_inlier) {
+        estimator->rejection_elapsed_seconds = 0.0F;
+        if (estimator->wheel_velocity_reliable) {
+            estimator->recovery_elapsed_seconds = 0.0F;
+            return 1U;
+        }
+
+        const float required = estimator->config.wheel_recovery_duration;
+        if (!isfinite(required) || required < 0.0F) return 0U;
+        estimator->recovery_elapsed_seconds += timestep_seconds;
+        if (estimator->recovery_elapsed_seconds < required) return 0U;
+
+        estimator->recovery_elapsed_seconds = 0.0F;
+        estimator->wheel_velocity_reliable = 1U;
+        return 1U;
     }
+
+    estimator->recovery_elapsed_seconds = 0.0F;
+    if (!estimator->wheel_velocity_reliable) return 0U;
+
+    const float required = estimator->config.wheel_rejection_duration;
+    if (!isfinite(required) || required < 0.0F) {
+        estimator->wheel_velocity_reliable = 0U;
+        return 0U;
+    }
+    estimator->rejection_elapsed_seconds += timestep_seconds;
+    if (estimator->rejection_elapsed_seconds >= required) {
+        estimator->rejection_elapsed_seconds = 0.0F;
+        estimator->wheel_velocity_reliable = 0U;
+    }
+    return 0U;
+}
+
+static void apply_measurement_update(
+    bc_velocity_estimator_t *estimator
+) {
+    const float innovation = estimator->output.innovation;
+    const float innovation_variance =
+        estimator->output.innovation_variance;
+    const float measurement_variance =
+        estimator->config.wheel_velocity_variance;
 
     float gain[ESTIMATOR_STATE_NUM];
     for (int row = 0; row < ESTIMATOR_STATE_NUM; ++row) {
@@ -156,7 +167,70 @@ void bc_velocity_estimator_update(
     }
     memcpy(estimator->covariance, covariance, sizeof(covariance));
     symmetrize_covariance(estimator->covariance);
+}
 
+void bc_velocity_estimator_init(
+    bc_velocity_estimator_t *estimator,
+    const bc_velocity_estimator_config_t *config
+) {
+    estimator->config = *config;
+    bc_velocity_estimator_reset(estimator);
+}
+
+void bc_velocity_estimator_reset(bc_velocity_estimator_t *estimator) {
+    memset(estimator->state, 0, sizeof(estimator->state));
+    memset(&estimator->output, 0, sizeof(estimator->output));
+    reset_covariance(estimator);
+    estimator->rejection_elapsed_seconds = 0.0F;
+    estimator->recovery_elapsed_seconds = 0.0F;
+    estimator->measurement_initialized = 0U;
+    estimator->wheel_velocity_reliable = 0U;
+}
+
+void bc_velocity_estimator_skip_update(
+    bc_velocity_estimator_t *estimator
+) {
+    estimator->output.prior_velocity_x = estimator->state[VELOCITY_X];
+    estimator->output.prior_velocity_y = estimator->state[VELOCITY_Y];
+    estimator->output.wheel_velocity_measurement = 0.0F;
+    estimator->output.innovation = 0.0F;
+    estimator->output.innovation_variance = 0.0F;
+    estimator->output.nis = 0.0F;
+    estimator->output.measurement_accepted = 0U;
+    estimator->rejection_elapsed_seconds = 0.0F;
+    estimator->recovery_elapsed_seconds = 0.0F;
+    estimator->measurement_initialized = 0U;
+    estimator->wheel_velocity_reliable = 0U;
+    capture_estimate(estimator);
+}
+
+void bc_velocity_estimator_update(
+    bc_velocity_estimator_t *estimator,
+    const float wheel_velocity_measurement,
+    const float timestep_seconds
+) {
+    if (!estimator->measurement_initialized) {
+        reset_covariance(estimator);
+        estimator->rejection_elapsed_seconds = 0.0F;
+        estimator->recovery_elapsed_seconds = 0.0F;
+        estimator->measurement_initialized = 1U;
+        estimator->wheel_velocity_reliable = 1U;
+    }
+
+    bc_velocity_estimator_output_t *output = &estimator->output;
+    output->prior_velocity_x = estimator->state[VELOCITY_X];
+    output->prior_velocity_y = estimator->state[VELOCITY_Y];
+    output->wheel_velocity_measurement = wheel_velocity_measurement;
+    output->measurement_accepted = 0U;
+    const uint8_t innovation_is_inlier = calculate_innovation(
+        estimator, wheel_velocity_measurement);
+    if (!update_wheel_reliability(
+            estimator, innovation_is_inlier, timestep_seconds)) {
+        capture_estimate(estimator);
+        return;
+    }
+
+    apply_measurement_update(estimator);
     output->measurement_accepted = 1U;
     capture_estimate(estimator);
 }

@@ -13,6 +13,8 @@ void bc_controller_capture_snapshot(
     snapshot->state_reference = controller->system.motion.state_reference;
     snapshot->roll = controller->control_core.observer.roll;
     snapshot->roll_rate = controller->control_core.observer.roll_rate;
+    snapshot->forward_velocity =
+        controller->control_core.observer.forward_velocity;
     snapshot->velocity_estimator =
         controller->control_core.observer.velocity_estimator.output;
     memcpy(

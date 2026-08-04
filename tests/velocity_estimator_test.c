@@ -24,6 +24,8 @@ static bc_velocity_estimator_config_t test_config(void) {
         .bias_walk_variance = 0.02F,
         .wheel_velocity_variance = 0.0004F,
         .nis_gate = 9.0F,
+        .wheel_rejection_duration = 0.003F,
+        .wheel_recovery_duration = 0.002F,
     };
 }
 
@@ -98,7 +100,7 @@ static int test_update(void) {
     bc_velocity_estimator_t estimator;
     bc_velocity_estimator_init(&estimator, &config);
 
-    bc_velocity_estimator_update(&estimator, 0.02F);
+    bc_velocity_estimator_update(&estimator, 0.02F, 0.001F);
     if (!estimator.output.measurement_accepted ||
         estimator.output.velocity_x <= 0.0F ||
         estimator.output.velocity_x >= 0.02F ||
@@ -114,7 +116,7 @@ static int test_update(void) {
     estimator.covariance[1][0] = 0.0001F;
     estimator.covariance[0][3] = 0.00005F;
     estimator.covariance[3][0] = 0.00005F;
-    bc_velocity_estimator_update(&estimator, 0.02F);
+    bc_velocity_estimator_update(&estimator, 0.02F, 0.001F);
     if (!estimator.output.measurement_accepted ||
         expect_near("lateral velocity", estimator.state[1], 0.4F, 0.0F) ||
         expect_near("lateral bias", estimator.state[3], -0.3F, 0.0F)) {
@@ -123,7 +125,7 @@ static int test_update(void) {
     }
 
     const float velocity_before_rejection = estimator.state[0];
-    bc_velocity_estimator_update(&estimator, 0.2F);
+    bc_velocity_estimator_update(&estimator, 0.2F, 0.001F);
     if (estimator.output.measurement_accepted ||
         estimator.output.nis <= config.nis_gate ||
         expect_near(
@@ -134,7 +136,7 @@ static int test_update(void) {
     }
 
     for (int repeat = 0; repeat < 10; ++repeat) {
-        bc_velocity_estimator_update(&estimator, 0.2F);
+        bc_velocity_estimator_update(&estimator, 0.2F, 0.001F);
     }
     if (expect_near(
             "repeated rejection", estimator.state[0],
@@ -165,16 +167,69 @@ static int test_bias_convergence(void) {
 
     imu.specific_force_x = 0.4F;
     for (int step = 0; step < 5000; ++step) {
-        bc_velocity_estimator_update(&estimator, 0.0F);
+        bc_velocity_estimator_update(&estimator, 0.0F, 0.001F);
         bc_velocity_estimator_predict(&estimator, &imu, 0.001F);
     }
-    bc_velocity_estimator_update(&estimator, 0.0F);
+    bc_velocity_estimator_update(&estimator, 0.0F, 0.001F);
     if (expect_near(
             "estimated bias", estimator.output.acceleration_bias_x,
             0.4F, 0.02F) ||
         expect_near(
             "bias-corrected velocity", estimator.output.velocity_x,
             0.0F, 0.01F)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static int test_measurement_health(void) {
+    const bc_velocity_estimator_config_t config = test_config();
+    bc_velocity_estimator_t estimator;
+    bc_velocity_estimator_init(&estimator, &config);
+
+    bc_velocity_estimator_update(&estimator, 0.0F, 0.001F);
+    if (!estimator.output.measurement_accepted ||
+        !estimator.output.wheel_velocity_reliable) {
+        fputs("initial wheel measurement was not accepted\n", stderr);
+        return 1;
+    }
+
+    for (int sample = 0; sample < 2; ++sample) {
+        bc_velocity_estimator_update(&estimator, 1.0F, 0.001F);
+    }
+    if (estimator.output.measurement_accepted ||
+        !estimator.output.wheel_velocity_reliable) {
+        fputs("transient rejection changed wheel reliability\n", stderr);
+        return 1;
+    }
+
+    bc_velocity_estimator_update(&estimator, 1.0F, 0.001F);
+    if (estimator.output.measurement_accepted ||
+        estimator.output.wheel_velocity_reliable) {
+        fputs("sustained rejection did not invalidate wheel velocity\n", stderr);
+        return 1;
+    }
+
+    bc_velocity_estimator_update(
+        &estimator, estimator.state[0], 0.001F);
+    if (estimator.output.measurement_accepted ||
+        estimator.output.wheel_velocity_reliable) {
+        fputs("wheel velocity recovered without a sufficient hold\n", stderr);
+        return 1;
+    }
+
+    bc_velocity_estimator_update(
+        &estimator, estimator.state[0], 0.001F);
+    if (!estimator.output.measurement_accepted ||
+        !estimator.output.wheel_velocity_reliable) {
+        fputs("wheel velocity did not recover after valid samples\n", stderr);
+        return 1;
+    }
+
+    bc_velocity_estimator_skip_update(&estimator);
+    if (estimator.output.wheel_velocity_reliable) {
+        fputs("disabled wheel update remained reliable\n", stderr);
         return 1;
     }
 
@@ -223,6 +278,7 @@ int main() {
     if (test_yaw_prediction()) return 1;
     if (test_update()) return 1;
     if (test_bias_convergence()) return 1;
+    if (test_measurement_health()) return 1;
     if (test_reset_and_invalid_timestep()) return 1;
     return 0;
 }

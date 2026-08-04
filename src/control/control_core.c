@@ -20,6 +20,8 @@ void bc_control_default_config(bc_control_config_t *config) {
                 .bias_walk_variance        = 0.00000001F,
                 .wheel_velocity_variance   = 0.0004F,
                 .nis_gate                  = 9.0F,
+                .wheel_rejection_duration  = 0.02F,
+                .wheel_recovery_duration   = 0.02F,
             },
             .imu_position = {
                 .x = -0.10F,

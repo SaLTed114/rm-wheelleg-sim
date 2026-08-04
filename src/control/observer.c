@@ -6,7 +6,7 @@
 #include <math.h>
 #include <string.h>
 
-static float wheel_velocity_at_imu(
+static float axle_velocity_offset_x(
     const bc_observer_t *observer,
     const bc_sensor_feedback_t *feedback
 ) {
@@ -32,12 +32,7 @@ static float wheel_velocity_at_imu(
         feedback->imu.pitch_rate * imu_to_axle_z -
         feedback->imu.yaw_rate * imu_to_axle_y +
         relative_velocity_x;
-    const float common_wheel_velocity = 0.5F * (
-        feedback->wheel[BC_L].angular_velocity +
-        feedback->wheel[BC_R].angular_velocity);
-
-    return observer->config.wheel_radius * common_wheel_velocity -
-        point_velocity_x;
+    return point_velocity_x;
 }
 
 void bc_observer_init(
@@ -53,6 +48,9 @@ void bc_observer_init(
 
 void bc_observer_reset(bc_observer_t *observer) {
     memset(observer->leg, 0, sizeof(observer->leg));
+    memset(
+        &observer->forward_velocity, 0,
+        sizeof(observer->forward_velocity));
     memset(&observer->state, 0, sizeof(observer->state));
     bc_velocity_estimator_reset(&observer->velocity_estimator);
     observer->roll = 0.0F;
@@ -84,10 +82,17 @@ void bc_observer_update(
             &observer->leg[side]);
     }
 
+    const float common_wheel_rate = 0.5F * (
+        feedback->wheel[BC_L].angular_velocity +
+        feedback->wheel[BC_R].angular_velocity);
+    const float velocity_offset = axle_velocity_offset_x(observer, feedback);
+    observer->forward_velocity.wheel_odometry =
+        observer->config.wheel_radius * common_wheel_rate;
     if (wheel_velocity_update_enabled) {
         bc_velocity_estimator_update(
             &observer->velocity_estimator,
-            wheel_velocity_at_imu(observer, feedback));
+            observer->forward_velocity.wheel_odometry - velocity_offset,
+            timestep_seconds);
     } else {
         bc_velocity_estimator_skip_update(
             &observer->velocity_estimator);
@@ -95,13 +100,11 @@ void bc_observer_update(
     bc_velocity_estimator_predict(
         &observer->velocity_estimator,
         &feedback->imu, timestep_seconds);
-
-    const float wheel_velocity = 0.5F * (
-        feedback->wheel[BC_L].angular_velocity +
-        feedback->wheel[BC_R].angular_velocity);
+    observer->forward_velocity.estimated_axle =
+        observer->velocity_estimator.output.velocity_x + velocity_offset;
 
     float *state = observer->state.value;
-    state[BC_STATE_DS]       = observer->config.wheel_radius * wheel_velocity;
+    state[BC_STATE_DS]       = observer->forward_velocity.estimated_axle;
     if (timestep_seconds > 0.0F) {
         state[BC_STATE_S] += state[BC_STATE_DS] * timestep_seconds;
     }

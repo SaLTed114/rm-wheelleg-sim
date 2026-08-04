@@ -94,7 +94,8 @@ PerformanceBenchmark::PerformanceBenchmark(
         "acceleration_bias_x", "acceleration_bias_y",
         "wheel_velocity_measurement", "velocity_innovation",
         "velocity_innovation_variance", "velocity_nis",
-        "velocity_measurement_accepted",
+        "velocity_measurement_accepted", "wheel_velocity_reliable",
+        "wheel_odometry_velocity", "estimated_axle_velocity",
         "command_forward", "command_yaw",
         "system", "motion", "s", "ds", "psi", "dpsi", "theta_l",
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
@@ -400,6 +401,9 @@ void PerformanceBenchmark::write_trace(
         .value(velocity.innovation_variance)
         .value(velocity.nis)
         .value(static_cast<int>(velocity.measurement_accepted))
+        .value(static_cast<int>(velocity.wheel_velocity_reliable))
+        .value(snapshot.forward_velocity.wheel_odometry)
+        .value(snapshot.forward_velocity.estimated_axle)
         .value(command.forward_velocity)
         .value(command.yaw_rate)
         .value(snapshot.state_machine.system)

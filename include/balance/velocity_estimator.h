@@ -15,6 +15,8 @@ typedef struct {
     float bias_walk_variance;
     float wheel_velocity_variance;
     float nis_gate;
+    float wheel_rejection_duration;
+    float wheel_recovery_duration;
 } bc_velocity_estimator_config_t;
 
 typedef struct {
@@ -31,6 +33,7 @@ typedef struct {
     float innovation_variance;
     float nis;
     uint8_t measurement_accepted;
+    uint8_t wheel_velocity_reliable;
 } bc_velocity_estimator_output_t;
 
 typedef struct {
@@ -38,7 +41,10 @@ typedef struct {
     float state[4];
     float covariance[4][4];
     bc_velocity_estimator_output_t output;
+    float rejection_elapsed_seconds;
+    float recovery_elapsed_seconds;
     uint8_t measurement_initialized;
+    uint8_t wheel_velocity_reliable;
 } bc_velocity_estimator_t;
 
 void bc_velocity_estimator_init(
@@ -49,7 +55,8 @@ void bc_velocity_estimator_skip_update(
     bc_velocity_estimator_t *estimator);
 void bc_velocity_estimator_update(
     bc_velocity_estimator_t *estimator,
-    float wheel_velocity_measurement);
+    float wheel_velocity_measurement,
+    float timestep_seconds);
 void bc_velocity_estimator_predict(
     bc_velocity_estimator_t *estimator,
     const bc_imu_feedback_t *imu,

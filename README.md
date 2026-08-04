@@ -161,9 +161,13 @@ axis. These fields are diagnostic telemetry and are not control inputs.
 The simulated accelerometer reports FLU body-frame specific force, so a level,
 stationary robot reads approximately `[0, 0, +9.81] m/s^2`. The
 `velocity_prior_*`, `velocity_estimate_*`, `velocity_truth_*`, innovation,
-NIS, and measurement-acceptance fields expose the planar velocity estimator.
-Wheel updates start 0.5 seconds after balance engagement and are diagnostic
-only: controller states `S` and `DS` still use the original wheel observer.
+NIS, measurement acceptance, and `wheel_velocity_reliable` fields expose the
+planar velocity estimator. Wheel reliability drops after 20 ms of continuous
+NIS rejection and recovers after 20 ms of continuous inliers.
+Wheel updates start 0.5 seconds after balance engagement. Controller state
+`DS` uses the estimated wheel-axle midpoint velocity, and `S` integrates that
+value; raw wheel odometry remains available only as estimator input and
+diagnostic telemetry.
 
 Generate the fixed-length, unsaturated `A/B + K` prior for the same positive
 yaw cases with the LQR Python environment:
