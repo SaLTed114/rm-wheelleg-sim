@@ -19,7 +19,8 @@
 引入时未修改上游模型资产。
 
 上游提供的 USD 文件仅用于 Isaac Sim，本项目当前采用 MuJoCo，因此 USD 原文件
-保存在被主仓库忽略的 `references/COD-2026RoboMaster-Balance.usd`，不随代码提交。
+保存在被主仓库忽略的
+`references/辽科轮腿模型/COD-2026RoboMaster-Balance.usd`，不随代码提交。
 
 截至引入日期，上游仓库没有提供明确的 `LICENSE` 或 `NOTICE` 文件。本仓库保留
 原作者和发布团队的署名，不对这些模型资产作重新许可声明。
