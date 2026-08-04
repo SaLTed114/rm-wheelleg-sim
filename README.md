@@ -158,6 +158,12 @@ options do not change the controller defaults:
 At trace level, `wheel_encoder_velocity_l/r` and
 `wheel_center_velocity_l/r` separate encoder slip from motion of the wheel
 axis. These fields are diagnostic telemetry and are not control inputs.
+The simulated accelerometer reports FLU body-frame specific force, so a level,
+stationary robot reads approximately `[0, 0, +9.81] m/s^2`. The
+`velocity_prior_*`, `velocity_estimate_*`, `velocity_truth_*`, innovation,
+NIS, and measurement-acceptance fields expose the planar velocity estimator.
+Wheel updates start 0.5 seconds after balance engagement and are diagnostic
+only: controller states `S` and `DS` still use the original wheel observer.
 
 Generate the fixed-length, unsaturated `A/B + K` prior for the same positive
 yaw cases with the LQR Python environment:

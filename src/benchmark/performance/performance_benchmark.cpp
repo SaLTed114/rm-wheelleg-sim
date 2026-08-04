@@ -83,7 +83,19 @@ PerformanceBenchmark::PerformanceBenchmark(
         "leg_length_target", "forward_velocity_observation",
         "position_feedback_enabled", "velocity_feedback_enabled",
         "base_x", "base_y", "base_z", "base_forward_velocity",
-        "base_vertical_velocity", "command_forward", "command_yaw",
+        "base_vertical_velocity", "imu_specific_force_x",
+        "imu_specific_force_y", "imu_specific_force_z",
+        "imu_linear_acceleration_x", "imu_linear_acceleration_y",
+        "velocity_prior_x", "velocity_prior_y",
+        "velocity_estimate_x", "velocity_estimate_y",
+        "velocity_truth_x", "velocity_truth_y",
+        "velocity_prior_error_x", "velocity_prior_error_y",
+        "velocity_estimate_error_x", "velocity_estimate_error_y",
+        "acceleration_bias_x", "acceleration_bias_y",
+        "wheel_velocity_measurement", "velocity_innovation",
+        "velocity_innovation_variance", "velocity_nis",
+        "velocity_measurement_accepted",
+        "command_forward", "command_yaw",
         "system", "motion", "s", "ds", "psi", "dpsi", "theta_l",
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
         "ref_s", "ref_ds", "ref_psi", "ref_dpsi", "ref_theta_l",
@@ -223,11 +235,13 @@ bool PerformanceBenchmark::step(
     roll_restraint_.apply(
         plant_.data(), runner_.snapshot().roll,
         runner_.snapshot().roll_rate);
+    const ImuMotionState velocity_truth =
+        sampler_.read_imu_motion(plant_.data());
     step_runner(command);
     const SimulationSample sample = sampler_.read(
         plant_.data(), runner_.snapshot());
     if (sample_index_ % trace_stride_ == 0U) {
-        write_trace(spec, phase, command, sample);
+        write_trace(spec, phase, command, sample, velocity_truth);
     }
     ++sample_index_;
 
@@ -344,9 +358,12 @@ void PerformanceBenchmark::finish_result(
 void PerformanceBenchmark::write_trace(
     const PerformanceCaseSpec &spec, const char *phase,
     const bc_operator_command_t &command,
-    const SimulationSample &sample
+    const SimulationSample &sample,
+    const ImuMotionState &velocity_truth
 ) {
     const bc_controller_snapshot_t &snapshot = sample.controller;
+    const bc_velocity_estimator_output_t &velocity =
+        snapshot.velocity_estimator;
     trace_.begin_row();
     trace_.value(spec.name)
         .value(phase)
@@ -361,6 +378,28 @@ void PerformanceBenchmark::write_trace(
         .value(sample.base.z)
         .value(sample.base.forward_velocity)
         .value(sample.base.vertical_velocity)
+        .value(runner_.feedback().imu.specific_force_x)
+        .value(runner_.feedback().imu.specific_force_y)
+        .value(runner_.feedback().imu.specific_force_z)
+        .value(velocity.linear_acceleration_x)
+        .value(velocity.linear_acceleration_y)
+        .value(velocity.prior_velocity_x)
+        .value(velocity.prior_velocity_y)
+        .value(velocity.velocity_x)
+        .value(velocity.velocity_y)
+        .value(velocity_truth.velocity_x)
+        .value(velocity_truth.velocity_y)
+        .value(velocity.prior_velocity_x - velocity_truth.velocity_x)
+        .value(velocity.prior_velocity_y - velocity_truth.velocity_y)
+        .value(velocity.velocity_x - velocity_truth.velocity_x)
+        .value(velocity.velocity_y - velocity_truth.velocity_y)
+        .value(velocity.acceleration_bias_x)
+        .value(velocity.acceleration_bias_y)
+        .value(velocity.wheel_velocity_measurement)
+        .value(velocity.innovation)
+        .value(velocity.innovation_variance)
+        .value(velocity.nis)
+        .value(static_cast<int>(velocity.measurement_accepted))
         .value(command.forward_velocity)
         .value(command.yaw_rate)
         .value(snapshot.state_machine.system)

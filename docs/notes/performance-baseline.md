@@ -322,6 +322,70 @@ observer 方案：正向案例在加速段约 `41%`、匀速保持段约 `21%` �
 简单永久关闭两个通道；需要保留纵向约束并提高 `DS` 在失去滚动接触时的
 可信度。
 
+## IMU/KF 平面速度基线
+
+第一阶段只建立 IMU 预测链，不做轮速更新，也不接管正式 `S/DS`。MuJoCo
+在机体坐标 `(-0.10, 0, -0.03) m` 放置临时 IMU site；该位置只是待实测的
+外参占位。accelerometer 输出 FLU 自然坐标下的比力，水平静止时约为
+`[0, 0, +9.81] m/s^2`。预测器先按 roll/pitch 去除重力，再在旋转自然坐标系
+中积分二维速度：
+
+```text
+a_x = f_x + g*sin(pitch) - b_x
+a_y = f_y - g*sin(roll)*cos(pitch) - b_y
+dv_x/dt = a_x + yaw_rate*v_y
+dv_y/dt = a_y - yaw_rate*v_x
+```
+
+当前 bias 只是初始化为零的预留状态，尚未估计；积分使用 midpoint/RK2，
+避免高偏航率下顺序 Euler 自身产生明显漂移。trace 用同一 IMU site 的
+MuJoCo 局部速度作为真值。为使 plant 不受已知轮速污染影响，四个验证案例
+都临时使用 `--forward-observation base-truth`，这不会给 IMU 预测器输入真值。
+
+| 案例 | `vx` RMS | `vy` RMS | 最大绝对误差 |
+| --- | ---: | ---: | ---: |
+| `forward_pos_2_a1` | `0.02538 m/s` | `0.01601 m/s` | `0.02954 m/s` |
+| `forward_neg_2_a1` | `0.02411 m/s` | `0.01602 m/s` | `0.02915 m/s` |
+| `yaw_pos_2pi_a3` | `0.02035 m/s` | `0.02114 m/s` | `0.03099 m/s` |
+| `yaw_neg_2pi_a3` | `0.02351 m/s` | `0.01768 m/s` | `0.03157 m/s` |
+
+四个完整时序案例均低于第一阶段 `0.05 m/s RMS` 目标，正负 yaw
+误差量级接近，没有出现持续的 yaw 相关前向漂移。
+
+第二阶段将模块收口并改名为 `velocity_estimator`，状态扩展为
+`[v_x, v_y, b_ax, b_ay]`，加入 `4x4` 协方差、Joseph update 和 NIS 门限。
+轮编码器共同速度先按解析腿运动学换算到 IMU 点：
+
+```text
+v_axle = v_imu + omega x r_imu_to_axle + v_axle_relative
+z_imu_x = R*(wheel_rate_l + wheel_rate_r)/2
+          - (omega x r_imu_to_axle + v_axle_relative)_x
+```
+
+由于自由落地和腿部整理期间轮速不具有里程计语义，IMU prediction 始终运行，
+轮速 update 则在进入平衡 `0.5 s` 后才开启。开启时保留预测状态，但重新初始化
+协方差。当前默认使用 `R=0.0004 (m/s)^2` 和 `NIS <= 9`；拒绝只跳过当次
+update，不会连续拒绝后强制重置到轮速。
+
+轮速只校正纵向 `v_x/b_ax`，不会经协方差间接修正 `v_y/b_ay`。曾验证过
+`v_axle_y=0` 的非完整伪测量，但它在正向偏心自旋中造成明显错误：当前模型
+允许轮轴真实侧向滑移，而这正是腿角补偿后偏心旋转的一部分，不能作为硬约束。
+
+最终 1 kHz 诊断如下。直线案例使用原始轮速和正常纵向闭环；yaw 案例关闭
+纵向 LQR 误差以避免旧 `S/DS` 发散，但 estimator 仍接收原始轮编码器：
+
+| 案例 | prior `vx` RMS | prior `vy` RMS | update 接受率 |
+| --- | ---: | ---: | ---: |
+| `forward_pos_2_a1` | `0.02018 m/s` | `0.01638 m/s` | `100%` |
+| `forward_neg_2_a1` | `0.02081 m/s` | `0.01646 m/s` | `100%` |
+| `yaw_pos_2pi_a3` | `0.05297 m/s` | `0.06532 m/s` | `80.42%` |
+| `yaw_neg_2pi_a3` | `0.04487 m/s` | `0.06014 m/s` | `82.73%` |
+
+偏航接触闪断中的 `0.12-0.17 m/s` innovation 对应 NIS 约 `28-70`，均被
+门限拒绝，证明它能抓住此前定位的共同轮速跳变。但 yaw 尤其正向仍有大量
+持续拒绝，且正向 prior `vx` 略高于第一阶段的 `0.05 m/s` 目标；因此本轮
+结果还不支持让融合值接管正式 `S/DS`。
+
 ## `0.18 m` 腿角偏置标定
 
 为避免 `S` 位置误差掩盖静态平衡点，`rm_balance_trim_scan` 在保留 `DS`

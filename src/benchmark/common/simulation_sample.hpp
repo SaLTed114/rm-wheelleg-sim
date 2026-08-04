@@ -29,6 +29,11 @@ struct WheelMotionState {
     std::array<double, BC_SIDE_NUM> forward_velocity{};
 };
 
+struct ImuMotionState {
+    double velocity_x{};
+    double velocity_y{};
+};
+
 struct SimulationSample {
     double time;
     const bc_controller_snapshot_t &controller;
@@ -42,6 +47,8 @@ public:
     explicit SimulationSampler(const mjModel &model);
 
     [[nodiscard]] BaseState read_base(
+        const mjData &data) const;
+    [[nodiscard]] ImuMotionState read_imu_motion(
         const mjData &data) const;
     [[nodiscard]] GroundContactState read_contacts(
         const mjData &data) const;
@@ -62,6 +69,7 @@ private:
     int ground_{};
     std::array<int, BC_SIDE_NUM> wheel_{};
     std::array<int, BC_SIDE_NUM> wheel_axis_{};
+    int imu_site_{};
 };
 
 } // namespace balance::benchmark

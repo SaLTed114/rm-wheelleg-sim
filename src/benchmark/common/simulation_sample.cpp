@@ -35,6 +35,7 @@ SimulationSampler::SimulationSampler(const mjModel &model) : model_(model) {
         require_id(model_, mjOBJ_SITE, "Right_wheel_axis_site"),
         require_id(model_, mjOBJ_SITE, "Left_wheel_axis_site"),
     }};
+    imu_site_ = require_id(model_, mjOBJ_SITE, "imu_site");
 }
 
 SimulationSample SimulationSampler::read(
@@ -83,6 +84,18 @@ WheelMotionState SimulationSampler::read_wheel_motion(
             velocity[3] * heading_x + velocity[4] * heading_y;
     }
     return state;
+}
+
+ImuMotionState SimulationSampler::read_imu_motion(
+    const mjData &data
+) const {
+    mjtNum velocity[6]{};
+    mj_objectVelocity(
+        &model_, &data, mjOBJ_SITE, imu_site_, velocity, 1);
+    return ImuMotionState{
+        velocity[3],
+        velocity[4],
+    };
 }
 
 GroundContactState SimulationSampler::read_contacts(

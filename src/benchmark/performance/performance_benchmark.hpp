@@ -85,7 +85,8 @@ private:
     void write_trace(
         const PerformanceCaseSpec &spec, const char *phase,
         const bc_operator_command_t &command,
-        const SimulationSample &sample);
+        const SimulationSample &sample,
+        const ImuMotionState &velocity_truth);
 
     sim::MujocoPlant plant_;
     sim::MujocoAdapter adapter_;
