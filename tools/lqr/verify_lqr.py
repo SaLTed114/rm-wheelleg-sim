@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 import re
 
 import numpy as np
 
 from lqr_generator import (
+    STATE_NAMES,
+    build_state_cost_matrix,
     compute_gain_samples,
     fit_gain_schedule,
     legacy_leg_parameters,
@@ -23,6 +26,33 @@ DEFAULT_REFERENCE = Path(
     "references/rm2026cb-balance-chassis/Tasks/balance_chassis/"
     "bc_lqr_schedule.c")
 GOLDEN_TOLERANCE = 1.0e-6
+
+
+def verify_leg_mode_costs() -> None:
+    settings = replace(
+        legacy_settings(),
+        leg_angle_difference_weight=120.0,
+        leg_angular_velocity_difference_weight=3.2)
+    matrix_q = build_state_cost_matrix(settings)
+
+    for left_name, right_name, common, difference in (
+        ("theta_l", "theta_r", 30.0, 120.0),
+        ("dtheta_l", "dtheta_r", 0.8, 3.2),
+    ):
+        left = STATE_NAMES.index(left_name)
+        right = STATE_NAMES.index(right_name)
+        common_mode = np.zeros(len(STATE_NAMES))
+        difference_mode = np.zeros(len(STATE_NAMES))
+        common_mode[left] = common_mode[right] = 1.0 / np.sqrt(2.0)
+        difference_mode[left] = 1.0 / np.sqrt(2.0)
+        difference_mode[right] = -1.0 / np.sqrt(2.0)
+        if not np.isclose(common_mode @ matrix_q @ common_mode, common):
+            raise AssertionError(f"{left_name} common-mode cost is incorrect")
+        if not np.isclose(
+            difference_mode @ matrix_q @ difference_mode, difference
+        ):
+            raise AssertionError(
+                f"{left_name} difference-mode cost is incorrect")
 
 
 def parse_reference(path: Path) -> tuple[np.ndarray, float, float]:
@@ -56,6 +86,7 @@ def parse_reference(path: Path) -> tuple[np.ndarray, float, float]:
 def verify_legacy(reference: Path) -> dict[str, float]:
     if not verify_yaw_inertia_identity():
         raise AssertionError("yaw inertia identity did not reduce to -I_z*D2psi")
+    verify_leg_mode_costs()
 
     expected, midpoint, scale = parse_reference(reference)
     samples = compute_gain_samples(

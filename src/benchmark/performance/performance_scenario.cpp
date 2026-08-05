@@ -27,14 +27,14 @@ constexpr std::array<PerformanceCaseSpec, 16> kCases{{
     {"forward_neg_2p5", PerformanceAxis::forward, -2.5, 5.0},
     {"forward_pos_3", PerformanceAxis::forward, 3.0, 5.0},
     {"forward_neg_3", PerformanceAxis::forward, -3.0, 5.0},
-    {"yaw_pos_1pi", PerformanceAxis::yaw, BC_PI, 15.0},
-    {"yaw_neg_1pi", PerformanceAxis::yaw, -BC_PI, 15.0},
-    {"yaw_pos_2pi", PerformanceAxis::yaw, 2.0 * BC_PI, 15.0},
-    {"yaw_neg_2pi", PerformanceAxis::yaw, -2.0 * BC_PI, 15.0},
-    {"yaw_pos_3pi", PerformanceAxis::yaw, 3.0 * BC_PI, 15.0},
-    {"yaw_neg_3pi", PerformanceAxis::yaw, -3.0 * BC_PI, 15.0},
-    {"yaw_pos_4pi", PerformanceAxis::yaw, 4.0 * BC_PI, 15.0},
-    {"yaw_neg_4pi", PerformanceAxis::yaw, -4.0 * BC_PI, 15.0},
+    {"yaw_pos_1pi", PerformanceAxis::yaw, BC_PI, 5.0},
+    {"yaw_neg_1pi", PerformanceAxis::yaw, -BC_PI, 5.0},
+    {"yaw_pos_2pi", PerformanceAxis::yaw, 2.0 * BC_PI, 5.0},
+    {"yaw_neg_2pi", PerformanceAxis::yaw, -2.0 * BC_PI, 5.0},
+    {"yaw_pos_3pi", PerformanceAxis::yaw, 3.0 * BC_PI, 5.0},
+    {"yaw_neg_3pi", PerformanceAxis::yaw, -3.0 * BC_PI, 5.0},
+    {"yaw_pos_4pi", PerformanceAxis::yaw, 4.0 * BC_PI, 5.0},
+    {"yaw_neg_4pi", PerformanceAxis::yaw, -4.0 * BC_PI, 5.0},
 }};
 
 constexpr std::array<PerformanceCaseSpec, 10> kForwardAccelerationCases{{

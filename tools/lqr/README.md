@@ -35,8 +35,11 @@ conda run -n sim python tools/lqr/build_current_model.py
 - `tools/lqr/generated/current_model_schedule.h`
 - `docs/notes/lqr-validation.md`
 
-当前调度保留旧实车的 Q/R 权重，以便单独观察物理模型变化。它针对 1 ms
-仿真控制周期生成，不能与现有 3 ms 实车调度混用。
+当前调度针对 1 ms 仿真控制周期生成，不能与现有 3 ms 实车调度混用。
+左右腿角代价使用共同/差分坐标：共同腿角保持基础权重，差分腿角由
+`--leg-angle-difference-weight` 单独设置；腿角速度也通过
+`--leg-angular-velocity-difference-weight` 独立设置。这样可以加强原地旋转
+时的腿姿态约束，而不同时限制直线加速所需的共同摆腿。
 
 需要诊断偏航惯量匹配时，可以把整机 Izz 候选生成到构建目录，避免覆盖正式
 参数和报告：
@@ -65,3 +68,7 @@ conda run -n sim python tools/lqr/build_current_model.py \
 - 状态顺序为 `[s, ds, psi, dpsi, theta_l, dtheta_l, theta_r, dtheta_r,
   theta_b, dtheta_b]`。
 - 输入顺序为 `[T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]`。
+- `q_diagonal` 保留可直接传回生成器的基础状态权重，`q_matrix` 记录实际
+  状态代价矩阵；`leg_angle_cost` 和
+  `leg_angular_velocity_cost` 另外记录共同模式、差分模式和转换到左右腿
+  坐标后的交叉项。

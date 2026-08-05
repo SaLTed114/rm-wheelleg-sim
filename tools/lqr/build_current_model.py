@@ -18,6 +18,7 @@ from lqr_generator import (
     LqrSettings,
     PhysicalParameters,
     STATE_NAMES,
+    build_state_cost_matrix,
     compute_gain_samples,
     evaluate_gain,
     fit_gain_schedule,
@@ -31,6 +32,8 @@ DEFAULT_MODEL = Path("models/MJCF/COD-2026RoboMaster-Balance.xml")
 DEFAULT_OUTPUT = Path("tools/lqr/generated")
 Q_DIAGONAL = (90, 60, 40, 15, 240, 4, 240, 4, 300, 60)
 R_DIAGONAL = (3.2, 3.2, 0.7, 0.7)
+LEG_ANGLE_DIFFERENCE_WEIGHT = 1920.0
+LEG_ANGULAR_VELOCITY_DIFFERENCE_WEIGHT = 32.0
 CONTROLLER_LENGTH_MINIMUM = 0.16
 YAW_INERTIA_SOURCES = ("base-link", "assembly")
 
@@ -172,6 +175,10 @@ def build_result(
     r_diagonal: tuple[float, ...] = R_DIAGONAL,
     extracted: dict[str, object] | None = None,
     yaw_inertia_source: str = "base-link",
+    leg_angle_difference_weight: float | None = (
+        LEG_ANGLE_DIFFERENCE_WEIGHT),
+    leg_angular_velocity_difference_weight: float | None = (
+        LEG_ANGULAR_VELOCITY_DIFFERENCE_WEIGHT),
 ) -> dict[str, object]:
     legacy_metrics = verify_legacy(
         Path("references/rm2026cb-balance-chassis/Tasks/balance_chassis/"
@@ -190,6 +197,9 @@ def build_result(
         timestep=0.001,
         q_diagonal=q_diagonal,
         r_diagonal=r_diagonal,
+        leg_angle_difference_weight=leg_angle_difference_weight,
+        leg_angular_velocity_difference_weight=(
+            leg_angular_velocity_difference_weight),
     )
 
     selected_scale = yaw_inertia_scale(extracted, yaw_inertia_source)
@@ -218,6 +228,12 @@ def build_result(
     comparison_difference = float(np.max(np.abs(
         samples.gains - comparison_samples.gains)))
 
+    matrix_q = build_state_cost_matrix(settings)
+    left_angle = STATE_NAMES.index("theta_l")
+    right_angle = STATE_NAMES.index("theta_r")
+    left_angular_velocity = STATE_NAMES.index("dtheta_l")
+    right_angular_velocity = STATE_NAMES.index("dtheta_r")
+
     return {
         "schema_version": 1,
         "model": extracted,
@@ -226,6 +242,20 @@ def build_result(
             "input_order": list(INPUT_NAMES),
             "timestep": settings.timestep,
             "q_diagonal": list(settings.q_diagonal),
+            "q_matrix_diagonal": np.diag(matrix_q).tolist(),
+            "q_matrix": matrix_q.tolist(),
+            "leg_angle_cost": {
+                "common": settings.q_diagonal[left_angle],
+                "difference": settings.leg_angle_difference_weight,
+                "coupling": matrix_q[left_angle, right_angle],
+            },
+            "leg_angular_velocity_cost": {
+                "common": settings.q_diagonal[left_angular_velocity],
+                "difference": (
+                    settings.leg_angular_velocity_difference_weight),
+                "coupling": matrix_q[
+                    left_angular_velocity, right_angular_velocity],
+            },
             "r_diagonal": list(settings.r_diagonal),
             "sample_count": settings.sample_count,
             "length_range": [settings.length_min, settings.length_max],
@@ -393,7 +423,15 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 ## 当前增益调度验证
 
 - 状态顺序：`{', '.join(controller['state_order'])}`。
-- Q 对角线：`{controller['q_diagonal']}`。
+- Q 基础对角权重：`{controller['q_diagonal']}`。
+- Q 实际矩阵对角线：`{controller['q_matrix_diagonal']}`。
+- 共同腿角权重：`{controller['leg_angle_cost']['common']}`；差分腿角权重：
+  `{controller['leg_angle_cost']['difference']}`；左右腿角交叉项：
+  `{controller['leg_angle_cost']['coupling']}`。
+- 共同腿角速度权重：`{controller['leg_angular_velocity_cost']['common']}`；
+  差分腿角速度权重：
+  `{controller['leg_angular_velocity_cost']['difference']}`；交叉项：
+  `{controller['leg_angular_velocity_cost']['coupling']}`。
 - 输入顺序：`{', '.join(controller['input_order'])}`。
 - R 对角线：`{controller['r_diagonal']}`。
 - 多项式阶数：`{schedule['polynomial_order']}`。
@@ -431,6 +469,14 @@ def main() -> int:
         "--r-diagonal", type=float, nargs=len(R_DIAGONAL),
         default=R_DIAGONAL)
     parser.add_argument(
+        "--leg-angle-difference-weight", type=float,
+        default=LEG_ANGLE_DIFFERENCE_WEIGHT,
+        help="eigenweight of the differential leg-angle mode")
+    parser.add_argument(
+        "--leg-angular-velocity-difference-weight", type=float,
+        default=LEG_ANGULAR_VELOCITY_DIFFERENCE_WEIGHT,
+        help="eigenweight of the differential leg-angular-velocity mode")
+    parser.add_argument(
         "--yaw-inertia-source", choices=YAW_INERTIA_SOURCES,
         default="base-link",
         help="yaw inertia used by the reduced controller model")
@@ -442,11 +488,15 @@ def main() -> int:
             arguments.reuse_model_parameters.read_text(encoding="ascii"))
         extracted = cached["model"] if "model" in cached else cached
     result = build_result(
-        arguments.model,
-        tuple(arguments.q_diagonal),
-        tuple(arguments.r_diagonal),
-        extracted,
-        arguments.yaw_inertia_source)
+        model_path=arguments.model,
+        q_diagonal=tuple(arguments.q_diagonal),
+        r_diagonal=tuple(arguments.r_diagonal),
+        extracted=extracted,
+        yaw_inertia_source=arguments.yaw_inertia_source,
+        leg_angle_difference_weight=(
+            arguments.leg_angle_difference_weight),
+        leg_angular_velocity_difference_weight=(
+            arguments.leg_angular_velocity_difference_weight))
     arguments.output.mkdir(parents=True, exist_ok=True)
     json_path = arguments.output / "current_model_schedule.json"
     header_path = arguments.output / "current_model_schedule.h"

@@ -46,6 +46,8 @@ class LqrSettings:
     timestep: float
     q_diagonal: tuple[float, ...]
     r_diagonal: tuple[float, ...]
+    leg_angle_difference_weight: float | None = None
+    leg_angular_velocity_difference_weight: float | None = None
 
 
 @dataclass(frozen=True)
@@ -302,6 +304,42 @@ def solve_lqr(
     return gain, riccati, eigenvalues, float(np.max(np.abs(residual)))
 
 
+def build_state_cost_matrix(settings: LqrSettings) -> np.ndarray:
+    matrix_q = np.diag(settings.q_diagonal).astype(float)
+
+    def set_leg_mode_cost(
+        left_name: str, right_name: str,
+        difference_weight: float | None,
+    ) -> None:
+        if difference_weight is None:
+            return
+
+        left = STATE_NAMES.index(left_name)
+        right = STATE_NAMES.index(right_name)
+        common_weight = settings.q_diagonal[left]
+        if not np.isclose(common_weight, settings.q_diagonal[right]):
+            raise ValueError(
+                f"{left_name} and {right_name} weights must match when "
+                "using a difference weight")
+        if common_weight <= 0.0 or difference_weight <= 0.0:
+            raise ValueError(
+                "leg common and difference weights must be positive")
+
+        diagonal = 0.5 * (common_weight + difference_weight)
+        coupling = 0.5 * (common_weight - difference_weight)
+        matrix_q[left, left] = diagonal
+        matrix_q[right, right] = diagonal
+        matrix_q[left, right] = coupling
+        matrix_q[right, left] = coupling
+
+    set_leg_mode_cost(
+        "theta_l", "theta_r", settings.leg_angle_difference_weight)
+    set_leg_mode_cost(
+        "dtheta_l", "dtheta_r",
+        settings.leg_angular_velocity_difference_weight)
+    return matrix_q
+
+
 def compute_gain_samples(
     physical: PhysicalParameters,
     settings: LqrSettings,
@@ -311,7 +349,7 @@ def compute_gain_samples(
     lengths = np.linspace(
         settings.length_min, settings.length_max, settings.sample_count)
     gains = np.zeros((len(INPUT_NAMES), len(STATE_NAMES), len(lengths)))
-    matrix_q = np.diag(settings.q_diagonal) * settings.timestep
+    matrix_q = build_state_cost_matrix(settings) * settings.timestep
     matrix_r = np.diag(settings.r_diagonal) * settings.timestep
     maximum_eigenvalue = 0.0
     maximum_residual = 0.0

@@ -48,7 +48,7 @@ void bc_control_default_config(bc_control_config_t *config) {
         .lqr_compensation = {
             .leg_angle_trim = 5.5F * BC_PI_F / 180.0F,
         },
-        .support_force      = 54.0F,
+        .support_force      = 67.5F,
         .wheel_torque_limit = 6.32F,
         .joint_torque_limit = 40.0F,
     };
