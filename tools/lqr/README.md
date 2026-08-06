@@ -41,6 +41,11 @@ conda run -n sim python tools/lqr/build_current_model.py
 `--leg-angular-velocity-difference-weight` 独立设置。这样可以加强原地旋转
 时的腿姿态约束，而不同时限制直线加速所需的共同摆腿。
 
+需要批量生成候选、建立隔离构建并运行 MuJoCo/A-B 对照时，使用
+`tools/experiments/run_experiment.py`；配置和产物说明见
+`tools/experiments/README.md`。`forward_response.py` 由该 runner 调用，要求
+输入关闭 `S` 位置反馈的 performance trace，并围绕运动前稳态比较扰动响应。
+
 需要诊断偏航惯量匹配时，可以把整机 Izz 候选生成到构建目录，避免覆盖正式
 参数和报告：
 

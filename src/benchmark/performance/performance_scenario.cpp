@@ -11,9 +11,6 @@ namespace {
 
 constexpr double kDisabledSettleSeconds = 2.0;
 constexpr double kEngagementTimeoutSeconds = 8.0;
-constexpr double kStandingSeconds = 2.0;
-constexpr double kTargetHoldSeconds = 3.0;
-constexpr double kStopSettleSeconds = 2.0;
 constexpr double kEvaluationSeconds = 1.0;
 constexpr double kForwardRateLimit = 5.0;
 constexpr double kYawRateLimit = 15.0;
@@ -136,9 +133,15 @@ PerformanceScenario::PerformanceScenario(
 ) : spec_(spec) {
     if (!std::isfinite(spec_.target) ||
         !std::isfinite(spec_.command_rate) ||
-        spec_.command_rate <= 0.0) {
+        spec_.command_rate <= 0.0 ||
+        !std::isfinite(spec_.target_hold_seconds) ||
+        spec_.target_hold_seconds < 0.0 ||
+        !std::isfinite(spec_.stop_settle_seconds) ||
+        spec_.stop_settle_seconds < 0.0 ||
+        !std::isfinite(spec_.standing_seconds) ||
+        spec_.standing_seconds < 0.0) {
         throw std::invalid_argument(
-            "performance case target and command rate must be valid");
+            "performance case values and durations must be valid");
     }
     reset();
 }
@@ -182,7 +185,7 @@ void PerformanceScenario::update(
         break;
 
     case PerformancePhase::standing:
-        if (phase_elapsed() >= kStandingSeconds) {
+        if (phase_elapsed() >= spec_.standing_seconds) {
             enter(PerformancePhase::target_ramp, simulation_time);
         }
         break;
@@ -196,7 +199,7 @@ void PerformanceScenario::update(
     }
 
     case PerformancePhase::target_hold:
-        if (phase_elapsed() >= kTargetHoldSeconds) {
+        if (phase_elapsed() >= spec_.target_hold_seconds) {
             enter(PerformancePhase::stop_ramp, simulation_time);
         }
         break;
@@ -210,7 +213,7 @@ void PerformanceScenario::update(
     }
 
     case PerformancePhase::stop_settle:
-        if (phase_elapsed() >= kStopSettleSeconds) {
+        if (phase_elapsed() >= spec_.stop_settle_seconds) {
             enter(PerformancePhase::complete, simulation_time);
         }
         break;
@@ -273,12 +276,14 @@ bool PerformanceScenario::monitored() const noexcept {
 
 bool PerformanceScenario::tracking_evaluation() const noexcept {
     return phase_ == PerformancePhase::target_hold &&
-        phase_elapsed() >= kTargetHoldSeconds - kEvaluationSeconds;
+        phase_elapsed() >= std::max(
+            0.0, spec_.target_hold_seconds - kEvaluationSeconds);
 }
 
 bool PerformanceScenario::settle_evaluation() const noexcept {
     return phase_ == PerformancePhase::stop_settle &&
-        phase_elapsed() >= kStopSettleSeconds - kEvaluationSeconds;
+        phase_elapsed() >= std::max(
+            0.0, spec_.stop_settle_seconds - kEvaluationSeconds);
 }
 
 bool PerformanceScenario::finished() const noexcept {

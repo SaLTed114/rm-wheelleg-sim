@@ -29,6 +29,9 @@ struct PerformanceCaseSpec {
     PerformanceAxis axis;
     double target;
     double command_rate;
+    double target_hold_seconds{3.0};
+    double stop_settle_seconds{2.0};
+    double standing_seconds{2.0};
 };
 
 [[nodiscard]] const std::array<PerformanceCaseSpec, 16> &

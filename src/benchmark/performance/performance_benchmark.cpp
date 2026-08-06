@@ -59,7 +59,8 @@ PerformanceBenchmark::PerformanceBenchmark(
     position_feedback_enabled_(config.position_feedback_enabled),
     velocity_feedback_enabled_(config.velocity_feedback_enabled),
     summary_(output_directory / "summary.csv", {
-        "case", "axis", "target", "command_rate", "leg_length_target",
+        "case", "axis", "target", "command_rate", "target_hold_seconds",
+        "stop_settle_seconds", "standing_seconds", "leg_length_target",
         "forward_velocity_observation", "roll_restrained",
         "position_feedback_enabled", "velocity_feedback_enabled",
         "completed", "balance_engaged",
@@ -177,6 +178,9 @@ void PerformanceBenchmark::write_summary(
         .value(performance_axis_name(result.spec.axis))
         .value(result.spec.target)
         .value(result.spec.command_rate)
+        .value(result.spec.target_hold_seconds)
+        .value(result.spec.stop_settle_seconds)
+        .value(result.spec.standing_seconds)
         .value(result.leg_length_target)
         .value(forward_observation_name(
             result.forward_velocity_observation))

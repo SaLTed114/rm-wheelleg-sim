@@ -1,0 +1,60 @@
+version = 1
+name = "forward-ab-baseline"
+
+[paths]
+model = "../../models/MJCF/COD-2026RoboMaster-Balance.xml"
+output_root = "../../build/experiments/results"
+
+[build]
+root = "../../build/experiments"
+configuration = "Release"
+cmake_args = []
+
+[controller]
+leg_length = 0.18
+position_feedback = false
+velocity_feedback = true
+forward_observation = "wheel-odometry"
+roll_restrained = false
+trace_stride = 10
+
+[lqr]
+mode = "generate"
+
+[lqr.generate]
+model_parameters = "../lqr/generated/current_model_schedule.json"
+q_diagonal = [90, 60, 40, 15, 240, 4, 240, 4, 300, 60]
+r_diagonal = [3.2, 3.2, 0.7, 0.7]
+leg_angle_difference_weight = 1920
+leg_angular_velocity_difference_weight = 32
+yaw_inertia_source = "base-link"
+
+[analysis]
+forward_linear = true
+
+[[case]]
+name = "forward_pos_2_a0p5"
+axis = "forward"
+target = 2.0
+command_rate = 0.5
+standing_seconds = 8.0
+target_hold_seconds = 3.0
+stop_settle_seconds = 2.0
+
+[[case]]
+name = "forward_pos_2_a1"
+axis = "forward"
+target = 2.0
+command_rate = 1.0
+standing_seconds = 8.0
+target_hold_seconds = 3.0
+stop_settle_seconds = 2.0
+
+[[case]]
+name = "forward_pos_2_a5"
+axis = "forward"
+target = 2.0
+command_rate = 5.0
+standing_seconds = 8.0
+target_hold_seconds = 3.0
+stop_settle_seconds = 2.0

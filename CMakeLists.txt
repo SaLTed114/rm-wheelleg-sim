@@ -176,6 +176,14 @@ if(BUILD_TESTING)
   balance_enable_warnings(velocity_estimator_test)
   add_test(NAME velocity_estimator COMMAND velocity_estimator_test)
 
+  add_executable(performance_scenario_test
+    tests/performance_scenario_test.cpp)
+  target_link_libraries(
+    performance_scenario_test PRIVATE balance_benchmark_support)
+  balance_enable_warnings(performance_scenario_test)
+  balance_configure_mujoco_runtime(performance_scenario_test)
+  add_test(NAME performance_scenario COMMAND performance_scenario_test)
+
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_benchmark_support)
   balance_enable_warnings(mujoco_smoke_test)
