@@ -23,6 +23,7 @@ int main() {
 
     bc_controller_default_config(&config);
     config.motion.stable_duration = 0.002F;
+    config.motion.engage_duration = 0.002F;
     config.velocity_estimator_update_delay = 0.002F;
     bc_controller_init(&controller, &config);
     bc_controller_capture_snapshot(&controller, &snapshot);
@@ -140,10 +141,8 @@ int main() {
     }
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.motion != BC_MOTION_BALANCE_ENGAGING ||
-        fabsf(snapshot.state_reference.value[BC_STATE_DS] - 0.005F) >
-            1.0e-7F ||
-        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.015F) >
-            1.0e-7F ||
+        snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
+        snapshot.state_reference.value[BC_STATE_DPSI] != 0.0F ||
         snapshot.tick_count != 5U) {
         fputs("stable legs did not engage balance control\n", stderr);
         return 1;
@@ -162,10 +161,26 @@ int main() {
         fputs("wheel update started before its balance delay\n", stderr);
         return 1;
     }
+    bc_controller_set_command(&controller, &command);
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+
     bc_controller_update(&controller, &feedback, 0.001F);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (!snapshot.velocity_estimator.measurement_accepted) {
         fputs("wheel update did not start after its balance delay\n", stderr);
+        return 1;
+    }
+    bc_controller_set_command(&controller, &command);
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.motion != BC_MOTION_ACTIVE ||
+        fabsf(snapshot.state_reference.value[BC_STATE_DS] - 0.005F) >
+            1.0e-7F ||
+        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.015F) >
+            1.0e-7F) {
+        fputs("controller did not activate motion after engagement\n", stderr);
         return 1;
     }
 

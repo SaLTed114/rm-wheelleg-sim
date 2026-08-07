@@ -7,7 +7,6 @@ import unittest
 
 from run_experiment import (
     ExperimentError,
-    case_command,
     load_config,
     lqr_fingerprint,
 )
@@ -47,14 +46,10 @@ class ExperimentConfigTest(unittest.TestCase):
             root = "build"
 
             [controller]
-            position_feedback = false
 
             [lqr]
             mode = "existing"
             schedule_dir = "schedule"
-
-            [analysis]
-            forward_linear = true
 
             [[case]]
             name = "forward-test"
@@ -70,7 +65,6 @@ class ExperimentConfigTest(unittest.TestCase):
         self.assertEqual(config.build.configuration, "Release")
         self.assertEqual(config.controller.leg_length, 0.18)
         self.assertEqual(config.controller.trace_stride, 10)
-        self.assertTrue(config.controller.yaw_position_feedback)
         self.assertEqual(config.cases[0].target_hold_seconds, 3.0)
         self.assertEqual(config.cases[0].standing_seconds, 2.0)
         self.assertEqual(config.lqr.schedule_dir, self.root / "schedule")
@@ -89,8 +83,6 @@ class ExperimentConfigTest(unittest.TestCase):
             configuration = "Debug"
 
             [controller]
-            position_feedback = false
-            yaw_position_feedback = false
 
             [lqr]
             mode = "generate"
@@ -110,15 +102,8 @@ class ExperimentConfigTest(unittest.TestCase):
             command_rate = 2.0
         """))
         self.assertEqual(config.build.configuration, "Debug")
-        self.assertFalse(config.controller.yaw_position_feedback)
         self.assertEqual(config.lqr.generate.q_diagonal[-1], 10.0)
         self.assertEqual(config.lqr.generate.yaw_inertia_source, "assembly")
-        command = case_command(
-            self.root / "benchmark", config, config.cases[0],
-            self.root / "case-output")
-        self.assertIn(
-            ["--yaw-position-feedback", "off"],
-            [command[index:index + 2] for index in range(len(command) - 1)])
 
     def test_lqr_weight_change_changes_fingerprint(self) -> None:
         first = load_config(self.write_config("""
@@ -166,10 +151,10 @@ class ExperimentConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(ExperimentError, "duplicate case"):
             load_config(self.write_config(contents))
 
-    def test_forward_analysis_requires_position_feedback_off(self) -> None:
+    def test_feedback_override_is_rejected(self) -> None:
         contents = self.existing_config().replace(
-            "position_feedback = false", "position_feedback = true")
-        with self.assertRaisesRegex(ExperimentError, "position_feedback"):
+            "[controller]", "[controller]\nposition_feedback = false")
+        with self.assertRaisesRegex(ExperimentError, "unknown controller keys"):
             load_config(self.write_config(contents))
 
     def test_unknown_key_is_rejected(self) -> None:

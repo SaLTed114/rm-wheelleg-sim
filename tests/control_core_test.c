@@ -59,6 +59,51 @@ int main() {
         }
     }
 
+    bc_control_config_t feedback_strategy_config = config;
+    feedback_strategy_config.lqr_compensation.leg_angle_trim = 0.0F;
+    bc_control_core_t feedback_strategy_core;
+    bc_control_core_init(
+        &feedback_strategy_core, &feedback_strategy_config);
+    bc_control_core_update(
+        &feedback_strategy_core, &feedback, 0.001F, 0U);
+    bc_control_command_t feedback_strategy_command = {
+        .wheel_strategy = BC_WHEEL_LQR,
+        .disabled_state_feedback =
+            BC_STATE_FEEDBACK_MASK(BC_STATE_S),
+    };
+    feedback_strategy_command.state_reference.value[BC_STATE_S] = 100.0F;
+    feedback_strategy_command.state_reference.value[BC_STATE_THETA_B] = 0.1F;
+    bc_control_core_calculate(
+        &feedback_strategy_core, &feedback_strategy_command);
+    float masked_wheel[BC_SIDE_NUM];
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        masked_wheel[side] = feedback_strategy_core.actuation_request
+            .wheel_torque[side];
+    }
+    feedback_strategy_command.state_reference.value[BC_STATE_S] = 0.0F;
+    bc_control_core_calculate(
+        &feedback_strategy_core, &feedback_strategy_command);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        if (fabsf(
+                feedback_strategy_core.actuation_request
+                    .wheel_torque[side] - masked_wheel[side]) > 1.0e-6F) {
+            fputs("masked state changed the LQR output\n", stderr);
+            return 1;
+        }
+    }
+    feedback_strategy_command.disabled_state_feedback = 0U;
+    feedback_strategy_command.state_reference.value[BC_STATE_S] = 100.0F;
+    bc_control_core_calculate(
+        &feedback_strategy_core, &feedback_strategy_command);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        if (fabsf(
+                feedback_strategy_core.actuation_request
+                    .wheel_torque[side] - masked_wheel[side]) <= 1.0e-3F) {
+            fputs("unmasked state did not change the LQR output\n", stderr);
+            return 1;
+        }
+    }
+
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         feedback.leg[side].joint[BC_FRONT].angle = 3.10F;
         feedback.leg[side].joint[BC_REAR].angle = 3.10F;
@@ -118,9 +163,12 @@ int main() {
     const float trim_length = 0.5F * (
         trim_core.observer.leg[BC_L].length +
         trim_core.observer.leg[BC_R].length);
-    bc_lqr_calculate(
-        trim_length, &trim_core.observer.state,
-        &effective_reference, &expected_lqr);
+    bc_state_vector_t state_error = {0};
+    for (int state = 0; state < BC_STATE_NUM; ++state) {
+        state_error.value[state] = effective_reference.value[state] -
+            trim_core.observer.state.value[state];
+    }
+    bc_lqr_calculate(trim_length, &state_error, &expected_lqr);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         if (fabsf(
                 trim_core.actuation_request.wheel_torque[side] -

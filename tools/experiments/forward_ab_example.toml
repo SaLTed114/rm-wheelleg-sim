@@ -1,5 +1,5 @@
 version = 1
-name = "forward-ab-baseline"
+name = "forward-baseline"
 
 [paths]
 model = "../../models/MJCF/COD-2026RoboMaster-Balance.xml"
@@ -12,9 +12,6 @@ cmake_args = []
 
 [controller]
 leg_length = 0.18
-position_feedback = false
-velocity_feedback = true
-yaw_position_feedback = true
 forward_observation = "wheel-odometry"
 roll_restrained = false
 trace_stride = 10
@@ -29,9 +26,6 @@ r_diagonal = [3.2, 3.2, 0.7, 0.7]
 leg_angle_difference_weight = 1920
 leg_angular_velocity_difference_weight = 32
 yaw_inertia_source = "base-link"
-
-[analysis]
-forward_linear = true
 
 [[case]]
 name = "forward_pos_2_a0p5"

@@ -195,11 +195,11 @@ int main(int argc, char **argv) {
 
         while (plant.data().time < 8.0 &&
                runner.snapshot().state_machine.motion !=
-                   BC_MOTION_BALANCE_ENGAGING) {
+                   BC_MOTION_ACTIVE) {
             step_controller(runner, plant, 0.0F, 0.0F);
         }
         if (runner.snapshot().state_machine.motion !=
-                BC_MOTION_BALANCE_ENGAGING ||
+                BC_MOTION_ACTIVE ||
             plant.data().eq_active[weld]) {
             std::cerr << "controller did not balance after posture settled: "
                       << bc_motion_state_name(

@@ -33,8 +33,7 @@ static float bc_lqr_gain(
 
 void bc_lqr_calculate(
     const float leg_length,
-    const bc_state_vector_t *state,
-    const bc_state_vector_t *reference,
+    const bc_state_vector_t *state_error,
     bc_lqr_output_t *output
 ) {
     const float normalized_length = bc_clampf(
@@ -47,10 +46,9 @@ void bc_lqr_calculate(
          input_index < BC_LQR_GENERATED_INPUT_COUNT; ++input_index) {
         for (int state_index = 0;
              state_index < BC_LQR_GENERATED_STATE_COUNT; ++state_index) {
-            const float error = reference->value[state_index] -
-                state->value[state_index];
             input[input_index] += bc_lqr_gain(
-                input_index, state_index, normalized_length) * error;
+                input_index, state_index, normalized_length) *
+                state_error->value[state_index];
         }
     }
 

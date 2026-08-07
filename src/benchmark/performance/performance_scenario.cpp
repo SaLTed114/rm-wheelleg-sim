@@ -178,7 +178,7 @@ void PerformanceScenario::update(
         break;
 
     case PerformancePhase::engaging:
-        if (snapshot.state_machine.motion == BC_MOTION_BALANCE_ENGAGING ||
+        if (snapshot.state_machine.motion == BC_MOTION_ACTIVE ||
             phase_elapsed() >= kEngagementTimeoutSeconds) {
             enter(PerformancePhase::standing, simulation_time);
         }

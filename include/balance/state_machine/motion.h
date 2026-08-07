@@ -25,9 +25,7 @@ typedef struct {
     float angle_tolerance;
     float angular_velocity_tolerance;
     float stable_duration;
-    uint8_t position_feedback_enabled; // Controls S only; DS stays active.
-    uint8_t velocity_feedback_enabled; // Controls DS only.
-    uint8_t yaw_position_feedback_enabled; // Controls PSI only; DPSI stays active.
+    float engage_duration;
     bc_reference_ramp_config_t forward_velocity_ramp;
     bc_reference_ramp_config_t yaw_rate_ramp;
 } bc_motion_config_t;
@@ -39,6 +37,7 @@ typedef struct {
     bc_reference_ramp_t forward_velocity_ramp;
     bc_reference_ramp_t yaw_rate_ramp;
     bc_condition_hold_t leg_stable_hold;
+    bc_condition_hold_t engage_hold;
 } bc_motion_t;
 
 void bc_motion_default_config(bc_motion_config_t *config);

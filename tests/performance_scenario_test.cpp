@@ -30,7 +30,7 @@ int main() {
         return 1;
     }
 
-    snapshot.state_machine.motion = BC_MOTION_BALANCE_ENGAGING;
+    snapshot.state_machine.motion = BC_MOTION_ACTIVE;
     scenario.update(snapshot, 2.01);
     scenario.update(snapshot, 2.41);
     scenario.update(snapshot, 2.91);

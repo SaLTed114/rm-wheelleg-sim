@@ -52,7 +52,6 @@ TrimResult TrimScanner::run(const double offset_deg) {
         static_cast<float>(config_.leg_length);
     controller_config.control.lqr_compensation.leg_angle_trim =
         static_cast<float>(offset_deg * BC_PI / 180.0);
-    controller_config.motion.position_feedback_enabled = 0U;
 
     sim::SimulationRunner runner(plant_, adapter_, controller_config);
     runner.reset();
@@ -67,14 +66,14 @@ TrimResult TrimScanner::run(const double offset_deg) {
     command.system_enabled = 1U;
     while (plant_.data().time < engagement_deadline &&
            runner.snapshot().state_machine.motion !=
-               BC_MOTION_BALANCE_ENGAGING) {
+               BC_MOTION_ACTIVE) {
         command.balance_restart = static_cast<uint8_t>(
             runner.snapshot().state_machine.system == BC_SYSTEM_OFF);
         runner.step(command);
     }
     command.balance_restart = 0U;
     result.engaged = runner.snapshot().state_machine.motion ==
-        BC_MOTION_BALANCE_ENGAGING;
+        BC_MOTION_ACTIVE;
     if (!result.engaged) {
         result.issue = "engagement_timeout";
         return result;

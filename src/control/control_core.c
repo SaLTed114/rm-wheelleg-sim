@@ -5,6 +5,10 @@
 
 #include <string.h>
 
+_Static_assert(
+    BC_STATE_NUM <= 16,
+    "state feedback mask is too small for the state vector");
+
 void bc_control_default_config(bc_control_config_t *config) {
     *config = (bc_control_config_t){
         .observer = {
@@ -105,9 +109,18 @@ void bc_control_core_calculate(
         effective_reference.value[BC_STATE_THETA_R] +=
             core->config.lqr_compensation.leg_angle_trim;
 
+        bc_state_vector_t state_error = {0};
+        for (int state = 0; state < BC_STATE_NUM; ++state) {
+            if (command->disabled_state_feedback &
+                BC_STATE_FEEDBACK_MASK(state)) continue;
+
+            state_error.value[state] =
+                effective_reference.value[state] -
+                core->observer.state.value[state];
+        }
+
         bc_lqr_calculate(
-            average_length, &core->observer.state,
-            &effective_reference, &lqr_output);
+            average_length, &state_error, &lqr_output);
     }
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {

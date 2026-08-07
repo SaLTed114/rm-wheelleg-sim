@@ -35,7 +35,7 @@ MotionTarget make_motion_target(
             bc_system_state_name(snapshot.state_machine.system),
         };
     }
-    if (snapshot.state_machine.motion != BC_MOTION_BALANCE_ENGAGING) {
+    if (snapshot.state_machine.motion != BC_MOTION_ACTIVE) {
         return {
             0.0F, 0.0F,
             bc_motion_state_name(snapshot.state_machine.motion),
@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
                     if (performance_scenario) {
                         case_balance_engaged = case_balance_engaged ||
                             snapshot.state_machine.motion ==
-                                BC_MOTION_BALANCE_ENGAGING;
+                                BC_MOTION_ACTIVE;
                         performance_scenario->update(
                             snapshot, plant.data().time);
                         motion = {
@@ -247,9 +247,9 @@ int main(int argc, char **argv) {
                         continue;
                     }
 
-                    if (previous_motion != BC_MOTION_BALANCE_ENGAGING &&
+                    if (previous_motion != BC_MOTION_ACTIVE &&
                         snapshot.state_machine.motion ==
-                            BC_MOTION_BALANCE_ENGAGING) {
+                            BC_MOTION_ACTIVE) {
                         balance_start_time = plant.data().time;
                     }
                     previous_motion = snapshot.state_machine.motion;

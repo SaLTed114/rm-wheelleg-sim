@@ -32,12 +32,11 @@ static float expected_gain(
 }
 
 int main() {
-    bc_state_vector_t state = {0};
-    bc_state_vector_t reference = {0};
+    bc_state_vector_t state_error = {0};
     bc_lqr_output_t output = {0};
-    state.value[BC_STATE_THETA_B] = 0.1F;
+    state_error.value[BC_STATE_THETA_B] = -0.1F;
 
-    bc_lqr_calculate(0.20F, &state, &reference, &output);
+    bc_lqr_calculate(0.20F, &state_error, &output);
     const float normalized_length =
         (0.20F - bc_lqr_generated_length_midpoint) /
             bc_lqr_generated_length_scale;
@@ -82,10 +81,10 @@ int main() {
     bc_lqr_output_t below_range = {0};
     bc_lqr_output_t at_minimum = {0};
     bc_lqr_output_t at_previous_minimum = {0};
-    bc_lqr_calculate(0.10F, &state, &reference, &below_range);
-    bc_lqr_calculate(0.16F, &state, &reference, &at_minimum);
+    bc_lqr_calculate(0.10F, &state_error, &below_range);
+    bc_lqr_calculate(0.16F, &state_error, &at_minimum);
     bc_lqr_calculate(
-        0.186F, &state, &reference, &at_previous_minimum);
+        0.186F, &state_error, &at_previous_minimum);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         if (expect_near(
                 "clamped wheel", below_range.wheel_torque[side],

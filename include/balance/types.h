@@ -98,6 +98,8 @@ typedef enum {
     BC_WHEEL_LQR
 } bc_wheel_strategy_t;
 
+#define BC_STATE_FEEDBACK_MASK(state) ((uint16_t)(1U << (state)))
+
 typedef struct {
     uint8_t system_enabled;
     uint8_t balance_restart;
@@ -114,6 +116,7 @@ typedef struct {
 typedef struct {
     bc_leg_control_command_t leg[BC_SIDE_NUM];
     bc_wheel_strategy_t wheel_strategy;
+    uint16_t disabled_state_feedback;
     bc_state_vector_t state_reference;
 } bc_control_command_t;
 

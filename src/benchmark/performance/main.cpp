@@ -74,9 +74,6 @@ int main(int argc, char **argv) {
     bool roll_restrained = false;
     ForwardVelocityObservation forward_observation =
         ForwardVelocityObservation::wheel_odometry;
-    bool position_feedback_enabled = true;
-    bool velocity_feedback_enabled = true;
-    bool yaw_position_feedback_enabled = true;
     const PerformanceCaseSpec *selected_case = nullptr;
     std::optional<std::string> custom_name;
     std::optional<PerformanceAxis> custom_axis;
@@ -188,18 +185,6 @@ int main(int argc, char **argv) {
             } else {
                 arguments_valid = false;
             }
-        } else if (option == "--position-feedback" &&
-                   position_feedback_enabled) {
-            position_feedback_enabled = value != "off";
-            arguments_valid = !position_feedback_enabled;
-        } else if (option == "--velocity-feedback" &&
-                   velocity_feedback_enabled) {
-            velocity_feedback_enabled = value != "off";
-            arguments_valid = !velocity_feedback_enabled;
-        } else if (option == "--yaw-position-feedback" &&
-                   yaw_position_feedback_enabled) {
-            yaw_position_feedback_enabled = value != "off";
-            arguments_valid = !yaw_position_feedback_enabled;
         } else {
             arguments_valid = false;
         }
@@ -225,9 +210,7 @@ int main(int argc, char **argv) {
                "--stop-settle-seconds <seconds>] "
                "[--leg-length <metres>] [--trace-stride <steps>] "
                "[--roll-restraint on] "
-               "[--forward-observation base-truth|contact-gated] "
-               "[--position-feedback off] [--velocity-feedback off] "
-               "[--yaw-position-feedback off]\n";
+               "[--forward-observation base-truth|contact-gated]\n";
         return EXIT_FAILURE;
     }
 
@@ -237,9 +220,6 @@ int main(int argc, char **argv) {
             trace_stride.value_or(kDefaultTraceStride),
             forward_observation,
             roll_restrained,
-            position_feedback_enabled,
-            velocity_feedback_enabled,
-            yaw_position_feedback_enabled,
         };
         PerformanceBenchmark benchmark(argv[1], argv[2], config);
         std::vector<PerformanceCaseSpec> cases;

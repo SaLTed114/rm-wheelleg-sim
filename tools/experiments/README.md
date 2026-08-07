@@ -1,9 +1,9 @@
 # Experiment runner
 
 `run_experiment.py` turns one human-readable TOML file into an isolated LQR
-schedule, CMake build, set of MuJoCo cases, and optional linear-model
-comparison. Run it with the repository's `sim` environment, which provides
-Python 3.11 and the numerical dependencies used by the LQR generator:
+schedule, CMake build, and set of MuJoCo cases. Run it with the repository's
+`sim` environment, which provides Python 3.11 and the numerical dependencies
+used by the LQR generator:
 
 ```bash
 conda run -n sim python tools/experiments/run_experiment.py \
@@ -22,11 +22,6 @@ four input weights, two differential leg-mode weights, and yaw inertia source.
 When `model_parameters` is present, model extraction is reused while Q/R are
 regenerated. Omit it to extract parameters from the selected MJCF.
 
-The controller switches independently control the `S`, `DS`, and `PSI`
-feedback channels. Setting `yaw_position_feedback = false` forces
-`ref_psi = psi` while leaving the ramped `DPSI` reference active; this is an
-experiment-only way to isolate yaw-rate control, not a parking state machine.
-
 To run an existing schedule without regeneration, replace the generation
 tables with:
 
@@ -36,12 +31,10 @@ mode = "existing"
 schedule_dir = "../lqr/generated"
 ```
 
-`forward_linear = true` compares forward ramp/hold and stop ramp/settle samples
-with the generated fixed-length `A/B/K`. It requires
-`position_feedback = false`, uses the last second of the standing phase as
-trim, and forces the predicted `S` error to zero. Give the case enough
-`standing_seconds` for the actual plant to settle; the example uses eight
-seconds. The summary reports motion and stop pitch metrics separately.
+The standalone `forward_response.py` and `forward_weight_sweep.py` tools can
+still analyze existing traces recorded with `S` feedback disabled. New
+feedback-policy experiments will be reconnected to the runner through explicit
+motion modes rather than controller configuration switches.
 
 Before building a full candidate schedule, `forward_weight_sweep.py` can use
 the same traces and fixed-length model to screen body pitch angle/rate weights:
@@ -68,8 +61,8 @@ Each run contains:
 - the original TOML and fully resolved JSON;
 - git, model, schedule, build, and command metadata;
 - one `summary.csv` and `trace.csv` directory per case;
-- an aggregate summary and optional forward linear comparison;
-- generation, configuration, build, case, and analysis logs.
+- an aggregate summary;
+- generation, configuration, build, and case logs.
 
 The runner disables the GUI in experiment builds, so GLFW is not needed. On a
 machine where MuJoCo is not discoverable from the active environment, add its

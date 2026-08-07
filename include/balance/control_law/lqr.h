@@ -14,8 +14,7 @@ typedef struct {
 
 void bc_lqr_calculate(
     float leg_length,
-    const bc_state_vector_t *state,
-    const bc_state_vector_t *reference,
+    const bc_state_vector_t *state_error,
     bc_lqr_output_t *output);
 
 #ifdef __cplusplus

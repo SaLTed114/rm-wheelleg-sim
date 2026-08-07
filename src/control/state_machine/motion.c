@@ -20,6 +20,17 @@ static void bc_motion_set_leg_control(
     }
 }
 
+static void bc_motion_set_balance_control(
+    const bc_motion_t *motion,
+    bc_control_command_t *command
+) {
+    bc_motion_set_leg_control(
+        motion,
+        BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_LQR,
+        command);
+    command->wheel_strategy = BC_WHEEL_LQR;
+}
+
 static uint8_t bc_motion_legs_are_stable(
     const bc_motion_t *motion,
     const bc_leg_kinematics_t leg[BC_SIDE_NUM]
@@ -67,9 +78,18 @@ static void bc_motion_transition(
             input->state->value[BC_STATE_S];
         motion->state_reference.value[BC_STATE_PSI] =
             input->state->value[BC_STATE_PSI];
+        bc_condition_hold_reset(&motion->engage_hold);
         break;
 
     case BC_MOTION_BALANCE_ENGAGING:
+        if (bc_condition_hold_update(
+                &motion->engage_hold, 1U,
+                motion->config.engage_duration,
+                input->timestep_seconds)) {
+            motion->state = BC_MOTION_ACTIVE;
+        }
+        break;
+
     case BC_MOTION_ACTIVE:
         break;
     }
@@ -92,12 +112,16 @@ static void bc_motion_action(
             output);
         break;
 
-    case BC_MOTION_BALANCE_ENGAGING: {
-        bc_motion_set_leg_control(
-            motion,
-            BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_LQR,
-            output);
-        output->wheel_strategy = BC_WHEEL_LQR;
+    case BC_MOTION_BALANCE_ENGAGING:
+        bc_motion_set_balance_control(motion, output);
+        output->disabled_state_feedback =
+            BC_STATE_FEEDBACK_MASK(BC_STATE_S) |
+            BC_STATE_FEEDBACK_MASK(BC_STATE_PSI);
+        output->state_reference = motion->state_reference;
+        break;
+
+    case BC_MOTION_ACTIVE: {
+        bc_motion_set_balance_control(motion, output);
         const float forward_velocity = bc_reference_ramp_update(
             &motion->forward_velocity_ramp,
             &motion->config.forward_velocity_ramp,
@@ -108,31 +132,16 @@ static void bc_motion_action(
             &motion->config.yaw_rate_ramp,
             input->operator_command->yaw_rate,
             input->timestep_seconds);
-        if (motion->config.position_feedback_enabled) {
-            motion->state_reference.value[BC_STATE_S] +=
-                forward_velocity * input->timestep_seconds;
-        } else {
-            motion->state_reference.value[BC_STATE_S] =
-                input->state->value[BC_STATE_S];
-        }
-        motion->state_reference.value[BC_STATE_DS] =
-            motion->config.velocity_feedback_enabled ?
-                forward_velocity : input->state->value[BC_STATE_DS];
-        if (motion->config.yaw_position_feedback_enabled) {
-            motion->state_reference.value[BC_STATE_PSI] +=
-                yaw_rate * input->timestep_seconds;
-        } else {
-            motion->state_reference.value[BC_STATE_PSI] =
-                input->state->value[BC_STATE_PSI];
-        }
+        motion->state_reference.value[BC_STATE_S] +=
+            forward_velocity * input->timestep_seconds;
+        motion->state_reference.value[BC_STATE_DS] = forward_velocity;
+        motion->state_reference.value[BC_STATE_PSI] +=
+            yaw_rate * input->timestep_seconds;
         motion->state_reference.value[BC_STATE_DPSI] =
             yaw_rate;
         output->state_reference = motion->state_reference;
         break;
     }
-
-    case BC_MOTION_ACTIVE:
-        break;
     }
 }
 
@@ -145,9 +154,7 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .angle_tolerance            = 8.0F * BC_PI_F / 180.0F,
         .angular_velocity_tolerance = 0.15F,
         .stable_duration            = 0.25F,
-        .position_feedback_enabled  = 1U,
-        .velocity_feedback_enabled  = 1U,
-        .yaw_position_feedback_enabled = 1U,
+        .engage_duration            = 0.1F,
         .forward_velocity_ramp = {
             .value_limit = 3.0F,
             .rate_limit = 5.0F,
@@ -175,6 +182,7 @@ void bc_motion_reset(bc_motion_t *motion) {
     bc_reference_ramp_reset(&motion->forward_velocity_ramp);
     bc_reference_ramp_reset(&motion->yaw_rate_ramp);
     bc_condition_hold_reset(&motion->leg_stable_hold);
+    bc_condition_hold_reset(&motion->engage_hold);
 }
 
 void bc_motion_start(bc_motion_t *motion) {
