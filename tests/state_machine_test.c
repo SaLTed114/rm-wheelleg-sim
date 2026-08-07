@@ -35,7 +35,8 @@ int main() {
     bc_motion_default_config(&config);
     if (config.leg_length != 0.18F ||
         !config.position_feedback_enabled ||
-        !config.velocity_feedback_enabled) {
+        !config.velocity_feedback_enabled ||
+        !config.yaw_position_feedback_enabled) {
         fputs("default motion config is incorrect\n", stderr);
         return 1;
     }
@@ -135,13 +136,17 @@ int main() {
 
     system.motion.config.position_feedback_enabled = 0U;
     system.motion.config.velocity_feedback_enabled = 0U;
+    system.motion.config.yaw_position_feedback_enabled = 0U;
     state.value[BC_STATE_S] = 2.0F;
     state.value[BC_STATE_DS] = -0.4F;
+    state.value[BC_STATE_PSI] = 0.75F;
     operator_command.forward_velocity = 0.2F;
     operator_command.yaw_rate = 0.0F;
     bc_system_update(&system, &input, &command);
     if (command.state_reference.value[BC_STATE_S] != 2.0F ||
         command.state_reference.value[BC_STATE_DS] != -0.4F ||
+        command.state_reference.value[BC_STATE_PSI] != 0.75F ||
+        command.state_reference.value[BC_STATE_DPSI] != 0.0F ||
         command.state_reference.value[BC_STATE_THETA_L] != 0.0F ||
         command.state_reference.value[BC_STATE_THETA_R] != 0.0F ||
         command.state_reference.value[BC_STATE_DTHETA_L] != 0.0F ||

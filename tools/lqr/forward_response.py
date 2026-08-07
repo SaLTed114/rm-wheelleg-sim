@@ -26,6 +26,9 @@ from lqr_generator import (
 DEFAULT_SCHEDULE = Path("tools/lqr/generated/current_model_schedule.json")
 TRIM_AVERAGE_SECONDS = 1.0
 PITCH_ERROR_THRESHOLD = np.radians(1.0)
+MOTION_PHASES = ("target_ramp", "target_hold")
+STOP_PHASES = ("stop_ramp", "stop_settle")
+COMPARISON_PHASES = MOTION_PHASES + STOP_PHASES
 
 S_INDEX = STATE_NAMES.index("s")
 DS_INDEX = STATE_NAMES.index("ds")
@@ -82,7 +85,7 @@ def compare_case(
 ) -> tuple[dict[str, float | str], list[list[float | str]]]:
     rows = [
         row for row in case_rows
-        if row["phase"] in ("target_ramp", "target_hold")
+        if row["phase"] in COMPARISON_PHASES
     ]
     if not rows:
         raise ValueError(f"case {name} has no forward-motion samples")
@@ -122,6 +125,15 @@ def compare_case(
     predicted_pitch_values: list[float] = []
     actual_wheel_values: list[float] = []
     predicted_wheel_values: list[float] = []
+    phase_metrics: dict[str, dict[str, list[float]]] = {
+        label: {
+            "ds_errors": [],
+            "pitch_errors": [],
+            "actual_pitch": [],
+            "predicted_pitch": [],
+        }
+        for label in ("motion", "stop")
+    }
     first_pitch_error = float("nan")
     contact_steps = 0
     other_contact_steps = 0
@@ -181,6 +193,12 @@ def compare_case(
         predicted_pitch_values.append(predicted[THETA_B_INDEX])
         actual_wheel_values.append(actual_common_wheel_delta)
         predicted_wheel_values.append(predicted_common_wheel_delta)
+        phase_label = "motion" if row["phase"] in MOTION_PHASES else "stop"
+        metrics = phase_metrics[phase_label]
+        metrics["ds_errors"].append(ds_error)
+        metrics["pitch_errors"].append(pitch_error)
+        metrics["actual_pitch"].append(actual[THETA_B_INDEX])
+        metrics["predicted_pitch"].append(predicted[THETA_B_INDEX])
         contact_steps += int(
             row["contact_wheel_l"] == "1" and
             row["contact_wheel_r"] == "1")
@@ -244,6 +262,15 @@ def compare_case(
         "dual_wheel_contact_ratio": contact_steps / len(rows),
         "other_contact_steps": other_contact_steps,
     }
+    for label, metrics in phase_metrics.items():
+        summary[f"{label}_ds_rms_error"] = root_mean_square(
+            metrics["ds_errors"])
+        summary[f"{label}_pitch_rms_error_deg"] = np.degrees(
+            root_mean_square(metrics["pitch_errors"]))
+        summary[f"{label}_actual_peak_pitch_deg"] = np.degrees(
+            max(abs(value) for value in metrics["actual_pitch"]))
+        summary[f"{label}_predicted_peak_pitch_deg"] = np.degrees(
+            max(abs(value) for value in metrics["predicted_pitch"]))
     return summary, comparison_rows
 
 
@@ -301,10 +328,10 @@ def main() -> int:
     for summary in summaries:
         print(
             f"{summary['case']:<22} "
-            f"ds_rms={summary['ds_rms_error']:.4f} "
-            f"pitch={summary['actual_peak_pitch_deg']:.2f}/"
-            f"{summary['predicted_peak_pitch_deg']:.2f} deg "
-            f"pitch_rms_error={summary['pitch_rms_error_deg']:.2f} deg")
+            f"motion_pitch={summary['motion_actual_peak_pitch_deg']:.2f}/"
+            f"{summary['motion_predicted_peak_pitch_deg']:.2f} deg "
+            f"stop_pitch={summary['stop_actual_peak_pitch_deg']:.2f}/"
+            f"{summary['stop_predicted_peak_pitch_deg']:.2f} deg")
     print(f"Wrote {summary_path}")
     print(f"Wrote {comparison_path}")
     return 0

@@ -19,7 +19,8 @@ constexpr double kRelativeTrackingTolerance = 0.10;
 bc_controller_config_t controller_config(
     const std::optional<double> leg_length,
     const bool position_feedback_enabled,
-    const bool velocity_feedback_enabled
+    const bool velocity_feedback_enabled,
+    const bool yaw_position_feedback_enabled
 ) {
     bc_controller_config_t config{};
     bc_controller_default_config(&config);
@@ -34,6 +35,8 @@ bc_controller_config_t controller_config(
         static_cast<uint8_t>(position_feedback_enabled);
     config.motion.velocity_feedback_enabled =
         static_cast<uint8_t>(velocity_feedback_enabled);
+    config.motion.yaw_position_feedback_enabled =
+        static_cast<uint8_t>(yaw_position_feedback_enabled);
     return config;
 }
 
@@ -47,7 +50,8 @@ PerformanceBenchmark::PerformanceBenchmark(
     adapter_(plant_.model()),
     runner_(plant_, adapter_, controller_config(
         config.leg_length, config.position_feedback_enabled,
-        config.velocity_feedback_enabled)),
+        config.velocity_feedback_enabled,
+        config.yaw_position_feedback_enabled)),
     sampler_(plant_.model()),
     roll_restraint_(plant_.model(), config.roll_restrained),
     forward_velocity_(
@@ -55,14 +59,17 @@ PerformanceBenchmark::PerformanceBenchmark(
         controller_config(
             config.leg_length,
             config.position_feedback_enabled,
-            config.velocity_feedback_enabled).control.observer.wheel_radius),
+            config.velocity_feedback_enabled,
+            config.yaw_position_feedback_enabled).control.observer.wheel_radius),
     position_feedback_enabled_(config.position_feedback_enabled),
     velocity_feedback_enabled_(config.velocity_feedback_enabled),
+    yaw_position_feedback_enabled_(config.yaw_position_feedback_enabled),
     summary_(output_directory / "summary.csv", {
         "case", "axis", "target", "command_rate", "target_hold_seconds",
         "stop_settle_seconds", "standing_seconds", "leg_length_target",
         "forward_velocity_observation", "roll_restrained",
         "position_feedback_enabled", "velocity_feedback_enabled",
+        "yaw_position_feedback_enabled",
         "completed", "balance_engaged",
         "leg_length_valid", "finite",
         "tracked", "settled", "issue", "issue_phase",
@@ -83,6 +90,7 @@ PerformanceBenchmark::PerformanceBenchmark(
         "case", "phase", "simulation_time", "command_rate",
         "leg_length_target", "forward_velocity_observation",
         "position_feedback_enabled", "velocity_feedback_enabled",
+        "yaw_position_feedback_enabled",
         "base_x", "base_y", "base_z", "base_forward_velocity",
         "base_vertical_velocity", "imu_specific_force_x",
         "imu_specific_force_y", "imu_specific_force_z",
@@ -122,7 +130,8 @@ PerformanceBenchmark::PerformanceBenchmark(
     const bc_controller_config_t controller =
         controller_config(
             config.leg_length, config.position_feedback_enabled,
-            config.velocity_feedback_enabled);
+            config.velocity_feedback_enabled,
+            config.yaw_position_feedback_enabled);
     leg_length_target_ = controller.motion.leg_length;
 }
 
@@ -140,6 +149,7 @@ PerformanceResult PerformanceBenchmark::run(
     result.roll_restrained = roll_restraint_.enabled();
     result.position_feedback_enabled = position_feedback_enabled_;
     result.velocity_feedback_enabled = velocity_feedback_enabled_;
+    result.yaw_position_feedback_enabled = yaw_position_feedback_enabled_;
     PerformanceScenario scenario(spec);
     scenario.reset(plant_.data().time);
 
@@ -187,6 +197,7 @@ void PerformanceBenchmark::write_summary(
         .value(result.roll_restrained)
         .value(result.position_feedback_enabled)
         .value(result.velocity_feedback_enabled)
+        .value(result.yaw_position_feedback_enabled)
         .value(result.completed)
         .value(result.balance_engaged)
         .value(result.leg_length_valid)
@@ -378,6 +389,7 @@ void PerformanceBenchmark::write_trace(
         .value(forward_observation_name(forward_velocity_.observation()))
         .value(position_feedback_enabled_)
         .value(velocity_feedback_enabled_)
+        .value(yaw_position_feedback_enabled_)
         .value(sample.base.x)
         .value(sample.base.y)
         .value(sample.base.z)

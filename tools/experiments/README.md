@@ -22,6 +22,11 @@ four input weights, two differential leg-mode weights, and yaw inertia source.
 When `model_parameters` is present, model extraction is reused while Q/R are
 regenerated. Omit it to extract parameters from the selected MJCF.
 
+The controller switches independently control the `S`, `DS`, and `PSI`
+feedback channels. Setting `yaw_position_feedback = false` forces
+`ref_psi = psi` while leaving the ramped `DPSI` reference active; this is an
+experiment-only way to isolate yaw-rate control, not a parking state machine.
+
 To run an existing schedule without regeneration, replace the generation
 tables with:
 
@@ -31,11 +36,27 @@ mode = "existing"
 schedule_dir = "../lqr/generated"
 ```
 
-`forward_linear = true` compares forward ramp/hold samples with the generated
-fixed-length `A/B/K`. It requires `position_feedback = false`, uses the last
-second of the standing phase as trim, and forces the predicted `S` error to
-zero. Give the case enough `standing_seconds` for the actual plant to settle;
-the example uses eight seconds.
+`forward_linear = true` compares forward ramp/hold and stop ramp/settle samples
+with the generated fixed-length `A/B/K`. It requires
+`position_feedback = false`, uses the last second of the standing phase as
+trim, and forces the predicted `S` error to zero. Give the case enough
+`standing_seconds` for the actual plant to settle; the example uses eight
+seconds. The summary reports motion and stop pitch metrics separately.
+
+Before building a full candidate schedule, `forward_weight_sweep.py` can use
+the same traces and fixed-length model to screen body pitch angle/rate weights:
+
+```bash
+conda run -n sim python tools/lqr/forward_weight_sweep.py \
+  --schedule tools/lqr/generated/current_model_schedule.json \
+  --output build/experiments/forward-weight-sweep \
+  --mujoco-trace path/to/case-a/trace.csv path/to/case-b/trace.csv \
+  --theta-weights 150 300 600 1200 \
+  --dtheta-weights 30 60 120 240
+```
+
+The sweep is only an ideal linear prefilter. Shortlisted weights still require
+a generated schedule and MuJoCo cases through the experiment runner.
 
 ## Build and output
 

@@ -5,7 +5,12 @@ import tempfile
 import textwrap
 import unittest
 
-from run_experiment import ExperimentError, load_config, lqr_fingerprint
+from run_experiment import (
+    ExperimentError,
+    case_command,
+    load_config,
+    lqr_fingerprint,
+)
 
 
 class ExperimentConfigTest(unittest.TestCase):
@@ -65,6 +70,7 @@ class ExperimentConfigTest(unittest.TestCase):
         self.assertEqual(config.build.configuration, "Release")
         self.assertEqual(config.controller.leg_length, 0.18)
         self.assertEqual(config.controller.trace_stride, 10)
+        self.assertTrue(config.controller.yaw_position_feedback)
         self.assertEqual(config.cases[0].target_hold_seconds, 3.0)
         self.assertEqual(config.cases[0].standing_seconds, 2.0)
         self.assertEqual(config.lqr.schedule_dir, self.root / "schedule")
@@ -84,6 +90,7 @@ class ExperimentConfigTest(unittest.TestCase):
 
             [controller]
             position_feedback = false
+            yaw_position_feedback = false
 
             [lqr]
             mode = "generate"
@@ -103,8 +110,15 @@ class ExperimentConfigTest(unittest.TestCase):
             command_rate = 2.0
         """))
         self.assertEqual(config.build.configuration, "Debug")
+        self.assertFalse(config.controller.yaw_position_feedback)
         self.assertEqual(config.lqr.generate.q_diagonal[-1], 10.0)
         self.assertEqual(config.lqr.generate.yaw_inertia_source, "assembly")
+        command = case_command(
+            self.root / "benchmark", config, config.cases[0],
+            self.root / "case-output")
+        self.assertIn(
+            ["--yaw-position-feedback", "off"],
+            [command[index:index + 2] for index in range(len(command) - 1)])
 
     def test_lqr_weight_change_changes_fingerprint(self) -> None:
         first = load_config(self.write_config("""

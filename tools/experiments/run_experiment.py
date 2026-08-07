@@ -51,6 +51,7 @@ class ControllerConfig:
     leg_length: float
     position_feedback: bool
     velocity_feedback: bool
+    yaw_position_feedback: bool
     forward_observation: str
     roll_restrained: bool
     trace_stride: int
@@ -223,6 +224,7 @@ def load_config(path: Path) -> ExperimentConfig:
     controller_table = require_table(document, "controller")
     reject_unknown(controller_table, {
         "leg_length", "position_feedback", "velocity_feedback",
+        "yaw_position_feedback",
         "forward_observation", "roll_restrained", "trace_stride",
     }, "controller")
     forward_observation = controller_table.get(
@@ -244,6 +246,8 @@ def load_config(path: Path) -> ExperimentConfig:
             controller_table, "position_feedback", True),
         velocity_feedback=boolean_value(
             controller_table, "velocity_feedback", True),
+        yaw_position_feedback=boolean_value(
+            controller_table, "yaw_position_feedback", True),
         forward_observation=forward_observation,
         roll_restrained=boolean_value(
             controller_table, "roll_restrained", False),
@@ -616,6 +620,8 @@ def case_command(
         command.extend(["--position-feedback", "off"])
     if not config.controller.velocity_feedback:
         command.extend(["--velocity-feedback", "off"])
+    if not config.controller.yaw_position_feedback:
+        command.extend(["--yaw-position-feedback", "off"])
     return command
 
 

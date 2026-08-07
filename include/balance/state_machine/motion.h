@@ -27,6 +27,7 @@ typedef struct {
     float stable_duration;
     uint8_t position_feedback_enabled; // Controls S only; DS stays active.
     uint8_t velocity_feedback_enabled; // Controls DS only.
+    uint8_t yaw_position_feedback_enabled; // Controls PSI only; DPSI stays active.
     bc_reference_ramp_config_t forward_velocity_ramp;
     bc_reference_ramp_config_t yaw_rate_ramp;
 } bc_motion_config_t;

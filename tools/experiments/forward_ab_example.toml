@@ -14,6 +14,7 @@ cmake_args = []
 leg_length = 0.18
 position_feedback = false
 velocity_feedback = true
+yaw_position_feedback = true
 forward_observation = "wheel-odometry"
 roll_restrained = false
 trace_stride = 10

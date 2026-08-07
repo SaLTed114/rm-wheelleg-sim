@@ -28,6 +28,7 @@ struct PerformanceBenchmarkConfig {
     bool roll_restrained{};
     bool position_feedback_enabled{true};
     bool velocity_feedback_enabled{true};
+    bool yaw_position_feedback_enabled{true};
 };
 
 struct PerformanceResult {
@@ -37,6 +38,7 @@ struct PerformanceResult {
     bool roll_restrained{};
     bool position_feedback_enabled{};
     bool velocity_feedback_enabled{};
+    bool yaw_position_feedback_enabled{};
     bool completed{};
     bool balance_engaged{};
     bool leg_length_valid{true};
@@ -96,6 +98,7 @@ private:
     ForwardVelocityDiagnostic forward_velocity_;
     bool position_feedback_enabled_{};
     bool velocity_feedback_enabled_{};
+    bool yaw_position_feedback_enabled_{};
     CsvWriter summary_;
     CsvWriter trace_;
     double leg_length_target_{};
