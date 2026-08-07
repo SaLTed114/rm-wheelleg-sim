@@ -59,6 +59,7 @@ add_library(balance_control_core STATIC
   src/control/observer.c
   src/control/velocity_estimator.c
   src/control/reference_ramp.c
+  src/control/state_machine/drive.c
   src/control/state_machine/motion.c
   src/control/state_machine/system.c)
 set(BALANCE_LQR_SCHEDULE_DIR
@@ -131,6 +132,11 @@ if(BUILD_TESTING)
   target_link_libraries(state_machine_test PRIVATE balance_control_core)
   balance_enable_warnings(state_machine_test)
   add_test(NAME layered_state_machine COMMAND state_machine_test)
+
+  add_executable(drive_state_machine_test tests/drive_state_machine_test.c)
+  target_link_libraries(drive_state_machine_test PRIVATE balance_control_core)
+  balance_enable_warnings(drive_state_machine_test)
+  add_test(NAME drive_state_machine COMMAND drive_state_machine_test)
 
   add_executable(controller_test tests/controller_test.c)
   target_link_libraries(controller_test PRIVATE balance_control_core)

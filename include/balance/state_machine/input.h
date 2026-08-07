@@ -12,6 +12,7 @@ typedef struct {
     const bc_operator_command_t *operator_command;
     const bc_state_vector_t *state;
     const bc_leg_kinematics_t *leg;
+    float wheel_odometry_velocity;
     float timestep_seconds;
 } bc_state_machine_input_t;
 

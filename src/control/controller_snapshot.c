@@ -9,6 +9,7 @@ void bc_controller_capture_snapshot(
     memset(snapshot, 0, sizeof(*snapshot));
     snapshot->state_machine.system = controller->system.state;
     snapshot->state_machine.motion = controller->system.motion.state;
+    snapshot->state_machine.drive = controller->system.motion.drive.state;
     snapshot->state = controller->control_core.observer.state;
     snapshot->state_reference = controller->system.motion.state_reference;
     snapshot->roll = controller->control_core.observer.roll;

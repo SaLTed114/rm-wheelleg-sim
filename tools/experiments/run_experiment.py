@@ -72,6 +72,11 @@ class LqrConfig:
 
 
 @dataclass(frozen=True)
+class AnalysisConfig:
+    forward_linear: bool
+
+
+@dataclass(frozen=True)
 class CaseConfig:
     name: str
     axis: str
@@ -91,6 +96,7 @@ class ExperimentConfig:
     build: BuildConfig
     controller: ControllerConfig
     lqr: LqrConfig
+    analysis: AnalysisConfig
     cases: tuple[CaseConfig, ...]
 
 
@@ -160,7 +166,7 @@ def load_config(path: Path) -> ExperimentConfig:
 
     reject_unknown(document, {
         "version", "name", "paths", "build", "controller", "lqr",
-        "case",
+        "analysis", "case",
     }, "top-level")
     if document.get("version") != 1:
         raise ExperimentError("version must be 1")
@@ -288,6 +294,14 @@ def load_config(path: Path) -> ExperimentConfig:
             yaw_inertia_source=yaw_source,
         )
 
+    analysis_table = document.get("analysis", {})
+    if not isinstance(analysis_table, dict):
+        raise ExperimentError("analysis must be a TOML table")
+    reject_unknown(analysis_table, {"forward_linear"}, "analysis")
+    analysis = AnalysisConfig(
+        forward_linear=boolean_value(
+            analysis_table, "forward_linear", False))
+
     case_values = document.get("case")
     if not isinstance(case_values, list) or not case_values:
         raise ExperimentError("at least one [[case]] is required")
@@ -334,6 +348,12 @@ def load_config(path: Path) -> ExperimentConfig:
                 f"case[{index}].standing_seconds"),
         ))
 
+    if analysis.forward_linear and not any(
+        item.axis == "forward" for item in cases
+    ):
+        raise ExperimentError(
+            "forward linear analysis requires at least one forward case")
+
     if not paths.model.is_file():
         raise ExperimentError(f"model does not exist: {paths.model}")
     if schedule_dir is not None:
@@ -352,6 +372,7 @@ def load_config(path: Path) -> ExperimentConfig:
         build=build,
         controller=controller,
         lqr=LqrConfig(mode=mode, schedule_dir=schedule_dir, generate=generate),
+        analysis=analysis,
         cases=tuple(cases),
     )
 
@@ -631,6 +652,7 @@ def resolved_document(config: ExperimentConfig) -> dict[str, Any]:
         "build": serializable(config.build),
         "controller": serializable(config.controller),
         "lqr": serializable(config.lqr),
+        "analysis": serializable(config.analysis),
         "cases": serializable(config.cases),
     }
 
@@ -668,6 +690,7 @@ def execute(config: ExperimentConfig, dry_run: bool) -> Path | None:
     executable = find_executable(build_dir, config.build.configuration)
 
     case_directories: list[Path] = []
+    forward_traces: list[Path] = []
     for case in config.cases:
         output = run_directory / "cases" / case.name
         command = case_command(executable, config, case, output)
@@ -675,9 +698,24 @@ def execute(config: ExperimentConfig, dry_run: bool) -> Path | None:
             command, REPOSITORY_ROOT,
             run_directory / "logs" / f"case-{case.name}.log", commands)
         case_directories.append(output)
+        if case.axis == "forward":
+            forward_traces.append(output / "trace.csv")
 
     combine_case_summaries(
         case_directories, run_directory / "summary.csv")
+    if config.analysis.forward_linear:
+        analysis_output = run_directory / "analysis" / "forward-linear"
+        command = [
+            sys.executable,
+            str(REPOSITORY_ROOT / "tools/lqr/forward_response.py"),
+            "--schedule", str(schedule_dir / "current_model_schedule.json"),
+            "--output", str(analysis_output),
+            "--mujoco-trace", *(str(path) for path in forward_traces),
+            "--leg-length", str(config.controller.leg_length),
+        ]
+        run_logged(
+            command, REPOSITORY_ROOT,
+            run_directory / "logs" / "forward-linear.log", commands)
 
     metadata = {
         "created_at": datetime.now(timezone.utc).isoformat(),

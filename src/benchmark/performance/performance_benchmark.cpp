@@ -84,7 +84,8 @@ PerformanceBenchmark::PerformanceBenchmark(
         "velocity_measurement_accepted", "wheel_velocity_reliable",
         "wheel_odometry_velocity", "estimated_axle_velocity",
         "command_forward", "command_yaw",
-        "system", "motion", "s", "ds", "psi", "dpsi", "theta_l",
+        "system", "motion", "drive", "s", "ds", "psi", "dpsi",
+        "theta_l",
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
         "ref_s", "ref_ds", "ref_psi", "ref_dpsi", "ref_theta_l",
         "ref_dtheta_l", "ref_theta_r", "ref_dtheta_r", "ref_theta_b",
@@ -389,7 +390,8 @@ void PerformanceBenchmark::write_trace(
         .value(command.forward_velocity)
         .value(command.yaw_rate)
         .value(snapshot.state_machine.system)
-        .value(snapshot.state_machine.motion);
+        .value(snapshot.state_machine.motion)
+        .value(bc_drive_state_name(snapshot.state_machine.drive));
     for (const float value : snapshot.state.value) trace_.value(value);
     for (const float value : snapshot.state_reference.value) {
         trace_.value(value);

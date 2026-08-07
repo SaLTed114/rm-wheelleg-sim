@@ -10,6 +10,7 @@ extern "C" {
 typedef struct {
     bc_system_state_t system;
     bc_motion_state_t motion;
+    bc_drive_state_t drive;
 } bc_state_machine_snapshot_t;
 
 typedef struct {

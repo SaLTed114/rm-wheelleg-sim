@@ -99,6 +99,7 @@ int main() {
     }
 
     if (system.motion.state != BC_MOTION_BALANCE_ENGAGING ||
+        system.motion.drive.state != BC_DRIVE_IDLE ||
         !control_uses_strategies(
             &command,
             BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_LQR,
@@ -128,11 +129,13 @@ int main() {
     operator_command.yaw_rate = 20.0F;
     bc_system_update(&system, &input, &command);
     if (system.motion.state != BC_MOTION_ACTIVE ||
+        system.motion.drive.state != BC_DRIVE_DRIVING ||
         fabsf(command.state_reference.value[BC_STATE_S] - 1.05F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.5F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_PSI] + 0.35F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DPSI] - 1.5F) > 1.0e-6F ||
-        command.disabled_state_feedback != 0U) {
+        command.disabled_state_feedback !=
+            BC_STATE_FEEDBACK_MASK(BC_STATE_S)) {
         fputs("active balance did not use rate-limited targets\n", stderr);
         return 1;
     }
@@ -147,7 +150,8 @@ int main() {
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.2F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_PSI] + 0.35F) > 1.0e-6F ||
         command.state_reference.value[BC_STATE_DPSI] != 0.0F ||
-        command.disabled_state_feedback != 0U ||
+        command.disabled_state_feedback !=
+            BC_STATE_FEEDBACK_MASK(BC_STATE_S) ||
         command.state_reference.value[BC_STATE_THETA_L] != 0.0F ||
         command.state_reference.value[BC_STATE_THETA_R] != 0.0F ||
         command.state_reference.value[BC_STATE_DTHETA_L] != 0.0F ||
@@ -163,8 +167,9 @@ int main() {
     if (system.motion.state != BC_MOTION_LEG_POSITIONING ||
         system.motion.state_reference.value[BC_STATE_S] != 0.0F ||
         system.motion.state_reference.value[BC_STATE_PSI] != 0.0F ||
-        system.motion.forward_velocity_ramp.value != 0.0F ||
-        system.motion.yaw_rate_ramp.value != 0.0F ||
+        system.motion.drive.state != BC_DRIVE_IDLE ||
+        system.motion.drive.forward_velocity_ramp.value != 0.0F ||
+        system.motion.drive.yaw_rate_ramp.value != 0.0F ||
         system.motion.engage_hold.elapsed_seconds != 0.0F ||
         !control_uses_strategies(
             &command,

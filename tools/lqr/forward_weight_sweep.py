@@ -19,6 +19,7 @@ from forward_response import (
     THETA_B_INDEX,
     TRIM_AVERAGE_SECONDS,
     load_model,
+    s_feedback_disabled,
     trace_vector,
 )
 from lqr_generator import (
@@ -77,8 +78,8 @@ def simulate_case(
     rows = [row for row in case_rows if row["phase"] in COMPARISON_PHASES]
     if not rows:
         raise ValueError(f"case {name} has no forward-motion samples")
-    if rows[0].get("position_feedback_enabled") != "0":
-        raise ValueError(f"case {name} must be recorded with position feedback off")
+    for row in rows:
+        s_feedback_disabled(row)
 
     start_time = float(rows[0]["simulation_time"])
     trim_rows = [
@@ -110,12 +111,14 @@ def simulate_case(
                 alpha = (interval_step + 1) / interval_steps
                 interpolated_reference = (
                     previous_reference + alpha * (reference - previous_reference))
-                interpolated_reference[S_INDEX] = state[S_INDEX]
+                if s_feedback_disabled(row):
+                    interpolated_reference[S_INDEX] = state[S_INDEX]
                 control = gain @ (interpolated_reference - state)
                 state = matrix_a @ state + matrix_b @ control
 
         effective_reference = reference.copy()
-        effective_reference[S_INDEX] = state[S_INDEX]
+        if s_feedback_disabled(row):
+            effective_reference[S_INDEX] = state[S_INDEX]
         control = gain @ (effective_reference - state)
         phase = "motion" if row["phase"] in MOTION_PHASES else "stop"
         phase_values[phase]["pitch"].append(

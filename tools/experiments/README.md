@@ -1,9 +1,9 @@
 # Experiment runner
 
 `run_experiment.py` turns one human-readable TOML file into an isolated LQR
-schedule, CMake build, and set of MuJoCo cases. Run it with the repository's
-`sim` environment, which provides Python 3.11 and the numerical dependencies
-used by the LQR generator:
+schedule, CMake build, set of MuJoCo cases, and optional linear-model
+comparison. Run it with the repository's `sim` environment, which provides
+Python 3.11 and the numerical dependencies used by the LQR generator:
 
 ```bash
 conda run -n sim python tools/experiments/run_experiment.py \
@@ -31,10 +31,12 @@ mode = "existing"
 schedule_dir = "../lqr/generated"
 ```
 
-The standalone `forward_response.py` and `forward_weight_sweep.py` tools can
-still analyze existing traces recorded with `S` feedback disabled. New
-feedback-policy experiments will be reconnected to the runner through explicit
-motion modes rather than controller configuration switches.
+`forward_linear = true` compares forward ramp/hold samples with the generated
+fixed-length `A/B/K`. It reads the `drive` state from new traces so `S` is
+ignored while driving and restored after parking. Traces from older builds
+recorded with `position_feedback_enabled = 0` are also accepted. Give the case
+enough `standing_seconds` for the actual plant to settle; the example uses
+eight seconds.
 
 Before building a full candidate schedule, `forward_weight_sweep.py` can use
 the same traces and fixed-length model to screen body pitch angle/rate weights:
@@ -61,8 +63,8 @@ Each run contains:
 - the original TOML and fully resolved JSON;
 - git, model, schedule, build, and command metadata;
 - one `summary.csv` and `trace.csv` directory per case;
-- an aggregate summary;
-- generation, configuration, build, and case logs.
+- an aggregate summary and optional forward linear comparison;
+- generation, configuration, build, case, and analysis logs.
 
 The runner disables the GUI in experiment builds, so GLFW is not needed. On a
 machine where MuJoCo is not discoverable from the active environment, add its

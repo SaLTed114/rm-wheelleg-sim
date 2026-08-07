@@ -65,9 +65,25 @@ class ExperimentConfigTest(unittest.TestCase):
         self.assertEqual(config.build.configuration, "Release")
         self.assertEqual(config.controller.leg_length, 0.18)
         self.assertEqual(config.controller.trace_stride, 10)
+        self.assertFalse(config.analysis.forward_linear)
         self.assertEqual(config.cases[0].target_hold_seconds, 3.0)
         self.assertEqual(config.cases[0].standing_seconds, 2.0)
         self.assertEqual(config.lqr.schedule_dir, self.root / "schedule")
+
+    def test_forward_analysis_uses_drive_policy(self) -> None:
+        contents = self.existing_config().replace(
+            "[[case]]",
+            "[analysis]\nforward_linear = true\n\n[[case]]")
+        config = load_config(self.write_config(contents))
+        self.assertTrue(config.analysis.forward_linear)
+
+    def test_forward_analysis_requires_forward_case(self) -> None:
+        contents = self.existing_config().replace(
+            "[[case]]",
+            "[analysis]\nforward_linear = true\n\n[[case]]").replace(
+                'axis = "forward"', 'axis = "yaw"')
+        with self.assertRaisesRegex(ExperimentError, "forward case"):
+            load_config(self.write_config(contents))
 
     def test_generate_config_reads_full_lqr_candidate(self) -> None:
         config = load_config(self.write_config("""

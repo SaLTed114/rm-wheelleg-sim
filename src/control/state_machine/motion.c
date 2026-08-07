@@ -87,6 +87,9 @@ static void bc_motion_transition(
                 motion->config.engage_duration,
                 input->timestep_seconds)) {
             motion->state = BC_MOTION_ACTIVE;
+            bc_drive_start(
+                &motion->drive, input,
+                &motion->state_reference);
         }
         break;
 
@@ -120,32 +123,18 @@ static void bc_motion_action(
         output->state_reference = motion->state_reference;
         break;
 
-    case BC_MOTION_ACTIVE: {
+    case BC_MOTION_ACTIVE:
         bc_motion_set_balance_control(motion, output);
-        const float forward_velocity = bc_reference_ramp_update(
-            &motion->forward_velocity_ramp,
-            &motion->config.forward_velocity_ramp,
-            input->operator_command->forward_velocity,
-            input->timestep_seconds);
-        const float yaw_rate = bc_reference_ramp_update(
-            &motion->yaw_rate_ramp,
-            &motion->config.yaw_rate_ramp,
-            input->operator_command->yaw_rate,
-            input->timestep_seconds);
-        motion->state_reference.value[BC_STATE_S] +=
-            forward_velocity * input->timestep_seconds;
-        motion->state_reference.value[BC_STATE_DS] = forward_velocity;
-        motion->state_reference.value[BC_STATE_PSI] +=
-            yaw_rate * input->timestep_seconds;
-        motion->state_reference.value[BC_STATE_DPSI] =
-            yaw_rate;
-        output->state_reference = motion->state_reference;
+        bc_drive_update(
+            &motion->drive, input,
+            &motion->state_reference, output);
         break;
-    }
     }
 }
 
 void bc_motion_default_config(bc_motion_config_t *config) {
+    bc_drive_config_t drive;
+    bc_drive_default_config(&drive);
     *config = (bc_motion_config_t){
         .leg_length                 = 0.18F,
         .leg_angle_body             = -0.5F * BC_PI_F,
@@ -155,14 +144,7 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .angular_velocity_tolerance = 0.15F,
         .stable_duration            = 0.25F,
         .engage_duration            = 0.1F,
-        .forward_velocity_ramp = {
-            .value_limit = 3.0F,
-            .rate_limit = 5.0F,
-        },
-        .yaw_rate_ramp = {
-            .value_limit = 4.0F * BC_PI_F,
-            .rate_limit = 15.0F,
-        },
+        .drive                      = drive,
     };
 }
 
@@ -171,6 +153,7 @@ void bc_motion_init(
     const bc_motion_config_t *config
 ) {
     motion->config = *config;
+    bc_drive_init(&motion->drive, &config->drive);
     bc_motion_reset(motion);
 }
 
@@ -179,8 +162,7 @@ void bc_motion_reset(bc_motion_t *motion) {
     memset(
         &motion->state_reference, 0,
         sizeof(motion->state_reference));
-    bc_reference_ramp_reset(&motion->forward_velocity_ramp);
-    bc_reference_ramp_reset(&motion->yaw_rate_ramp);
+    bc_drive_reset(&motion->drive);
     bc_condition_hold_reset(&motion->leg_stable_hold);
     bc_condition_hold_reset(&motion->engage_hold);
 }

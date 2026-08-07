@@ -70,6 +70,23 @@ def trace_vector(row: dict[str, str], prefix: str = "") -> np.ndarray:
     return np.asarray([float(row[f"{prefix}{name}"]) for name in STATE_NAMES])
 
 
+def s_feedback_disabled(row: dict[str, str]) -> bool:
+    drive = row.get("drive")
+    if drive:
+        if drive not in ("idle", "parked", "driving"):
+            raise ValueError(f"unknown drive state: {drive}")
+        return drive == "driving"
+
+    legacy = row.get("position_feedback_enabled")
+    if legacy == "0":
+        return True
+    if legacy == "1":
+        raise ValueError(
+            "legacy trace must be recorded with position feedback off")
+    raise ValueError(
+        "trace must contain drive or position_feedback_enabled")
+
+
 def root_mean_square(values: list[float]) -> float:
     array = np.asarray(values, dtype=float)
     return float(np.sqrt(np.mean(np.square(array))))
@@ -89,9 +106,8 @@ def compare_case(
     ]
     if not rows:
         raise ValueError(f"case {name} has no forward-motion samples")
-    if rows[0].get("position_feedback_enabled") != "0":
-        raise ValueError(
-            f"case {name} must be recorded with position feedback off")
+    for row in rows:
+        s_feedback_disabled(row)
 
     start_time = float(rows[0]["simulation_time"])
     trim_rows = [
@@ -149,12 +165,14 @@ def compare_case(
                 interpolated_reference = (
                     previous_reference +
                     alpha * (reference - previous_reference))
-                interpolated_reference[S_INDEX] = state[S_INDEX]
+                if s_feedback_disabled(row):
+                    interpolated_reference[S_INDEX] = state[S_INDEX]
                 control = gain @ (interpolated_reference - state)
                 state = matrix_a @ state + matrix_b @ control
 
         effective_reference = reference.copy()
-        effective_reference[S_INDEX] = state[S_INDEX]
+        if s_feedback_disabled(row):
+            effective_reference[S_INDEX] = state[S_INDEX]
         predicted_control = gain @ (effective_reference - state)
         actual = trace_vector(row)
         predicted = trim_state + state
@@ -169,7 +187,8 @@ def compare_case(
             predicted_control[0] + predicted_control[1])
         actual_delta = actual - trim_state
         actual_effective_reference = reference.copy()
-        actual_effective_reference[S_INDEX] = actual_delta[S_INDEX]
+        if s_feedback_disabled(row):
+            actual_effective_reference[S_INDEX] = actual_delta[S_INDEX]
         reconstructed_control = gain @ (
             actual_effective_reference - actual_delta)
         reconstructed_common_wheel_delta = 0.5 * (

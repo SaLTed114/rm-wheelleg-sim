@@ -27,6 +27,9 @@ leg_angle_difference_weight = 1920
 leg_angular_velocity_difference_weight = 32
 yaw_inertia_source = "base-link"
 
+[analysis]
+forward_linear = true
+
 [[case]]
 name = "forward_pos_2_a0p5"
 axis = "forward"

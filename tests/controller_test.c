@@ -29,6 +29,7 @@ int main() {
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||
         snapshot.state_machine.motion != BC_MOTION_IDLE ||
+        snapshot.state_machine.drive != BC_DRIVE_IDLE ||
         snapshot.tick_count != 0U ||
         !actuation_is_zero(&snapshot.actuation_request) ||
         !actuation_is_zero(&snapshot.actuation)) {
@@ -141,6 +142,7 @@ int main() {
     }
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.motion != BC_MOTION_BALANCE_ENGAGING ||
+        snapshot.state_machine.drive != BC_DRIVE_IDLE ||
         snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
         snapshot.state_reference.value[BC_STATE_DPSI] != 0.0F ||
         snapshot.tick_count != 5U) {
@@ -176,6 +178,7 @@ int main() {
     bc_controller_execute(&controller, &actuation);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.motion != BC_MOTION_ACTIVE ||
+        snapshot.state_machine.drive != BC_DRIVE_DRIVING ||
         fabsf(snapshot.state_reference.value[BC_STATE_DS] - 0.005F) >
             1.0e-7F ||
         fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.015F) >
@@ -216,6 +219,7 @@ int main() {
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||
         snapshot.state_machine.motion != BC_MOTION_IDLE ||
+        snapshot.state_machine.drive != BC_DRIVE_IDLE ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("system disable did not reset and clear the controller\n", stderr);
         return 1;
