@@ -61,7 +61,7 @@ add_library(balance_control_core STATIC
   src/control/velocity_estimator.c
   src/control/reference/ramp.c
   src/control/reference/yaw.c
-  src/control/state_machine/drive.c
+  src/control/state_machine/forward_mode.c
   src/control/state_machine/motion.c
   src/control/state_machine/system.c)
 set(BALANCE_LQR_SCHEDULE_DIR
@@ -76,6 +76,7 @@ endif()
 balance_enable_warnings(balance_control_core)
 
 add_library(balance_simulation STATIC
+  src/sim/input/virtual_gimbal.cpp
   src/sim/mujoco_adapter.cpp
   src/sim/mujoco_plant.cpp
   src/sim/simulation_runner.cpp)
@@ -135,10 +136,10 @@ if(BUILD_TESTING)
   balance_enable_warnings(state_machine_test)
   add_test(NAME layered_state_machine COMMAND state_machine_test)
 
-  add_executable(drive_state_machine_test tests/drive_state_machine_test.c)
-  target_link_libraries(drive_state_machine_test PRIVATE balance_control_core)
-  balance_enable_warnings(drive_state_machine_test)
-  add_test(NAME drive_state_machine COMMAND drive_state_machine_test)
+  add_executable(forward_mode_test tests/forward_mode_test.c)
+  target_link_libraries(forward_mode_test PRIVATE balance_control_core)
+  balance_enable_warnings(forward_mode_test)
+  add_test(NAME forward_mode COMMAND forward_mode_test)
 
   add_executable(controller_test tests/controller_test.c)
   target_link_libraries(controller_test PRIVATE balance_control_core)
@@ -164,6 +165,11 @@ if(BUILD_TESTING)
   target_link_libraries(yaw_reference_test PRIVATE balance_control_core)
   balance_enable_warnings(yaw_reference_test)
   add_test(NAME yaw_reference COMMAND yaw_reference_test)
+
+  add_executable(virtual_gimbal_test tests/virtual_gimbal_test.cpp)
+  target_link_libraries(virtual_gimbal_test PRIVATE balance_simulation)
+  balance_enable_warnings(virtual_gimbal_test)
+  add_test(NAME virtual_gimbal COMMAND virtual_gimbal_test)
 
   add_executable(lqr_controller_test tests/lqr_controller_test.c)
   target_link_libraries(lqr_controller_test PRIVATE balance_control_core)

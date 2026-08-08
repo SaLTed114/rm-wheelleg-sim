@@ -8,25 +8,29 @@ core, distinct from the top-level controller facade.
 The demo keeps the system off while the robot settles, then enables it and
 sends a simulated balance-restart pulse so the controller can position the
 legs and enter balance control.
-The simulation talks to the C controller through one operator-command input.
+The simulation talks to the C controller through operator-command and sensor-
+feedback inputs. The operator command contains only enable/restart and forward
+velocity in gimbal coordinates; relative gimbal yaw and yaw rate are feedback,
+matching the real design where both boards listen to the yaw motor on one CAN
+bus.
 Observability is provided by an on-demand, caller-owned controller snapshot;
 the state machine and low-level control remain internal. `SimulationRunner`
 captures its latest snapshot after construction, reset, and each controller
 execution, so the GUI and tests never need to read controller internals.
-Forward velocity and yaw rate are shaped by sibling `forward_reference` and
-`yaw_reference` components, with independent linear ramps limited to
-`3 m/s, 5 m/s^2` and `4*pi rad/s, 10 rad/s^2`. The drive state machine owns no
-reference ramp: it only selects longitudinal `hold` or `drive` feedback policy.
-The two generators and their shared ramp primitive live under
-`include/balance/reference/` and `src/control/reference/`.
-`hold` keeps position feedback enabled, while `drive` releases position and
-tracks the generated forward-velocity reference. Normal yaw has no discrete
-mode, so in-place turning remains in `hold` and forward stopping never waits
-for yaw to settle. `spin` is currently an unreachable placeholder for a future
-explicit rate-only yaw mode; high yaw targets do not select it automatically.
+The longitudinal `forward_reference` ramps commands within
+`3 m/s, 5 m/s^2`. Its sibling forward mode selects only the feedback policy:
+`hold` keeps position feedback enabled, while `velocity` releases `S` and
+tracks velocity. Forward stopping is independent of yaw.
+NORMAL motion selects the nearer chassis front/rear direction from the gimbal
+motor feedback, reverses the chassis-frame forward command when rear is chosen,
+and passes the selected relative angle/rate to `yaw_reference`. `PSI/DPSI` stay
+enabled throughout NORMAL motion and the target rate is limited to
+`1.5*pi rad/s`. The simulation provides a shared virtual gimbal, while the
+front/rear policy lives in the C control core just as it will on the lower board;
+task-level `SPIN` remains a documented future feature and is not represented by
+an axis-level state or a low-level test bypass.
 Roll and roll rate are observable through the snapshot but are not yet used for
-compensation; the lower `1.5*pi rad/s` moving-turn envelope is also not yet
-enforced.
+compensation.
 The current 1 ms LQR schedule was retuned around `0.16 m` and `0.18 m` leg
 lengths. It completes the diagnostic `+/-3 m/s` translation sweep at both
 lengths; in-place yaw above `pi rad/s` remains an investigation target rather
@@ -67,12 +71,16 @@ To drive interactively instead of running the automatic demonstration, append
   --keyboard
 ```
 
-Hold `W/S` or the up/down arrows for `+/-2 m/s`; holding either Shift key at
-the same time boosts the forward target to `+/-3 m/s`. Hold `A/D` or the
-left/right arrows for `+/-pi rad/s`. Forward and yaw inputs can be combined.
-Releasing the keys commands zero; the normal controller ramps perform the
-acceleration and braking. Space pauses, `R` resets, and Escape closes the
-viewer. Keyboard mode cannot be combined with an exact performance case.
+Hold `W/S` or the up/down arrows for `+/-2 m/s` along the virtual gimbal
+direction; holding either Shift key boosts this to `+/-3 m/s`. `A/D` or the
+left/right arrows rotate the virtual gimbal at `+/-pi rad/s`, with a
+`10 rad/s^2` ramp. The chassis follows its world heading and automatically
+chooses the nearer front or rear direction; rear alignment reverses the mapped
+chassis-frame forward command. Releasing A/D brakes the virtual gimbal to zero
+rate and leaves its final world heading locked. The cyan arrow above the body
+shows that heading, while the title reports front/rear selection, heading error,
+gimbal rate, and mapped velocity. Space pauses, `R` resets, and Escape closes
+the viewer. Keyboard mode cannot be combined with an exact performance case.
 
 The simulation runs in real time until the window is closed. Use the left mouse
 button to rotate, right mouse button to pan, middle button or wheel to zoom,
@@ -83,8 +91,9 @@ robot falls and settles. It then enables the system and emits one simulated
 balance-restart event. `LEG_POSITIONING` moves both virtual legs toward
 `0.18 m / -pi/2`; once stable, `ENGAGING` enables the current-model LQR and
 `67.5 N` axial support per leg. No mocap support or pose teleport is used. The
-simulator then repeats standing, `+/-0.25 m/s` travel, and `+/-1.57 rad/s` yaw
-phases. It prints the current phase and ten-element state vector every 0.5 s.
+simulator then repeats standing, `+/-0.25 m/s` travel, and virtual-gimbal
+`+/-1.57 rad/s` turning phases. It prints the current phase and ten-element
+state vector every 0.5 s.
 The chassis, leg links, and wheels collide with the infinite ground plane,
 while self-collision remains disabled. A 40 by 40 m checkerboard and gradient
 skybox provide the visible environment.
@@ -130,8 +139,9 @@ MJCF. Headless tests can be built without the viewer using
 ## Performance benchmark
 
 `rm_balance_performance` is a diagnostic benchmark rather than a CTest gate.
-It independently resets and runs coarse forward/reverse and left/right yaw
-sweeps, classifying stability, tracking, stopping, and actuator saturation.
+It independently resets and runs coarse forward/reverse and NORMAL heading
+follow sweeps, classifying tracking, stopping, and actuator saturation while
+recording contact and posture diagnostics.
 Run it with an output directory for the per-case summary and 100 Hz trace:
 
 ```powershell
@@ -141,11 +151,11 @@ Run it with an output directory for the per-case summary and 100 Hz trace:
 ```
 
 The generated `summary.csv` and `trace.csv` stay under the ignored build tree.
-The benchmark challenges `+/-1, 2, 2.5, 3 m/s` translation and
-`+/-pi, 2*pi, 3*pi, 4*pi rad/s` in-place yaw. These targets map the current
-controller boundary; reaching the configured maximum is not a build-pass
-requirement. All yaw benchmark cases still use normal heading tracking; they
-do not exercise the reserved `spin` state. See
+The benchmark challenges `+/-1, 2, 2.5, 3 m/s` translation and virtual-gimbal
+rates of `+/-pi, 1.5*pi rad/s`. Heading cases exercise the same virtual-gimbal
+feedback and control-core NORMAL mapping as the GUI; they do not
+exercise the future task-level `SPIN`. Reaching every target is not a build-pass
+requirement. See
 `docs/notes/performance-baseline.md` for the first measured baseline and its
 acceptance criteria.
 
@@ -159,16 +169,6 @@ To separate acceleration capability from top speed, run the dedicated
   --suite forward-acceleration
 ```
 
-The matching in-place yaw sweep fixes the target at `+/-2*pi rad/s` and tests
-`1, 2, 3, 5, 7.5, 10, 15 rad/s^2`:
-
-```powershell
-.\build\Release\rm_balance_performance.exe `
-  .\models\MJCF\COD-2026RoboMaster-Balance.xml `
-  .\build\performance\yaw-acceleration `
-  --suite yaw-acceleration --leg-length 0.18
-```
-
 The benchmark also provides isolated observer and plant diagnostics. These
 options do not change the controller defaults:
 
@@ -176,16 +176,14 @@ options do not change the controller defaults:
   observation with the MuJoCo base forward velocity.
 - `--forward-observation contact-gated` freezes the common wheel-speed
   observation for 50 ms after either wheel loses contact.
-- `--position-feedback off` removes only the LQR position error while retaining
-  forward-speed feedback.
-- `--velocity-feedback off` removes only the LQR forward-speed error while
-  retaining the measured `DS` in telemetry. Pass both feedback options to
-  isolate yaw control from the longitudinal LQR channels.
 - `--roll-restraint on` applies a benchmark-only ideal base roll restraint.
 
 At trace level, `wheel_encoder_velocity_l/r` and
 `wheel_center_velocity_l/r` separate encoder slip from motion of the wheel
 axis. These fields are diagnostic telemetry and are not control inputs.
+`command_forward`, `gimbal_relative_yaw/rate`, `alignment`,
+`mapped_forward`, and `heading_error` separately expose upper-board intent,
+motor-equivalent CAN feedback, and the lower-board NORMAL mapping result.
 The simulated accelerometer reports FLU body-frame specific force, so a level,
 stationary robot reads approximately `[0, 0, +9.81] m/s^2`. The
 `velocity_prior_*`, `velocity_estimate_*`, `velocity_truth_*`, innovation,
@@ -197,8 +195,8 @@ Wheel updates start 0.5 seconds after balance engagement. Controller state
 value; raw wheel odometry remains available only as estimator input and
 diagnostic telemetry.
 
-Generate the fixed-length, unsaturated `A/B + K` prior for the same positive
-yaw cases with the LQR Python environment:
+The historical fixed-length, unsaturated raw-yaw `A/B + K` diagnostic remains
+available in the LQR Python environment:
 
 ```bash
 python tools/lqr/yaw_response.py \
@@ -206,10 +204,10 @@ python tools/lqr/yaw_response.py \
   --leg-length 0.18
 ```
 
-This writes an ideal-model `summary.csv` and 1 kHz `trace.csv`. Passing one or
-more benchmark traces with `--mujoco-trace` also compares perturbations around
-the measured pre-ramp standing trim. It does not run MuJoCo or change the
-generated controller schedule.
+This writes an ideal-model `summary.csv` and 1 kHz `trace.csv`. It is not a
+NORMAL operator-input path and must not be interpreted as a current heading
+case or SPIN implementation. It does not run MuJoCo or change the generated
+controller schedule.
 
 To identify the common leg-angle reference without allowing the position
 channel to hide steady drift, run the dedicated trim scan:
@@ -260,9 +258,9 @@ The GUI can replay any one of the exact same benchmark cases:
 ```
 
 Valid names are `forward_pos_1` through `forward_pos_3`, their `forward_neg_*`
-counterparts, and `yaw_pos_1pi` through `yaw_pos_4pi` with matching
-`yaw_neg_*` cases. Acceleration cases use names such as
-`forward_pos_2_a0p5`, `forward_neg_2_a2`, `yaw_pos_2pi_a3`, and
-`yaw_neg_2pi_a7p5`. The camera follows the chassis. Playback notes problems in
+counterparts, and `heading_pos_1pi`, `heading_neg_1pi`,
+`heading_pos_1p5pi`, and `heading_neg_1p5pi`. Forward-acceleration cases use
+names such as `forward_pos_2_a0p5` and `forward_neg_2_a2`. The camera follows
+the chassis and displays the virtual-gimbal arrow. Playback notes problems in
 the title and continues to the scheduled end; press `R` to replay the case and
 use Space to pause or resume while it is running.

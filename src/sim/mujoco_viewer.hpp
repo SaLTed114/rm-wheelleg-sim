@@ -29,6 +29,8 @@ public:
     bool consume_reset_request();
 
     void set_title(const std::string &title);
+    void set_virtual_gimbal_heading(
+        float world_yaw, bool visible = true) noexcept;
     void render(mjData &data);
     void poll_events();
 
@@ -49,6 +51,7 @@ private:
     void handle_scroll(double y_offset);
 
     const mjModel &model_;
+    int base_body_id_{-1};
     GLFWwindow *window_{};
     mjvCamera camera_{};
     mjvOption option_{};
@@ -60,6 +63,8 @@ private:
     bool right_button_{};
     bool paused_{};
     bool reset_requested_{};
+    bool virtual_gimbal_visible_{};
+    float virtual_gimbal_yaw_{};
     double cursor_x_{};
     double cursor_y_{};
 };

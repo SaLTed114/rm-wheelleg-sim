@@ -29,7 +29,8 @@ int main() {
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||
         snapshot.state_machine.motion != BC_MOTION_IDLE ||
-        snapshot.state_machine.drive != BC_DRIVE_IDLE ||
+        snapshot.state_machine.forward != BC_FORWARD_IDLE ||
+        snapshot.state_machine.alignment != BC_CHASSIS_FRONT ||
         snapshot.tick_count != 0U ||
         !actuation_is_zero(&snapshot.actuation_request) ||
         !actuation_is_zero(&snapshot.actuation)) {
@@ -126,7 +127,8 @@ int main() {
     }
     command.balance_restart = 0U;
     command.forward_velocity = 10.0F;
-    command.yaw_rate = 20.0F;
+    feedback.gimbal.relative_yaw = 0.1F;
+    feedback.gimbal.relative_yaw_rate = 0.2F;
 
     for (int step = 0; step < 2; ++step) {
         bc_controller_update(&controller, &feedback, 0.001F);
@@ -142,7 +144,7 @@ int main() {
     }
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.motion != BC_MOTION_BALANCE_ENGAGING ||
-        snapshot.state_machine.drive != BC_DRIVE_IDLE ||
+        snapshot.state_machine.forward != BC_FORWARD_IDLE ||
         snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
         snapshot.state_reference.value[BC_STATE_DPSI] != 0.0F ||
         snapshot.tick_count != 5U) {
@@ -180,9 +182,16 @@ int main() {
     bc_controller_execute(&controller, &actuation);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.motion != BC_MOTION_ACTIVE ||
-        snapshot.state_machine.drive != BC_DRIVE_HOLD ||
+        snapshot.state_machine.forward != BC_FORWARD_HOLD ||
+        snapshot.state_machine.alignment != BC_CHASSIS_FRONT ||
+        snapshot.gimbal.relative_yaw != 0.1F ||
+        snapshot.gimbal.relative_yaw_rate != 0.2F ||
+        snapshot.mapped_forward_velocity != 0.0F ||
+        snapshot.heading_error != 0.1F ||
         snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
-        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.010F) >
+        fabsf(snapshot.state_reference.value[BC_STATE_PSI] - 0.1F) >
+            1.0e-7F ||
+        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.2F) >
             1.0e-7F) {
         fputs("pure yaw did not activate in forward hold\n", stderr);
         return 1;
@@ -194,10 +203,13 @@ int main() {
     bc_controller_calculate(&controller);
     bc_controller_execute(&controller, &actuation);
     bc_controller_capture_snapshot(&controller, &snapshot);
-    if (snapshot.state_machine.drive != BC_DRIVE_DRIVING ||
+    if (snapshot.state_machine.forward != BC_FORWARD_VELOCITY ||
+        snapshot.mapped_forward_velocity != 10.0F ||
         fabsf(snapshot.state_reference.value[BC_STATE_DS] - 0.005F) >
             1.0e-7F ||
-        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.020F) >
+        fabsf(snapshot.state_reference.value[BC_STATE_PSI] - 0.1F) >
+            1.0e-7F ||
+        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.2F) >
             1.0e-7F) {
         fputs("forward command did not leave hold\n", stderr);
         return 1;
@@ -235,7 +247,8 @@ int main() {
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||
         snapshot.state_machine.motion != BC_MOTION_IDLE ||
-        snapshot.state_machine.drive != BC_DRIVE_IDLE ||
+        snapshot.state_machine.forward != BC_FORWARD_IDLE ||
+        snapshot.state_machine.alignment != BC_CHASSIS_FRONT ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("system disable did not reset and clear the controller\n", stderr);
         return 1;
@@ -248,6 +261,10 @@ int main() {
         snapshot.state_reference.value[BC_STATE_PSI] != 0.0F ||
         snapshot.roll != 0.0F ||
         snapshot.roll_rate != 0.0F ||
+        snapshot.gimbal.relative_yaw != 0.0F ||
+        snapshot.gimbal.relative_yaw_rate != 0.0F ||
+        snapshot.mapped_forward_velocity != 0.0F ||
+        snapshot.heading_error != 0.0F ||
         !actuation_is_zero(&snapshot.actuation_request) ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("reset did not clear the captured output\n", stderr);

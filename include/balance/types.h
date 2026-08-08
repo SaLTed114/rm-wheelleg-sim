@@ -54,6 +54,11 @@ typedef struct {
 } bc_wheel_feedback_t;
 
 typedef struct {
+    float relative_yaw;
+    float relative_yaw_rate;
+} bc_gimbal_feedback_t;
+
+typedef struct {
     float roll;
     float pitch;
     float yaw;
@@ -70,6 +75,7 @@ typedef struct {
     bc_leg_feedback_t leg[BC_SIDE_NUM];
     bc_wheel_feedback_t wheel[BC_SIDE_NUM];
     bc_imu_feedback_t imu;
+    bc_gimbal_feedback_t gimbal;
 } bc_sensor_feedback_t;
 
 typedef struct {
@@ -103,8 +109,7 @@ typedef enum {
 typedef struct {
     uint8_t system_enabled;
     uint8_t balance_restart;
-    float forward_velocity;
-    float yaw_rate;
+    float forward_velocity; /* Gimbal-forward coordinates. */
 } bc_operator_command_t;
 
 typedef struct {

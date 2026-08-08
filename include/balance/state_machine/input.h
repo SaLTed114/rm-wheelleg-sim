@@ -10,6 +10,7 @@ extern "C" {
 
 typedef struct {
     const bc_operator_command_t *operator_command;
+    const bc_gimbal_feedback_t *gimbal_feedback;
     const bc_state_vector_t *state;
     const bc_leg_kinematics_t *leg;
     float timestep_seconds;

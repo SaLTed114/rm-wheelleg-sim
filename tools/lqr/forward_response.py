@@ -71,6 +71,12 @@ def trace_vector(row: dict[str, str], prefix: str = "") -> np.ndarray:
 
 
 def s_feedback_disabled(row: dict[str, str]) -> bool:
+    forward = row.get("forward")
+    if forward:
+        if forward not in ("idle", "hold", "velocity"):
+            raise ValueError(f"unknown forward mode: {forward}")
+        return forward == "velocity"
+
     drive = row.get("drive")
     if drive:
         if drive not in (
@@ -85,7 +91,7 @@ def s_feedback_disabled(row: dict[str, str]) -> bool:
         raise ValueError(
             "legacy trace must be recorded with position feedback off")
     raise ValueError(
-        "trace must contain drive or position_feedback_enabled")
+        "trace must contain forward, drive, or position_feedback_enabled")
 
 
 def root_mean_square(values: list[float]) -> float:

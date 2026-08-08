@@ -369,24 +369,24 @@ MuJoCo plant
 ```
 
 - control core 使用 C11，simulation core 使用 C++17，通过 `include/balance/types.h` 中的纯 C 数据结构连接；
-- 正式控制接口收口到 `bc_controller_t`，统一持有 state machine、control core、最新 operator command 和最近一次最终 actuation；operator command 是 `set_command` 与 `calculate` 之间待处理的输入；仿真与后续实车上层只调用 controller 的 `update -> set_command -> calculate -> execute`，不负责拼接内部模块；
+- 正式控制接口收口到 `bc_controller_t`，统一持有 state machine、control core、最新 operator command、最新云台反馈和最近一次最终 actuation；operator command 是 `set_command` 与 `calculate` 之间待处理的输入，云台反馈随其他 sensor feedback 在 update 时捕获；仿真与后续实车上层只调用 controller 的 `update -> set_command -> calculate -> execute`，不负责拼接内部模块；
 - controller 的 update 更新运动学与观测状态，set_command 只保存最新 operator command，calculate 是唯一推进状态机、时间计数并生成低层控制请求的阶段，execute 只根据顶层 system 状态做硬门控、力矩限幅和最终输出；
 - 顶层 `controller` 表示完整控制系统的 facade；PD 与 LQR 是由 control core 调用的具体控制律，集中放在 `control_law/` 子目录，且不依赖 controller、state machine 或 observer；
-- control core 不暴露六路扁平 actuator 顺序；sensor feedback 按左右侧拆分为腿部前/后关节反馈、轮反馈和 IMU，actuation 对应拆分为腿关节力矩与轮力矩；
-- 独立的 `controller_snapshot` 模块通过 `bc_controller_capture_snapshot()` 按需读取 controller 的 system/motion/drive、observer、当前 state reference、roll/roll rate、tick count、限幅前 actuation request 和最近一次最终 actuation，生成由调用者持有的 `bc_controller_snapshot_t`；controller 不持续缓存第二份同步状态，旧 snapshot 也不会被后续控制周期改写；该结构是 GUI、测试以及未来实车遥测、日志、故障诊断和命令确认的统一观察面，不参与实时安全决策，也不是可直接发送的 UART 线格式；
+- control core 不暴露六路扁平 actuator 顺序；sensor feedback 按左右侧拆分为腿部前/后关节反馈、轮反馈、IMU 和云台 YAW 电机相对角/相对转速，actuation 对应拆分为腿关节力矩与轮力矩。实车上下板与云台 YAW 电机共用一条 CAN，总线反馈可由两块板直接监听，下板不需要上板二次转发 heading 目标；
+- 独立的 `controller_snapshot` 模块通过 `bc_controller_capture_snapshot()` 按需读取 controller 的 system/motion/forward/alignment、observer、云台反馈、下板映射后的纵向速度和 heading error、当前 state reference、roll/roll rate、tick count、限幅前 actuation request 和最近一次最终 actuation，生成由调用者持有的 `bc_controller_snapshot_t`；controller 不持续缓存第二份同步状态，旧 snapshot 也不会被后续控制周期改写；该结构是 GUI、测试以及未来实车遥测、日志、故障诊断和命令确认的统一观察面，不参与实时安全决策，也不是可直接发送的 UART 线格式；
 - `SimulationRunner` 持有最近一次 snapshot，在构造、reset 后以及每次 execute 后刷新，只公开 `snapshot()`，不再读取或暴露 state machine/control core 内部字段及分散的 state/leg/actuation getter；未来实车应由控制线程在 execute 后捕获，再把副本交给串口或日志线程，其他线程不直接读取 controller；
 - state machine 和 control core 的低层 API 继续供各自单元测试与内部调试使用，但正式仿真路径只使用 controller facade；MuJoCo 腿部定姿等低层集成验证使用测试文件内的专用 harness，不污染 runner 的生产接口；
 - MuJoCo 中六个关节和 actuator 的名称、索引、排列、符号及关节零偏只由 C++ adapter 管理；左右腿进入 control core 后共用同一套坐标；左右轮 actuator 均显式限制为 `+/-6.32 N*m`，与 control core 一致；
-- operator command 使用持续电平 `system_enabled` 和单周期事件 `balance_restart`：顶层 `SYSTEM_OFF` 时 control core 的 execute 无条件输出零；使能只进入 `SYSTEM_ON/MOTION_IDLE`，不会在状态机内部隐式启动恢复流程，必须由外部发送 restart；开启状态下 restart 会清除计时、reference ramp 和 LQR 参考并重新整理腿部，关闭状态下忽略 restart；
-- ACTIVE 下的连续参考由并列、均无离散状态的 `forward_reference` 与 `yaw_reference` 生成：前者持有前进死区和 velocity ramp，写入 `DS_ref` 并积分 `S_ref`；后者持有 yaw 死区和 rate ramp，写入 `DPSI_ref` 并积分 `PSI_ref`。两者与共享的 `reference_ramp` 原语集中放在 `include/balance/reference/` 和 `src/control/reference/`，而不是混在状态机目录中。drive 状态机不再持有任何 ramp、command deadband 或 state reference，只根据“是否有纵向请求、参考速度、融合实测速度”选择纵向反馈策略。当前硬上限为 `3 m/s, 5 m/s^2` 与 `4*pi rad/s, 10 rad/s^2`；`15 rad/s^2` 只保留为性能挑战档。移动转弯建议不超过 `1.5*pi rad/s`，但耦合指令包络尚未实现；system off 仍立即门控最终 actuation，不经过斜坡停机；
-- 分层 C 状态机当前使用 `system -> motion -> drive`：已建立 `SYSTEM_OFF/ON/FAULT`、`MOTION_IDLE/SELF_RIGHTING/LEG_POSITIONING/BALANCE_ENGAGING/ACTIVE`，以及 ACTIVE 下的 `IDLE/HOLD/DRIVING/SPIN`。进入 ACTIVE 时 drive 启动为 `HOLD`，若已有非零前进命令则同周期进入 `DRIVING`；普通 yaw 命令不引发 drive 状态转移。`SPIN` 目前只有枚举和名称占位，没有 operator command 或合法入口；若内部异常进入，下一拍捕获当前 `S` 并安全回到 `HOLD`。未来显式高速自旋将在该状态关闭 `PSI`、保持 `S/DS`、禁止纵向命令，并在实际 `DPSI` 停稳后捕获当前 `PSI` 无扰退出；不会按 yaw rate 大小自动切换；
-- drive 的 `HOLD` 启用 `S`，`DRIVING` 仅禁用 `S`；前进命令死区为 `0.01 m/s`，命令与 forward reference ramp 归零、融合 `DS` 严格低于 `0.05 m/s` 且连续 `0.25 s` 后回到 `HOLD`。motion 观察到进入 `HOLD` 后调用 forward reference 捕获当前 `S`、清零 `DS_ref`；普通 yaw 在两种状态下都独立连续推进。停车不再依赖原始共同轮速或 `DPSI`，所以持续普通转向不会阻止纵向锁位，也不会重置 `PSI_ref`；
+- operator command 当前只包含持续电平 `system_enabled`、单周期 `balance_restart` 和云台坐标系下的 `forward_velocity`；不包含 yaw rate、heading error、front/rear 或只有 NORMAL 一个值的 task enum。顶层 `SYSTEM_OFF` 时 control core 的 execute 无条件输出零；使能只进入 `SYSTEM_ON/MOTION_IDLE`，必须由外部发送 restart。仿真中 restart 仍是本地单周期事件；未来 CAN 线协议必须用保持到确认或 sequence counter 避免丢帧，本轮不设计线格式；
+- ACTIVE 下的连续参考由并列、均无离散状态的 `forward_reference` 与 `yaw_reference` 生成。前者消费下板映射后的纵向速度，持有死区和 velocity ramp，写入 `DS_ref` 并积分 `S_ref`，硬上限为 `3 m/s, 5 m/s^2`。motion 直接根据云台相对角比较 chassis front/rear 候选，以 `5 deg` 误差差值滞回选择方向，并在 rear 时反转 operator forward velocity；随后 yaw reference 令 `PSI_ref = PSI + selected_relative_yaw`，并把 `DPSI + gimbal_relative_yaw_rate` 限制到 `+/-1.5*pi rad/s` 后写入 `DPSI_ref`。共享 `reference_ramp` 目前服务纵向参考和仿真虚拟云台；system off 仍立即门控最终 actuation；
+- 分层 C 状态机当前使用 `system -> motion -> forward mode`：已建立 `SYSTEM_OFF/ON/FAULT`、`MOTION_IDLE/SELF_RIGHTING/LEG_POSITIONING/BALANCE_ENGAGING/ACTIVE`，以及 ACTIVE 下纵向的 `IDLE/HOLD/VELOCITY`。进入 ACTIVE 时 forward 启动为 `HOLD`，若已有非零前进命令则同周期进入 `VELOCITY`；普通 heading follow 不引发 forward 状态转移。轴级 `SPIN` 占位已删除；任务级 SPIN 尚未实现，也不会按 heading 目标大小自动切换；
+- forward mode 的 `HOLD` 启用 `S`，`VELOCITY` 仅禁用 `S`；前进命令死区为 `0.01 m/s`，命令与 forward reference ramp 归零、融合 `DS` 严格低于 `0.05 m/s` 且连续 `0.25 s` 后回到 `HOLD`。motion 观察到进入 `HOLD` 后调用 forward reference 捕获当前 `S`、清零 `DS_ref`；NORMAL heading follow 在两种纵向模式下都每周期直接更新。停车不依赖原始共同轮速或 `DPSI`，所以持续普通转向不会阻止纵向锁位；
 - system 与 motion 位于 `state_machine/` 子目录：system 的转移和动作只负责 `OFF/ON`、预留的 `FAULT -> OFF` 回退及下层启动/复位，motion 使用先转移、再按转移后状态执行动作的两个 switch，不再把两级转移和平衡控制输出混在一条 if 链中；
-- controller 每周期组装一份只读 `bc_state_machine_input_t`，集中提供 operator command、观测状态、双腿运动学和 timestep，system 只把它传给 motion；motion 从中提取窄输入调用 drive，并分别更新 forward/yaw reference，最后统一复制完整 reference。融合 `DS` 已包含在观测状态中，不再额外传递共同轮里程计速度。持久配置、状态和计时器仍属于各状态机或参考生成对象，控制策略与目标仍通过独立的 `bc_control_command_t` 输出，不使用可写的大 context；
+- controller 每周期组装一份只读 `bc_state_machine_input_t`，集中提供 operator command、云台反馈、观测状态、双腿运动学和 timestep，system 只把它传给 motion；motion 先完成 NORMAL 正/负方向映射，再以窄输入调用 forward mode 和两个 reference，最后统一复制完整 reference。融合 `DS` 已包含在观测状态中，不再额外传递共同轮里程计速度。持久配置、状态和计时器仍属于各状态机或参考生成对象，控制策略与目标仍通过独立的 `bc_control_command_t` 输出，不使用可写的大 context；
 - controller config 只提供实际生效的 `control` 与 `motion` 两组配置，不在 controller 内保存副本，也不使用仅包装 motion 的空 `system` config；control core 和 motion 初始化时各自复制并持有自己的有效配置；
 - 状态转移中“条件连续成立指定时长”的公共逻辑使用头文件内联工具 `bc_condition_hold_t`；条件不成立时自动清零累计时间，各状态机为每个独立条件持有自己的 hold，不把普通延时、超时、锁存或滞回混入这一原语；
-- 后续平衡失败不自动恢复，而是回到 `MOTION_IDLE` 等待新的 restart；ACTIVE 下预留 `NORMAL/STAIR_CLIMB/JUMP/RAMP_JUMP` 任务层，`AIRBORNE` 是由接触观测派生、可供跳跃和飞坡共用的状态，不能仅因轮子离地就判定平衡失败；
-- 当前不建立通用 scenario 框架；性能 benchmark 与 GUI 单案例回放通过窄接口 `PerformanceScenario` 共用 case spec、固定阶段时间和 operator command，并用相同诊断函数标记问题，从而保证肉眼观察与 CSV 使用同一案例。原有 GUI 循环演示和其他 headless 测试仍使用各自局部输入函数，等出现扰动、回放等更多跨入口需求后再扩展场景抽象；
+- 后续平衡失败不自动恢复，而是回到 `MOTION_IDLE` 等待新的 restart。当前 ACTIVE 隐式只有 NORMAL，不为单一任务建立 enum；未来加入的 SPIN 是协调纵向、偏航和命令许可的整车任务。跳跃、楼梯、坡跳和 airborne/contact phase 等只保留为未来需求，不提前加入枚举或抽象；
+- 当前不建立通用 scenario 框架；性能 benchmark 与 GUI 单案例回放通过窄接口 `PerformanceScenario` 共用 case spec、固定阶段时间、operator command 和虚拟云台反馈，并用相同诊断函数标记问题，从而保证肉眼观察与 CSV 使用同一案例。原有 GUI 循环演示和其他 headless 测试仍使用各自局部输入函数，等出现扰动、回放等更多跨入口需求后再扩展场景抽象；
 - control command 不再使用粗粒度的 `POSTURE/BALANCE` 模式，而是由状态机为左右腿自动生成独立的腿长、腿角策略及目标，并生成车轮策略和 LQR 禁用状态位图；位图零值表示不屏蔽任何误差，状态机只标记当前模式需要关闭的少数通道。operator command 只提供系统使能、平衡重启和运动意图，不能从顶层指定低层控制策略；
 - control core 使用 `l1=0.215 m`、`l2=0.254 m` 计算虚拟腿运动学、解析雅可比和 `J*qdot`；`LEG_POSITIONING` 选择腿长/腿角位置 PD 和车轮禁用，`ENGAGING/ACTIVE` 选择腿长位置 PD + 每腿支撑前馈、腿角 LQR 和车轮 LQR，最后通过 `J^T` 输出关节力矩；
 - control core 按禁用位图生成 `reference - state` 误差，被标记状态显式写入零误差；低层 LQR 只按左右平均腿长调度增益并计算 `K*error`，reference 不再通过追随观测值模拟通道关闭。轮力矩限制为实车电机参数换算得到的 `6.32 N*m`，真实关节力矩限制为 `40 N*m`。schedule 已从旧的 `0.186-0.390 m` 重新生成到 `0.160-0.390 m`，默认 `0.16 m` 不再复用 `0.186 m` 边界增益；模型能直接提取等效腿参数的机械范围仍为 `0.186-0.390 m`，下段 `0.160-0.186 m` 明确使用参数拟合延伸。当前 1 ms 仿真权重为 `Q=[90,60,40,15,240,4,240,4,300,60]`、`R=[3.2,3.2,0.7,0.7]`，重点覆盖 `0.16/0.18 m`；全区间验证的最小可控秩为 `10`、最大拟合闭环特征值模约 `0.998641`；
@@ -396,9 +396,9 @@ MuJoCo plant
 - 腿长目标已由 `0.20 m` 改为 `0.16 m`，行为层约在 `2.775 s` 切入平衡；末段双轮接触率 `100%`、无其他部件触地，最大机体俯仰约 `1.95 deg`。最初出现的缓慢回正和机体持续触地并非腿长不足，而是行为层切换时误把整个当前状态复制为 LQR 参考，导致 `theta_l/theta_r/theta_b` 及其角速度参考非零；现已改为参考向量先清零、只捕获当前 `S/PSI`，并由单元测试保证六个姿态参考保持零；
 - 不能在轮子仍悬空时直接开启完整 LQR：当前观测器会把轮自转积分为底盘位移，实测可迅速产生约 `-27 m/s` 的错误里程计速度并把腿打到角度限位。已经删除的早期静态 scenario 曾用人为对齐接地高度规避；当前自由落地流程不再使用该做法，后续应由接触状态或融合观测器正式处理；
 - 腿长目标为 `0.20 m` 时，无界面静态站立测试在约 `3.711 s` 切入平衡，最后 `3 s` 双轮接触率为 `100%`、无其他部件触地，最大机体俯仰约 `1.48 deg`，最大俯仰角速度约 `0.00065 rad/s`；
-- 平衡场景支持前进速度和偏航速度参考；每个控制周期分别积分为 `s_ref` 和 `psi_ref`，同时设置 `ds_ref` 和 `dpsi_ref`。GUI 循环演示静止、`+/-0.25 m/s` 前后运动和 `+/-1.57 rad/s` 左右偏航；
+- 早期平衡场景曾直接接收前进速度和偏航速度参考，并每周期积分 `s_ref/psi_ref`；这条 raw yaw 输入路径现已被 NORMAL 云台跟随取代，GUI 循环演示保留相同目标量级但通过虚拟云台和 mapper 驱动；
 - 无界面运动验证中，前进/后退稳态速度约为 `+0.258/-0.258 m/s`，三秒真实位移约为 `+0.742/-0.769 m`；`+/-1.57 rad/s` 偏航目标实际约为 `+1.88/-1.85 rad/s`，存在约 18 至 20% 超调。四个阶段双轮接触率均为 `100%`，无其他部件触地；
-- 独立的 `rm_balance_performance` 不加入 CTest，而是按相同初始条件逐档 reset，粗扫 `+/-1, 2, 2.5, 3 m/s` 与 `+/-pi, 2*pi, 3*pi, 4*pi rad/s`，并在 build 目录输出逐案例 summary 和 100 Hz trace。第一轮结果为：`+/-1 m/s` 稳定且满足 10% 跟踪线，但 2 秒刹停观察仍有约 `0.13 m/s` 反向残速；更高直行档出现底盘或右后腿触地；所有粗扫 yaw 档均在到达末段跟踪窗口前触地并伴随轮力矩限幅。详细判据和结果记录于 `docs/notes/performance-baseline.md`；本轮不据此修改 LQR、roll 补偿或模型参数；
+- 独立的 `rm_balance_performance` 不加入 CTest，而是按相同初始条件逐档 reset，并在 build 目录输出逐案例 summary 和 100 Hz trace。最初的 raw yaw 基线曾粗扫 `+/-pi, 2*pi, 3*pi, 4*pi rad/s`；这些历史结果仍记录于 `docs/notes/performance-baseline.md`，但对应案例已经从当前 NORMAL benchmark 移除；
 - 固定 `+/-2 m/s`、扫描 `0.5, 1, 2, 3, 5 m/s^2` 的完整时序复测表明，所有加速度档都能保持有界并满足跟踪判据，没有出现控制器直接发散；`3/5 m/s^2` 会在正向加速或负向刹车阶段发生底盘触地。触地附近共同腿角约 `35-39 deg`、腿竖直投影约 `0.119-0.127 m`，这应解释为离地间隙/运动几何问题，而不是加速度稳定性失败；所有案例开始运动前仍有约 `0.286 m` 的 `S_ref-S` 偏差；
 - 保持其他外部配置不变覆盖目标腿长后，`0.18 m` 可使正向 `3 m/s^2` 完整通过，但负向仍在刹车后的观察阶段触地；`0.20 m` 可使正反向 `3 m/s^2` 都完整通过并满足稳定、跟踪判据，`5 m/s^2` 仍会触地；`0.24 m` 因站起末段腿角误差约 `8.4/9.3 deg` 超过当前 `8 deg` 状态机阈值而无法进入平衡，尚不能评价其运动性能。本轮未同时修改进入阈值。由于 LQR 按实际平均腿长自动调度，`0.20 m` 的改善同时包含几何离地间隙和调度增益变化，不能只归因于腿更长；
 - LQR 复调以 `0.16/0.18 m` 为主：降低 `S/theta_b` 权重并提高双腿角及角速度权重后，两个腿长均能完成并跟踪 `+/-3 m/s`，固定 `+/-2 m/s`、`0.5-5 m/s^2` 扫描也保持有限且无持续饱和；`Q[S]=90` 是本轮兼顾 `0.16 m` 反向刹车鲁棒性与跟踪误差的拐点。`+/-pi rad/s` 可跟踪，但 `2*pi rad/s` 起仍出现腿差分角、roll 和饱和快速增大，yaw 模型对齐与 roll 补偿仍未解决；
@@ -408,7 +408,7 @@ MuJoCo plant
 - 当前 yaw 观测不是简单的 `[-pi, pi]` 回绕角：adapter 输出回绕姿态，observer 对相邻帧差值 wrap 后持续累加，因此连续积分的 `psi_ref` 与连续展开的 `psi` 对齐，跨过 `pi` 不会凭空产生 `2*pi` 误差；
 - 用生成器的同一组离散 `A/B` 和正式 `K(0.18 m)` 直接运行无接触、无饱和闭环 `x[k+1]=A_d*x[k]+B_d*K*(r[k]-x[k])` 后，`pi/2*pi/4*pi rad/s`、`15 rad/s^2` 的理想半差分腿角峰值分别约为 `12.0/21.6/31.3 deg`，共同腿角小于 `0.03 deg`，匀速稳定后两腿回零。MuJoCo 的 `pi` 档半差分峰值约 `11.4 deg`，与线性模型吻合，说明低速旋转时左右腿反向摆动是当前 yaw 模型和 LQR 控制分配主动产生的，不是单纯的仿真符号错误；
 - `0.18 m / +2*pi` 的异常发生顺序为：目标 ramp 后约 `0.28 s` 单侧轮力矩先达到 `6.32 N*m`，约 `0.30 s` 一侧轮子离地，约 `0.36 s` 半差分腿角超过线性模型的 `21.6 deg` 峰值，约 `0.40 s` 关节开始饱和并带动共同腿角失控；腿差分超过理想峰值时 roll 仍仅约 `0.2 deg`。因此小幅劈叉属于理想控制动作，继续扩大则首先与接触不对称和饱和相关；缺少 roll 补偿会妨碍后续恢复，但在该正向案例中不是最早触发源；
-- `2*pi rad/s` 偏航加速度扫描已经落地为 `yaw-acceleration` suite，并由 `tools/lqr/yaw_response.py` 使用正式 schedule 的同一组离散 `A/B + K` 生成无接触、无限幅先验。线性模型在 `0.18 m` 的 `1/2/3/5/7.5/10/15 rad/s^2` 全部档位都预测单轮峰值低于 `6.32 N*m`；MuJoCo 双向可用边界位于 `2-3 rad/s^2`：`1 rad/s^2` 正负两向跟踪和停止稳定均通过，`2 rad/s^2` 两向可跟踪但停止窗口仍有残余振荡，`3 rad/s^2` 正向失效而负向通过；
+- 历史 `2*pi rad/s` raw yaw 加速度扫描曾实现为 `yaw-acceleration` suite，并由 `tools/lqr/yaw_response.py` 使用正式 schedule 的同一组离散 `A/B + K` 生成无接触、无限幅先验；该 suite 已从当前 CLI 删除，以下数据只保留为 LQR/plant 调查记录，不能视作 NORMAL 或 SPIN 输入路径；
 - `0.18 m / a3` 的 1 kHz trace 表明最早接触丢失主要是 `1-3 ms` 闪断，不是持续静态卸载。正向约在 `1.79 s` 同时进入接触丢失、法向力冲击和轮力矩饱和的正反馈，不能把第一帧闪断或轮力矩饱和单独解释为根因；
 - `0.18 m` 静态站立共同腿角约 `+7.15 deg`；实际腿约 `65 mm` 垂直 COM 偏置对应约 `2.0 N*m` 常值重力矩和约 `+8 deg` 自然 trim。当前生成器只把轴向 COM 投影和等效惯量带入齐次零点 `A/B`，没有表示该仿射常值项。MuJoCo 对照现已改为围绕 ramp 前一秒站立均值预测扰动，不能再把实际非零状态直接当作零平衡模型的绝对状态；
 - trim 对齐后，`0.18 m / a3` 正向的半差分/共同模态误差分别约在 `1.272/1.714 s` 超过 `2 deg`，负向分别约在 `1.410/2.009 s`。即使全程接触且无饱和的 `a1`，高偏航速度下仍有约 `2-3 deg` 误差；因为当前线性方程不含速度乘积项，`A/B` 只适合初期力矩和腿摆量级先验，不能覆盖高偏航率科氏、离心和陀螺耦合；
@@ -429,18 +429,18 @@ MuJoCo plant
 - 完整 yaw acceleration 对照中，estimator source 的正负 `1/2/3/5 rad/s^2` 均完整跟踪，`7.5 rad/s^2` 起在 target hold 因真实姿态、接触和轮力矩饱和失败；wheel source 在正向 `3 rad/s^2` 和正负 `5 rad/s^2` 已于 target ramp 发散。融合将当前双向稳定边界由 `2` 推到 `5 rad/s^2`，更高加速度的主要瓶颈已不是共同轮速观测；
 - 默认每腿支撑前馈已由 `54 N` 校准为 `67.5 N`：`0.18 m` 静止左右腿长约为 `0.18158/0.17844 m`，平均 `0.18001 m`。这是当前模型和工作点的虚拟轴向力，不应直接解释为半车重，也不能自动沿用到其他腿长；
 - 正式 LQR 已将腿姿态代价拆为共同/差分模态：腿角权重为 `240/1920`，腿角速度权重为 `4/32`，其他 Q/R 不变；实际 Q 的腿角块为 `[[1080,-840],[-840,1080]]`，腿角速度块为 `[[18,-14],[-14,18]]`。生成器和 JSON 显式记录完整 Q、模态权重及交叉项；当前三阶调度覆盖 `0.160-0.390 m`，拟合闭环最大特征值模 `0.998883421`；
-- 新增差分约束后，默认 `0.18 m` 的正负 `2*pi rad/s` 在 `1-15 rad/s^2` 全部完整跟踪且腿长有效；`15 rad/s^2` 仅有约 `4.1/3.3%` 轮力矩饱和、无关节饱和。基础 yaw 速度案例现统一使用 `5 rad/s^2`，正负 `pi-4*pi rad/s` 全部跟踪且无饱和；`4*pi` 正负 RMSE 约 `0.196/0.210 rad/s`；
+- 历史 raw yaw 路径新增差分约束后，默认 `0.18 m` 的正负 `2*pi rad/s` 在 `1-15 rad/s^2` 全部完整跟踪且腿长有效；当时的 `pi-4*pi rad/s` 档也全部跟踪且无饱和。这些结果用于说明 LQR 差分模态能力，不是当前 NORMAL benchmark 的操作接口或未来 SPIN 的验收结果；
 - 选择性差分权重保留直线共同模态性能：`0.18 m、+/-2 m/s、5 m/s^2` 的 RMSE 约 `0.167/0.158 m/s`，最大 pitch 约 `5.38/5.32 deg`。关闭 `S`、保留 `DS` 后正向案例 pitch 峰值降到约 `3.75 deg`、RMSE 降到 `0.061 m/s` 且满足刹停，但同样操作不改善高加速度 yaw；因此直线 pitch 慢恢复主要是位置误差持续拉车，下一阶段可独立处理；
-- 此前为直线因果对照临时加入的 `S/DS` feedback config 已移除，避免把实验注入伪装成生产配置；现在普通 `DRIVING` 通过禁用位图正式关闭 `S`、保留 `DS`，`HOLD` 恢复全部纵向状态反馈。performance trace 继续使用字符串 `drive` 列并输出新名称 `hold/drive`；`forward_response.py` 在新 `drive` 状态下屏蔽线性模型的 `S` 误差，同时兼容历史 `parked/driving` 名称和更早的 `position_feedback_enabled` trace；
+- 此前为直线因果对照临时加入的 `S/DS` feedback config 已移除，避免把实验注入伪装成生产配置；现在普通 `VELOCITY` 通过禁用位图正式关闭 `S`、保留 `DS`，`HOLD` 恢复全部纵向状态反馈。performance trace 使用 `forward` 列并输出 `idle/hold/velocity`；`forward_response.py` 优先读取新列，同时兼容历史 `drive` 列的 `hold/drive`、`parked/driving` 名称和更早的 `position_feedback_enabled` trace；
 - `rm_balance_trim_scan` 在 `0.18 m` 下关闭 `S` 并扫描共同腿角参考：零补偿时 pitch 约 `-2.075 deg`、车以约 `-0.32 m/s` 滑移；`+5.25/+5.50/+5.75 deg` 均基本消除速度漂移，其中 `+5.50 deg` 的 pitch 均值约 `+0.055 deg`，3 秒基座位移约 `-1.6e-6 m`，双轮持续接触且无饱和；
 - 默认通用腿长已统一为 `0.18 m`。`+5.50 deg` 共同腿角偏置已移入 control config 的 LQR compensation，作为该腿长下的平衡工作点补偿固化；motion/state machine 继续输出零腿角名义参考，控制核心仅在调用 LQR 前生成有效参考并叠加补偿，不修改观测、运动学零点或腿部定位目标；
 - 纯 PD 在固定 `0.30 m / -pi/2` 的 8 秒测试中稳态误差约为 `12 mm / 2.1 deg`，暂未加入积分或重力前馈；
 - 解析运动学与 MuJoCo `framepos` 多姿态对照的已知最大偏差约为 `9.1 mm / 1.8 deg`，该偏差保留为当前实际闭链模型的可见特性；
 - C++ 侧分为 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner` 和 `MujocoViewer`；正常入口实时无限运行到用户关闭 GUI，`run_for()` 只供 headless 测试使用；
-- GUI 支持显式 `--keyboard` 驾驶模式：`W/S`（或上下方向键）给出 `+/-2 m/s` 前进目标，同时按住 Shift 提升到 `+/-3 m/s`；`A/D`（或左右方向键）给出 `+/-pi rad/s` 偏航目标，可组合输入；松键只把 operator command 归零，实际启停仍经过正式 drive 状态机与 reference ramp。该模式与精确 performance case 互斥，不直接写执行器；
-- ACTIVE 普通运动及 forward/yaw reference 拆分后已在 Windows Release 验证 16/16 CTest：`forward_pos_2` 仍完整跟踪并刹停，trace 状态为 `idle/hold/drive`；`yaw_pos_1pi` 全程只出现 `idle/hold`，完整跟踪且无饱和，仍保留既有的 2 秒停转窗口残振。两个案例重构前后的 summary/trace 哈希分别完全一致，确认此次 forward reference 拆分没有改变控制时序或数值；`forward_response.py` 已成功读取新 `hold/drive` trace；键盘 GUI 已再次启动供组合输入手感验证；
+- 仿真已提供 GUI/headless 共用的 `VirtualGimbal`：A/D 给虚拟云台 `+/-pi rad/s` 目标，按 `10 rad/s^2` 斜坡并限制在 `+/-1.5*pi rad/s`，首次进入 ACTIVE 捕获当前底盘朝向；它只把世界朝向转换为与真实 YAW 电机等价的相对角/相对转速反馈。W/S 原始速度不在仿真层变号，front/rear、`5 deg` 滞回和纵向反号均由 C motion 完成。GUI 用机体上方青色箭头显示云台世界朝向，标题读取 snapshot 中的 alignment、heading error 和映射后纵向速度；
+- NORMAL 云台跟随与 forward mode 重整后已在 Windows Release 验证 17/17 CTest。删除独立 C++ mapper 并下沉映射后，12 档 baseline 的关键 summary 指标与下沉前逐值完全一致；正负 `pi` 与 `1.5*pi rad/s` heading 档均完成、有限、满足跟踪判据且无执行器饱和。四档在默认两秒停止观察窗内仍未满足 `settled`；该残振留作 NORMAL 参考/控制精调证据，不恢复旧 raw yaw-rate 测试旁路；
 - benchmark 已按 `common/performance/trim` 拆到 `src/benchmark`：`CsvWriter` 统一目录创建、转义和列数检查，`SimulationSampler` 统一基座自然坐标速度与轮地接触采样，`CommonDiagnostics` 统一有限性、接触、执行器饱和和峰值统计，`SampleStatistics/LinearTrend` 统一基础统计；`PerformanceBenchmark/PerformanceScenario` 与 `TrimScanner` 各自拥有具体实验实现，各自的 `main.cpp` 只保留 CLI、案例选择和打印。GUI 案例回放共用 performance scenario 和公共问题判定，仿真核心不再编译具体实验时序。重构后不再保留只有入口文件的顶层 `benchmarks` 目录；重构前后直线加速度 suite 及 `5.5 deg` trim 单点的 summary/trace 均字节一致；
-- performance benchmark 支持通过 CLI 指定任意单案例的名称、轴、目标、加速度和站立/保持/停止时长，原有固定 suite 保持兼容；`tools/experiments/run_experiment.py` 使用一份 TOML 描述一组 LQR 候选和多个案例，自动生成隔离 schedule、复用指纹化 CMake build、运行案例并保存完整配置、git/model/schedule 哈希、命令和日志。该配置只服务实验编排，生产 C 控制器仍使用编译期参数；
+- performance benchmark 支持通过 CLI 指定任意单案例的名称、轴、目标、加速度和站立/保持/停止时长；自定义轴现为 `forward|heading`，旧 `yaw` 会被显式拒绝。固定 baseline 删除 `2*pi-4*pi` raw yaw 档和 `yaw-acceleration` suite，加入正负 `pi/1.5*pi` NORMAL heading-follow 档；`tools/experiments/run_experiment.py` 同步使用新轴名。该配置只服务实验编排，生产 C 控制器仍使用编译期参数；
 - 直线 `A/B/K` 对照由 `tools/lqr/forward_response.py` 围绕运动前最后 `1 s` 稳态运行；新 trace 在 `drive` 时令预测的 `S` 误差为零、进入 `hold` 后恢复，历史 `driving/parked` trace 仍兼容。默认 `0.18 m`、关闭 `S`、站立 `8 s` 后的 `+2 m/s` 正向 `0.5/1/5 m/s^2` 案例均全程双轮接触且无饱和；运动 ramp/hold 内 MuJoCo/线性模型 pitch 峰值分别约为 `1.78/0.64`、`1.77/0.71`、`1.81/1.80 deg`，pitch RMS 模型误差约为 `0.71/0.74/0.83 deg`，`DS` RMS 模型误差约为 `0.049/0.054/0.068 m/s`；停止 ramp/settle 内 pitch 峰值分别约为 `2.18/1.34`、`2.55/1.99`、`3.77/3.07 deg`，pitch RMS 模型误差约为 `0.66/0.66/0.61 deg`。因此 `5 m/s^2` 的大俯仰既有当前 `K + DS` 制动参考自身的贡献，也有约 `0.7 deg` 的 plant/非线性偏差，不能单独归因于任一方；
 - `tools/lqr/forward_weight_sweep.py` 使用同一固定腿长 `A/B` 和 trace 中的参考序列扫描 `Q[theta_b]/Q[dtheta_b]`，只作为生成完整 schedule 前的线性预筛。`0.18 m / +2 m/s / 0.5-5 m/s^2` 下，基线 `300/60`、候选 `600/240`、`1200/240` 的最坏线性停止 pitch 约为 `3.07/2.20/1.60 deg`，共同轮力矩峰值均约为 `1.77-1.78 N*m`；
 - 两个候选随后均通过独立 schedule 的 MuJoCo 对照。`600/240` 正向三档完整案例 pitch 峰值约为 `1.39/1.56/2.20 deg`；`1200/240` 正向为 `0.97/1.08/1.60 deg`，反向为 `0.99/1.11/1.62 deg`，均完整跟踪、稳定停车、全程无轮/关节饱和。正向速度 RMSE 由基线约 `0.061 m/s` 增至约 `0.068 m/s`；因此提高机体 pitch 角度和角速度权重是当前有效方向，但 `1200/240` 在替换正式参数前仍需验证不同腿长、更高速度和 yaw 包线；
@@ -454,7 +454,7 @@ MuJoCo plant
 - 当前机体具有自由基座、上游 USD 惯性参数、地面和轮地接触；mocap weld 默认关闭，只在测试中显式启用；
 - CMake 支持用 `MUJOCO_ROOT` 指向 Linux Python wheel 或官方 MuJoCo 包，并为 Windows MSVC 官方包复制运行时 DLL；Windows 原生链接还需要 `lib/mujoco.lib`，当前检查到的 `armsim` Python wheel 只有头文件和 `mujoco.dll`，不能单独作为 Windows C++ SDK；
 - Linux 环境的官方 MuJoCo 3.9.0 SDK 位于 `/home/l/.local/opt/mujoco-3.9.0`；当前 `470e08f` 已在该环境完成构建和 11/11 CTest，并再次验证 C 运动学/雅可比、模型接线与功率方向、site 几何对照和 8 秒悬空定姿测试。该路径只是本机记录，不是跨平台默认值；
-- 当前 Windows 环境把不入库的本地依赖放在 `third_party/mujoco-3.9.0` 与 `third_party/glfw`，使用 MSVC 19.44、Windows SDK 10.0.26100 和 MuJoCo 3.9.0 完成 Release 构建，15 个 CTest 全部通过，GUI 已实际启动并运行站立、前后运动与左右偏航阶段；
+- 当前 Windows 环境把不入库的本地依赖放在 `third_party/mujoco-3.9.0` 与 `third_party/glfw`，使用 MSVC 19.44、Windows SDK 10.0.26100 和 MuJoCo 3.9.0 完成 Release 构建，17 个 CTest 全部通过；NORMAL 虚拟云台 baseline 已运行，GUI 待用户进行组合输入和正/负方向切换的手感验证；
 - Windows 配置应同时显式传入 `-DMUJOCO_ROOT=<third_party/mujoco-3.9.0>` 与 `-DFETCHCONTENT_SOURCE_DIR_GLFW=<third_party/glfw>`。只设置 `MUJOCO_ROOT` 不会阻止 GLFW FetchContent 联网；中断 Git clone 可能留下仍在运行的子进程和 `build/_deps/glfw-src/.git/objects/pack/tmp_pack_*` 只读文件，导致后续删除 build 目录受阻；
 - MuJoCo 3.9.0 将尺寸类型 `mjtSize` 定义为 `int64_t`；adapter 的 actuator 数量缓存使用同一类型，避免将 `mjModel::nu` 收窄到 `int` 的 MSVC C4244 警告。
 
@@ -462,8 +462,8 @@ MuJoCo plant
 
 1. 以 MJCF/MuJoCo 为当前仿真后端；USD 只作为上游物理属性和坐标关系的外部参考。
 2. 为平滑启停、直线位置过冲、偏航角过冲和稳定时间建立明确指标，并让 performance benchmark 输出所需的直接事实。
-3. 用新的 `DRIVING -> HOLD` 路径重跑直线双向加速度实验，先确认运动时关闭 `S` 的 pitch 改善、停车判定和重新锁位过程，再联合参考轨迹整形与 LQR 参数做可复现对照，不用瞬时跟踪 RMSE 主导选择。
-4. 普通运动键盘手感确认后，再为预留 `SPIN` 增加显式命令入口、只允许从纵向 `HOLD` 进入、关闭 `PSI` 并在停稳后捕获当前朝向无扰退出；随后继续扫描直线 `3 m/s`、自旋 `13 rad/s` 以及候选 `5 m/s^2`、`15 rad/s^2` 的完整双向包线，优先检查轮 `6.32 N*m` 限制、真实关节力矩、pitch、接触和净空。
+3. 用新的 `VELOCITY -> HOLD` 路径继续检查直线双向启停手感，确认运动时关闭 `S` 的 pitch 改善、停车判定和重新锁位过程，再联合参考轨迹整形与 LQR 参数做可复现对照，不用瞬时跟踪 RMSE 主导选择。
+4. 先通过 GUI 与 heading-follow trace 精调 NORMAL 的角度误差、过冲和停转时间，并验证 W+A/W+D、松开 A/D 后锁定最终朝向、90 度滞回及被撞转 180 度后的 rear 切换；随后再按 `docs/notes/active-motion-design.md` 单独实现任务级 SPIN。SPIN 固定方向、目标 `4*pi rad/s`，进入前先纵向停稳，退出时先 rate-only 制动，再按实验确定的速度阈值恢复云台跟随。
 5. 继续调查高偏航速度下的正向偏心平移和停转残速；将当前 `20 ms` 可信度迟滞、IMU 外参和噪声参数视为仿真初值，实车数据到位后重新标定，且不恢复直接轮速 `S/DS` 路径。
 6. plant 可信度工作与控制探索并行推进：逐个核对 body frame、CAD/STL 变换、机体底部/髋轴/轮轴几何、质量、质心、惯量及碰撞几何；不用旧 MATLAB 参数或闭环表现填补未知量。
 7. plant 发生实质修改后，重新验证闭链、关节符号、运动学/Jacobian 和自由落体，再提取等效腿参数、生成 LQR 调度、标定工作点补偿并重跑性能基线。

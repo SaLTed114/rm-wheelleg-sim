@@ -51,7 +51,10 @@ struct PerformanceResult {
     }};
     double initial_position_error{};
     bool initial_position_error_captured{};
+    double maximum_heading_error{};
+    double stop_peak_yaw_rate{};
     SampleStatistics tracking_error;
+    SampleStatistics heading_error;
     SampleStatistics settle_forward;
     SampleStatistics settle_yaw;
     CommonDiagnostics common;
@@ -70,17 +73,24 @@ public:
 private:
     bool step(
         const PerformanceCaseSpec &spec, const char *phase,
-        const bc_operator_command_t &command, PerformanceResult *result,
-        bool evaluate_tracking, bool evaluate_settle);
+        const bc_operator_command_t &command,
+        const sim::VirtualGimbalState &gimbal,
+        const bc_gimbal_feedback_t &gimbal_feedback,
+        PerformanceResult *result, bool evaluate_tracking,
+        bool evaluate_settle, bool stopping);
     bool collect(
         PerformanceResult &result, const char *phase,
         const SimulationSample &sample,
-        bool evaluate_tracking, bool evaluate_settle) const;
-    void step_runner(const bc_operator_command_t &command);
+        bool evaluate_tracking, bool evaluate_settle,
+        bool stopping) const;
+    void step_runner(
+        const bc_operator_command_t &command,
+        const bc_gimbal_feedback_t &gimbal_feedback);
     void finish_result(PerformanceResult &result) const;
     void write_trace(
         const PerformanceCaseSpec &spec, const char *phase,
         const bc_operator_command_t &command,
+        const sim::VirtualGimbalState &gimbal,
         const SimulationSample &sample,
         const ImuMotionState &velocity_truth);
 

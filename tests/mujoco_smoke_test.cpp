@@ -17,19 +17,18 @@ int main(int argc, char **argv) {
     }
 
     try {
-        const auto &yaw_cases = balance::benchmark::yaw_acceleration_cases();
-        const auto *yaw_case = balance::benchmark::find_performance_case(
-            "yaw_pos_2pi_a7p5");
-        const auto *yaw_speed_case =
-            balance::benchmark::find_performance_case("yaw_pos_4pi");
-        if (yaw_cases.size() != 14U || yaw_case == nullptr ||
-            yaw_case->axis != balance::benchmark::PerformanceAxis::yaw ||
-            std::abs(yaw_case->target - 2.0 * BC_PI) > 1.0e-12 ||
-            std::abs(yaw_case->command_rate - 7.5) > 1.0e-12 ||
-            yaw_speed_case == nullptr ||
-            std::abs(yaw_speed_case->target - 4.0 * BC_PI) > 1.0e-12 ||
-            std::abs(yaw_speed_case->command_rate - 5.0) > 1.0e-12) {
-            std::cerr << "yaw performance cases are incorrect\n";
+        const auto &cases = balance::benchmark::performance_cases();
+        const auto *heading_case =
+            balance::benchmark::find_performance_case(
+                "heading_pos_1p5pi");
+        if (cases.size() != 12U || heading_case == nullptr ||
+            heading_case->axis !=
+                balance::benchmark::PerformanceAxis::heading ||
+            std::abs(heading_case->target - 1.5 * BC_PI) > 1.0e-12 ||
+            std::abs(heading_case->command_rate - 10.0) > 1.0e-12 ||
+            balance::benchmark::find_performance_case(
+                "yaw_pos_4pi") != nullptr) {
+            std::cerr << "heading performance cases are incorrect\n";
             return EXIT_FAILURE;
         }
 

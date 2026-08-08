@@ -59,6 +59,8 @@ PerformanceBenchmark::PerformanceBenchmark(
         "initial_s_error",
         "tracking_mean_error", "tracking_rmse", "settle_mean_ds",
         "settle_rmse_ds", "settle_mean_dpsi", "settle_rmse_dpsi",
+        "max_heading_error", "heading_error_rmse",
+        "stop_peak_abs_dpsi",
         "peak_raw_wheel_l", "peak_raw_wheel_r",
         "peak_raw_joint_l_front", "peak_raw_joint_l_rear",
         "peak_raw_joint_r_front", "peak_raw_joint_r_rear",
@@ -83,8 +85,11 @@ PerformanceBenchmark::PerformanceBenchmark(
         "velocity_innovation_variance", "velocity_nis",
         "velocity_measurement_accepted", "wheel_velocity_reliable",
         "wheel_odometry_velocity", "estimated_axle_velocity",
-        "command_forward", "command_yaw",
-        "system", "motion", "drive", "s", "ds", "psi", "dpsi",
+        "gimbal_yaw", "gimbal_yaw_rate",
+        "gimbal_relative_yaw", "gimbal_relative_yaw_rate",
+        "alignment", "command_forward", "mapped_forward",
+        "heading_error",
+        "system", "motion", "forward", "s", "ds", "psi", "dpsi",
         "theta_l",
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
         "ref_s", "ref_ds", "ref_psi", "ref_dpsi", "ref_theta_l",
@@ -136,9 +141,12 @@ PerformanceResult PerformanceBenchmark::run(
         PerformanceResult *monitored =
             scenario.monitored() ? &result : nullptr;
         if (!step(
-                spec, scenario.phase_name(), scenario.command(), monitored,
+                spec, scenario.phase_name(), scenario.command(),
+                scenario.gimbal(), scenario.gimbal_feedback(), monitored,
                 scenario.tracking_evaluation(),
-                scenario.settle_evaluation())) {
+                scenario.settle_evaluation(),
+                scenario.phase() == PerformancePhase::stop_ramp ||
+                    scenario.phase() == PerformancePhase::stop_settle)) {
             finish_result(result);
             return result;
         }
@@ -191,7 +199,10 @@ void PerformanceBenchmark::write_summary(
         .value(result.settle_forward.mean())
         .value(result.settle_forward.rms())
         .value(result.settle_yaw.mean())
-        .value(result.settle_yaw.rms());
+        .value(result.settle_yaw.rms())
+        .value(result.maximum_heading_error)
+        .value(result.heading_error.rms())
+        .value(result.stop_peak_yaw_rate);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         summary_.value(result.common.peak_wheel_torque(side));
     }
@@ -215,38 +226,46 @@ void PerformanceBenchmark::write_summary(
 
 bool PerformanceBenchmark::step(
     const PerformanceCaseSpec &spec, const char *phase,
-    const bc_operator_command_t &command, PerformanceResult *result,
-    const bool evaluate_tracking, const bool evaluate_settle
+    const bc_operator_command_t &command,
+    const sim::VirtualGimbalState &gimbal,
+    const bc_gimbal_feedback_t &gimbal_feedback,
+    PerformanceResult *result, const bool evaluate_tracking,
+    const bool evaluate_settle, const bool stopping
 ) {
     roll_restraint_.apply(
         plant_.data(), runner_.snapshot().roll,
         runner_.snapshot().roll_rate);
     const ImuMotionState velocity_truth =
         sampler_.read_imu_motion(plant_.data());
-    step_runner(command);
+    step_runner(command, gimbal_feedback);
     const SimulationSample sample = sampler_.read(
         plant_.data(), runner_.snapshot());
     if (sample_index_ % trace_stride_ == 0U) {
-        write_trace(spec, phase, command, sample, velocity_truth);
+        write_trace(
+            spec, phase, command, gimbal,
+            sample, velocity_truth);
     }
     ++sample_index_;
 
     if (result == nullptr) return true;
     return collect(
-        *result, phase, sample, evaluate_tracking, evaluate_settle);
+        *result, phase, sample,
+        evaluate_tracking, evaluate_settle, stopping);
 }
 
 void PerformanceBenchmark::step_runner(
-    const bc_operator_command_t &command
+    const bc_operator_command_t &command,
+    const bc_gimbal_feedback_t &gimbal_feedback
 ) {
     if (forward_velocity_.observation() ==
         ForwardVelocityObservation::wheel_odometry) {
-        runner_.step(command);
+        runner_.step(command, gimbal_feedback);
         return;
     }
 
     bc_sensor_feedback_t feedback{};
     adapter_.read(plant_.data(), feedback);
+    feedback.gimbal = gimbal_feedback;
     forward_velocity_.apply(
         plant_.data(), sampler_,
         runner_.snapshot().state.value[BC_STATE_DS], feedback);
@@ -256,7 +275,8 @@ void PerformanceBenchmark::step_runner(
 bool PerformanceBenchmark::collect(
     PerformanceResult &result, const char *phase,
     const SimulationSample &sample,
-    const bool evaluate_tracking, const bool evaluate_settle
+    const bool evaluate_tracking, const bool evaluate_settle,
+    const bool stopping
 ) const {
     const bc_controller_snapshot_t &snapshot = sample.controller;
     result.common.observe(sample);
@@ -269,6 +289,16 @@ bool PerformanceBenchmark::collect(
     result.maximum_roll_restraint_torque = std::max(
         result.maximum_roll_restraint_torque,
         std::abs(roll_restraint_.torque()));
+    result.maximum_heading_error = std::max(
+        result.maximum_heading_error,
+        std::abs(static_cast<double>(snapshot.heading_error)));
+    result.heading_error.add(snapshot.heading_error);
+    if (stopping) {
+        result.stop_peak_yaw_rate = std::max(
+            result.stop_peak_yaw_rate,
+            std::abs(static_cast<double>(
+                snapshot.state.value[BC_STATE_DPSI])));
+    }
 
     if (!result.initial_position_error_captured) {
         result.initial_position_error =
@@ -344,6 +374,7 @@ void PerformanceBenchmark::finish_result(
 void PerformanceBenchmark::write_trace(
     const PerformanceCaseSpec &spec, const char *phase,
     const bc_operator_command_t &command,
+    const sim::VirtualGimbalState &gimbal,
     const SimulationSample &sample,
     const ImuMotionState &velocity_truth
 ) {
@@ -387,11 +418,18 @@ void PerformanceBenchmark::write_trace(
         .value(static_cast<int>(velocity.wheel_velocity_reliable))
         .value(snapshot.forward_velocity.wheel_odometry)
         .value(snapshot.forward_velocity.estimated_axle)
+        .value(gimbal.world_yaw)
+        .value(gimbal.world_yaw_rate)
+        .value(snapshot.gimbal.relative_yaw)
+        .value(snapshot.gimbal.relative_yaw_rate)
+        .value(bc_chassis_alignment_name(
+            snapshot.state_machine.alignment))
         .value(command.forward_velocity)
-        .value(command.yaw_rate)
+        .value(snapshot.mapped_forward_velocity)
+        .value(snapshot.heading_error)
         .value(snapshot.state_machine.system)
         .value(snapshot.state_machine.motion)
-        .value(bc_drive_state_name(snapshot.state_machine.drive));
+        .value(bc_forward_state_name(snapshot.state_machine.forward));
     for (const float value : snapshot.state.value) trace_.value(value);
     for (const float value : snapshot.state_reference.value) {
         trace_.value(value);

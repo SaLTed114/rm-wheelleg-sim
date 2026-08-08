@@ -26,6 +26,9 @@ void bc_controller_reset(bc_controller_t *controller) {
         &controller->operator_command, 0,
         sizeof(controller->operator_command));
     memset(
+        &controller->gimbal_feedback, 0,
+        sizeof(controller->gimbal_feedback));
+    memset(
         &controller->last_actuation, 0,
         sizeof(controller->last_actuation));
     bc_condition_hold_reset(&controller->velocity_estimator_hold);
@@ -38,6 +41,7 @@ void bc_controller_update(
     const float timestep_seconds
 ) {
     controller->timestep_seconds = timestep_seconds;
+    controller->gimbal_feedback = feedback->gimbal;
     const uint8_t balance_motion =
         controller->system.motion.state == BC_MOTION_BALANCE_ENGAGING ||
         controller->system.motion.state == BC_MOTION_ACTIVE;
@@ -64,6 +68,7 @@ void bc_controller_calculate(bc_controller_t *controller) {
 
     const bc_state_machine_input_t input = {
         .operator_command = &controller->operator_command,
+        .gimbal_feedback = &controller->gimbal_feedback,
         .state = &controller->control_core.observer.state,
         .leg = controller->control_core.observer.leg,
         .timestep_seconds = controller->timestep_seconds,

@@ -67,10 +67,29 @@ int main() {
         return 1;
     }
 
+    const PerformanceCaseSpec heading_spec{
+        "heading", PerformanceAxis::heading, BC_PI, 10.0,
+        0.2, 0.3, 0.4};
+    PerformanceScenario heading(heading_spec);
+    snapshot = {};
+    heading.update(snapshot, 2.0);
+    snapshot.state_machine.motion = BC_MOTION_ACTIVE;
+    heading.update(snapshot, 2.01);
+    heading.update(snapshot, 2.41);
+    heading.update(snapshot, 2.42);
+    if (heading.phase() != PerformancePhase::target_ramp ||
+        heading.gimbal_feedback().relative_yaw <= 0.0F ||
+        heading.gimbal_feedback().relative_yaw_rate <= 0.0F ||
+        heading.gimbal().world_yaw_rate <= 0.0F) {
+        std::cerr << "heading scenario did not drive virtual gimbal\n";
+        return 1;
+    }
+
     bool invalid_rejected = false;
     try {
         const PerformanceCaseSpec invalid{
-            "invalid", PerformanceAxis::yaw, 1.0, 1.0, -1.0, 1.0, 1.0};
+            "invalid", PerformanceAxis::heading,
+            2.0 * BC_PI, 1.0, 1.0, 1.0, 1.0};
         PerformanceScenario ignored(invalid);
     } catch (const std::invalid_argument &) {
         invalid_rejected = true;

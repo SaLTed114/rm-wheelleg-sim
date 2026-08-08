@@ -24,7 +24,6 @@ using balance::benchmark::PerformanceAxis;
 enum class Suite {
     baseline,
     forward_acceleration,
-    yaw_acceleration,
 };
 
 void print_result(const PerformanceResult &result) {
@@ -52,6 +51,10 @@ void print_result(const PerformanceResult &result) {
               << result.tracking_error.mean()
               << " rmse=" << std::setw(10)
               << result.tracking_error.rms()
+              << " heading=" << std::setw(10)
+              << result.heading_error.rms()
+              << " stop_yaw_peak=" << std::setw(10)
+              << result.stop_peak_yaw_rate
               << " pitch=" << std::setw(8)
               << result.maximum_pitch * 180.0 / BC_PI
               << " roll=" << std::setw(8)
@@ -89,9 +92,6 @@ int main(int argc, char **argv) {
         if (option == "--suite" && suite == Suite::baseline &&
             value == "forward-acceleration") {
             suite = Suite::forward_acceleration;
-        } else if (option == "--suite" && suite == Suite::baseline &&
-                   value == "yaw-acceleration") {
-            suite = Suite::yaw_acceleration;
         } else if (option == "--leg-length" && !leg_length) {
             std::size_t consumed = 0U;
             try {
@@ -118,8 +118,8 @@ int main(int argc, char **argv) {
         } else if (option == "--axis" && !custom_axis) {
             if (value == "forward") {
                 custom_axis = PerformanceAxis::forward;
-            } else if (value == "yaw") {
-                custom_axis = PerformanceAxis::yaw;
+            } else if (value == "heading") {
+                custom_axis = PerformanceAxis::heading;
             } else {
                 arguments_valid = false;
             }
@@ -201,9 +201,9 @@ int main(int argc, char **argv) {
     if (!arguments_valid) {
         std::cerr
             << "usage: rm_balance_performance <model.xml> <output-directory> "
-               "[--suite forward-acceleration|yaw-acceleration] "
+               "[--suite forward-acceleration] "
                "[--case <case-name>] "
-               "[--name <case-name> --axis forward|yaw "
+               "[--name <case-name> --axis forward|heading "
                "--target <value> --command-rate <value> "
                "--standing-seconds <seconds> "
                "--target-hold-seconds <seconds> "
@@ -242,11 +242,6 @@ int main(int argc, char **argv) {
         } else if (suite == Suite::forward_acceleration) {
             const auto &acceleration_cases =
                 balance::benchmark::forward_acceleration_cases();
-            cases.assign(
-                acceleration_cases.begin(), acceleration_cases.end());
-        } else if (suite == Suite::yaw_acceleration) {
-            const auto &acceleration_cases =
-                balance::benchmark::yaw_acceleration_cases();
             cases.assign(
                 acceleration_cases.begin(), acceleration_cases.end());
         } else {

@@ -87,7 +87,7 @@ static void bc_motion_transition(
                 motion->config.engage_duration,
                 input->timestep_seconds)) {
             motion->state = BC_MOTION_ACTIVE;
-            bc_drive_start(&motion->drive);
+            bc_forward_mode_start(&motion->forward);
             bc_forward_reference_start(
                 &motion->forward_reference,
                 input->state->value[BC_STATE_S],
@@ -95,6 +95,7 @@ static void bc_motion_transition(
             bc_yaw_reference_start(
                 &motion->yaw_reference,
                 input->state->value[BC_STATE_PSI],
+                input->state->value[BC_STATE_DPSI],
                 &motion->state_reference);
         }
         break;
@@ -104,32 +105,61 @@ static void bc_motion_transition(
     }
 }
 
-static void bc_motion_update_drive(
+static void bc_motion_map_normal_command(
+    bc_motion_t *motion,
+    const bc_state_machine_input_t *input
+) {
+    const float front_error = bc_wrap_anglef(
+        input->gimbal_feedback->relative_yaw);
+    const float rear_error = bc_wrap_anglef(
+        front_error + BC_PI_F);
+
+    if (motion->alignment == BC_CHASSIS_FRONT) {
+        if (fabsf(rear_error) + motion->config.alignment_hysteresis <
+            fabsf(front_error)) {
+            motion->alignment = BC_CHASSIS_REAR;
+        }
+    } else if (
+        fabsf(front_error) + motion->config.alignment_hysteresis <
+        fabsf(rear_error)
+    ) {
+        motion->alignment = BC_CHASSIS_FRONT;
+    }
+
+    const uint8_t rear = motion->alignment == BC_CHASSIS_REAR;
+    motion->mapped_forward_velocity = rear ?
+        -input->operator_command->forward_velocity :
+        input->operator_command->forward_velocity;
+    motion->heading_error = rear ? rear_error : front_error;
+}
+
+static void bc_motion_update_forward(
     bc_motion_t *motion,
     const bc_state_machine_input_t *input,
+    const float forward_velocity,
     bc_control_command_t *output
 ) {
-    const bc_drive_state_t previous_state = motion->drive.state;
-    bc_drive_update(
-        &motion->drive,
+    const bc_forward_state_t previous_state = motion->forward.state;
+    bc_forward_mode_update(
+        &motion->forward,
         bc_forward_reference_requested(
             &motion->forward_reference,
-            input->operator_command->forward_velocity),
+            forward_velocity),
         motion->forward_reference.velocity_ramp.value,
         input->state->value[BC_STATE_DS],
         input->timestep_seconds,
         output);
 
-    if (motion->drive.state == BC_DRIVE_HOLD &&
-        previous_state != BC_DRIVE_HOLD) {
+    if (motion->forward.state == BC_FORWARD_HOLD &&
+        previous_state != BC_FORWARD_HOLD) {
         bc_forward_reference_start(
             &motion->forward_reference,
             input->state->value[BC_STATE_S],
             &motion->state_reference);
-    } else if (motion->drive.state == BC_DRIVE_DRIVING) {
+    } else if (motion->forward.state == BC_FORWARD_VELOCITY) {
         bc_forward_reference_update(
             &motion->forward_reference,
-            input->operator_command->forward_velocity,
+            forward_velocity,
             input->timestep_seconds,
             &motion->state_reference);
     }
@@ -162,11 +192,14 @@ static void bc_motion_action(
 
     case BC_MOTION_ACTIVE:
         bc_motion_set_balance_control(motion, output);
-        bc_motion_update_drive(motion, input, output);
+        bc_motion_map_normal_command(motion, input);
+        bc_motion_update_forward(
+            motion, input, motion->mapped_forward_velocity, output);
         bc_yaw_reference_update(
             &motion->yaw_reference,
-            input->operator_command->yaw_rate,
-            input->timestep_seconds,
+            input->state,
+            motion->heading_error,
+            input->gimbal_feedback->relative_yaw_rate,
             &motion->state_reference);
         output->state_reference = motion->state_reference;
         break;
@@ -174,10 +207,10 @@ static void bc_motion_action(
 }
 
 void bc_motion_default_config(bc_motion_config_t *config) {
-    bc_drive_config_t drive;
+    bc_forward_mode_config_t forward;
     bc_forward_reference_config_t forward_reference;
     bc_yaw_reference_config_t yaw_reference;
-    bc_drive_default_config(&drive);
+    bc_forward_mode_default_config(&forward);
     bc_forward_reference_default_config(&forward_reference);
     bc_yaw_reference_default_config(&yaw_reference);
     *config = (bc_motion_config_t){
@@ -189,7 +222,8 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .angular_velocity_tolerance = 0.15F,
         .stable_duration            = 0.25F,
         .engage_duration            = 0.1F,
-        .drive                      = drive,
+        .alignment_hysteresis       = 5.0F * BC_PI_F / 180.0F,
+        .forward                    = forward,
         .forward_reference          = forward_reference,
         .yaw_reference              = yaw_reference,
     };
@@ -200,7 +234,7 @@ void bc_motion_init(
     const bc_motion_config_t *config
 ) {
     motion->config = *config;
-    bc_drive_init(&motion->drive, &config->drive);
+    bc_forward_mode_init(&motion->forward, &config->forward);
     bc_forward_reference_init(
         &motion->forward_reference,
         &config->forward_reference);
@@ -214,7 +248,10 @@ void bc_motion_reset(bc_motion_t *motion) {
     memset(
         &motion->state_reference, 0,
         sizeof(motion->state_reference));
-    bc_drive_reset(&motion->drive);
+    motion->alignment = BC_CHASSIS_FRONT;
+    motion->mapped_forward_velocity = 0.0F;
+    motion->heading_error = 0.0F;
+    bc_forward_mode_reset(&motion->forward);
     bc_forward_reference_reset(&motion->forward_reference);
     bc_yaw_reference_reset(&motion->yaw_reference);
     bc_condition_hold_reset(&motion->leg_stable_hold);
@@ -248,6 +285,18 @@ const char *bc_motion_state_name(const bc_motion_state_t state) {
         return "engaging balance";
     case BC_MOTION_ACTIVE:
         return "active";
+    }
+    return "unknown";
+}
+
+const char *bc_chassis_alignment_name(
+    const bc_chassis_alignment_t alignment
+) {
+    switch (alignment) {
+    case BC_CHASSIS_FRONT:
+        return "front";
+    case BC_CHASSIS_REAR:
+        return "rear";
     }
     return "unknown";
 }

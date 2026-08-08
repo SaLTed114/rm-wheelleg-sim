@@ -1,5 +1,6 @@
 #include "mujoco_viewer.hpp"
 
+#include <cmath>
 #include <stdexcept>
 
 #include <GLFW/glfw3.h>
@@ -28,10 +29,10 @@ MujocoViewer::MujocoViewer(const mjModel &model)
     glfwSetScrollCallback(window_, scroll_callback);
 
     mjv_defaultFreeCamera(&model_, &camera_);
-    const int tracked_body = mj_name2id(&model_, mjOBJ_BODY, "base_link");
-    if (tracked_body >= 0) {
+    base_body_id_ = mj_name2id(&model_, mjOBJ_BODY, "base_link");
+    if (base_body_id_ >= 0) {
         camera_.type = mjCAMERA_TRACKING;
-        camera_.trackbodyid = tracked_body;
+        camera_.trackbodyid = base_body_id_;
         camera_.distance = 3.0;
         camera_.azimuth = 135.0;
         camera_.elevation = -20.0;
@@ -92,12 +93,43 @@ void MujocoViewer::set_title(const std::string &title) {
     glfwSetWindowTitle(window_, title.c_str());
 }
 
+void MujocoViewer::set_virtual_gimbal_heading(
+    const float world_yaw, const bool visible
+) noexcept {
+    virtual_gimbal_yaw_ = world_yaw;
+    virtual_gimbal_visible_ = visible;
+}
+
 void MujocoViewer::render(mjData &data) {
     mjrRect viewport{};
     glfwGetFramebufferSize(window_, &viewport.width, &viewport.height);
     mjv_updateScene(
         &model_, &data, &option_, nullptr,
         &camera_, mjCAT_ALL, &scene_);
+    if (virtual_gimbal_visible_ && base_body_id_ >= 0 &&
+        scene_.ngeom < scene_.maxgeom) {
+        constexpr mjtNum kMarkerHeight = 0.45;
+        constexpr mjtNum kMarkerLength = 0.50;
+        constexpr mjtNum kMarkerWidth = 0.018;
+        const mjtNum *base_position =
+            data.xpos + 3 * base_body_id_;
+        const mjtNum from[3] = {
+            base_position[0],
+            base_position[1],
+            base_position[2] + kMarkerHeight,
+        };
+        const mjtNum to[3] = {
+            from[0] + kMarkerLength * std::cos(virtual_gimbal_yaw_),
+            from[1] + kMarkerLength * std::sin(virtual_gimbal_yaw_),
+            from[2],
+        };
+        const float color[4] = {0.1F, 0.9F, 1.0F, 1.0F};
+        mjvGeom &marker = scene_.geoms[scene_.ngeom++];
+        mjv_initGeom(
+            &marker, mjGEOM_ARROW, nullptr, nullptr, nullptr, color);
+        mjv_connector(
+            &marker, mjGEOM_ARROW, kMarkerWidth, from, to);
+    }
     mjr_render(viewport, &scene_, &context_);
     glfwSwapBuffers(window_);
 }

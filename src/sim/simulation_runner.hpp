@@ -26,6 +26,9 @@ public:
 
     void reset();
     void step(const bc_operator_command_t &command);
+    void step(
+        const bc_operator_command_t &command,
+        const bc_gimbal_feedback_t &gimbal_feedback);
     void step_with_feedback(
         const bc_operator_command_t &command,
         const bc_sensor_feedback_t &feedback);

@@ -15,13 +15,14 @@
 #include "mujoco_viewer.hpp"
 #include "performance/performance_scenario.hpp"
 #include "common/simulation_sample.hpp"
+#include "input/virtual_gimbal.hpp"
 #include "simulation_runner.hpp"
 
 namespace {
 
 struct MotionTarget {
     float forward_velocity;
-    float yaw_rate;
+    float gimbal_yaw_rate;
     const char *phase;
 };
 
@@ -83,7 +84,7 @@ MotionTarget make_keyboard_motion_target(
             kKeyboardBoostForwardVelocity :
             kKeyboardForwardVelocity),
         input.yaw_axis * kKeyboardYawRate,
-        bc_drive_state_name(snapshot.state_machine.drive),
+        bc_forward_state_name(snapshot.state_machine.forward),
     };
 }
 
@@ -179,6 +180,7 @@ int main(int argc, char **argv) {
         }
         balance::sim::SimulationRunner runner(
             plant, adapter, controller_config);
+        balance::sim::VirtualGimbal virtual_gimbal;
         balance::sim::MujocoViewer viewer(plant.model());
         balance::benchmark::SimulationSampler sampler(plant.model());
         std::optional<balance::benchmark::PerformanceScenario>
@@ -200,6 +202,8 @@ int main(int argc, char **argv) {
         bool case_balance_engaged = false;
         std::string case_issue{"none"};
         bc_motion_state_t previous_motion = BC_MOTION_IDLE;
+        bool virtual_gimbal_initialized = false;
+        balance::sim::VirtualGimbalState displayed_gimbal{};
         MotionTarget motion{
             0.0F, 0.0F,
             bc_system_state_name(runner.snapshot().state_machine.system),
@@ -228,6 +232,9 @@ int main(int argc, char **argv) {
                 case_balance_engaged = false;
                 case_issue = "none";
                 previous_motion = BC_MOTION_IDLE;
+                virtual_gimbal.reset();
+                virtual_gimbal_initialized = false;
+                displayed_gimbal = {};
             }
 
             if (viewer.paused() || case_finished) {
@@ -248,9 +255,11 @@ int main(int argc, char **argv) {
                         motion = {
                             performance_scenario->command()
                                 .forward_velocity,
-                            performance_scenario->command().yaw_rate,
+                            performance_scenario->gimbal()
+                                .world_yaw_rate,
                             performance_scenario->phase_name(),
                         };
+                        displayed_gimbal = performance_scenario->gimbal();
                         if (performance_scenario->finished()) {
                             case_finished = true;
                             if (!case_balance_engaged) {
@@ -269,7 +278,9 @@ int main(int argc, char **argv) {
                         command = performance_scenario->command();
                         const bool monitored =
                             performance_scenario->monitored();
-                        runner.step(command);
+                        runner.step(
+                            command,
+                            performance_scenario->gimbal_feedback());
                         accumulated_time -= plant.timestep();
 
                         if (monitored) {
@@ -312,9 +323,29 @@ int main(int argc, char **argv) {
                     command.balance_restart =
                         command.system_enabled &&
                         snapshot.state_machine.system == BC_SYSTEM_OFF;
-                    command.forward_velocity = motion.forward_velocity;
-                    command.yaw_rate = motion.yaw_rate;
-                    runner.step(command);
+                    if (snapshot.state_machine.motion == BC_MOTION_ACTIVE) {
+                        if (!virtual_gimbal_initialized) {
+                            virtual_gimbal.reset(
+                                snapshot.state.value[BC_STATE_PSI]);
+                            virtual_gimbal_initialized = true;
+                        }
+                        virtual_gimbal.update(
+                            motion.gimbal_yaw_rate,
+                            static_cast<float>(plant.timestep()));
+                        command.forward_velocity = motion.forward_velocity;
+                    } else {
+                        virtual_gimbal.reset(
+                            snapshot.state.value[BC_STATE_PSI]);
+                        virtual_gimbal_initialized = false;
+                    }
+                    displayed_gimbal = virtual_gimbal.state();
+                    const bc_gimbal_feedback_t gimbal_feedback =
+                        virtual_gimbal_initialized ?
+                            virtual_gimbal.feedback(
+                                snapshot.state.value[BC_STATE_PSI],
+                                snapshot.state.value[BC_STATE_DPSI]) :
+                            bc_gimbal_feedback_t{};
+                    runner.step(command, gimbal_feedback);
                     accumulated_time -= plant.timestep();
                 }
             }
@@ -339,18 +370,35 @@ int main(int argc, char **argv) {
                     title += case_issue;
                 }
                 if (case_finished) title += " | complete - R to replay";
+                title += " | ";
+                title += bc_chassis_alignment_name(
+                    runner.snapshot().state_machine.alignment);
+                title += " | error=";
+                title += std::to_string(runner.snapshot().heading_error);
+                title += " rad | gimbal=";
+                title += std::to_string(displayed_gimbal.world_yaw_rate);
+                title += " rad/s";
                 viewer.set_title(title);
             } else if (keyboard_drive) {
                 std::string title = "rm-balance-sim | keyboard | ";
                 title += motion.phase;
                 title += " | v=";
-                title += std::to_string(motion.forward_velocity);
-                title += " m/s | yaw=";
-                title += std::to_string(motion.yaw_rate);
-                title += " rad/s | WASD/arrows, Shift boost, Space, R, Esc";
+                title += std::to_string(
+                    runner.snapshot().mapped_forward_velocity);
+                title += " m/s | gimbal=";
+                title += std::to_string(displayed_gimbal.world_yaw_rate);
+                title += " rad/s | ";
+                title += bc_chassis_alignment_name(
+                    runner.snapshot().state_machine.alignment);
+                title += " | error=";
+                title += std::to_string(runner.snapshot().heading_error);
+                title += " rad | WASD/arrows, Shift boost, Space, R, Esc";
                 viewer.set_title(title);
             }
 
+            viewer.set_virtual_gimbal_heading(
+                displayed_gimbal.world_yaw,
+                runner.snapshot().state_machine.motion == BC_MOTION_ACTIVE);
             viewer.render(plant.data());
             viewer.poll_events();
         }

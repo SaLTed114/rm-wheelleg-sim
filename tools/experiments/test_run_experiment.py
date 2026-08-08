@@ -81,8 +81,14 @@ class ExperimentConfigTest(unittest.TestCase):
         contents = self.existing_config().replace(
             "[[case]]",
             "[analysis]\nforward_linear = true\n\n[[case]]").replace(
-                'axis = "forward"', 'axis = "yaw"')
+                'axis = "forward"', 'axis = "heading"')
         with self.assertRaisesRegex(ExperimentError, "forward case"):
+            load_config(self.write_config(contents))
+
+    def test_legacy_yaw_axis_is_rejected(self) -> None:
+        contents = self.existing_config().replace(
+            'axis = "forward"', 'axis = "yaw"')
+        with self.assertRaisesRegex(ExperimentError, "forward or heading"):
             load_config(self.write_config(contents))
 
     def test_generate_config_reads_full_lqr_candidate(self) -> None:
@@ -112,8 +118,8 @@ class ExperimentConfigTest(unittest.TestCase):
             yaw_inertia_source = "assembly"
 
             [[case]]
-            name = "yaw-test"
-            axis = "yaw"
+            name = "heading-test"
+            axis = "heading"
             target = -3.0
             command_rate = 2.0
         """))

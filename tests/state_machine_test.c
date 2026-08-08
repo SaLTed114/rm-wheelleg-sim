@@ -1,7 +1,9 @@
 #include "balance/state_machine/system.h"
+#include "balance/math_utils.h"
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 static int control_uses_strategies(
     const bc_control_command_t *command,
@@ -22,11 +24,13 @@ int main() {
     bc_motion_config_t config;
     bc_system_t system;
     bc_operator_command_t operator_command = {0};
+    bc_gimbal_feedback_t gimbal_feedback = {0};
     bc_state_vector_t state = {0};
     bc_leg_kinematics_t leg[BC_SIDE_NUM] = {0};
     bc_control_command_t command;
     const bc_state_machine_input_t input = {
         .operator_command = &operator_command,
+        .gimbal_feedback = &gimbal_feedback,
         .state = &state,
         .leg = leg,
         .timestep_seconds = 0.1F,
@@ -36,7 +40,8 @@ int main() {
     if (config.leg_length != 0.18F ||
         config.engage_duration != 0.1F ||
         config.forward_reference.velocity_ramp.rate_limit != 5.0F ||
-        config.yaw_reference.rate_ramp.rate_limit != 10.0F) {
+        fabsf(config.yaw_reference.rate_limit - 1.5F * BC_PI_F) >
+            1.0e-6F) {
         fputs("default motion config is incorrect\n", stderr);
         return 1;
     }
@@ -95,13 +100,14 @@ int main() {
         state.value[index] = 0.1F * (float)index;
     }
     operator_command.forward_velocity = 0.2F;
-    operator_command.yaw_rate = -0.3F;
+    gimbal_feedback.relative_yaw = -0.3F;
+    gimbal_feedback.relative_yaw_rate = -0.2F;
     for (int step = 0; step < 3; ++step) {
         bc_system_update(&system, &input, &command);
     }
 
     if (system.motion.state != BC_MOTION_BALANCE_ENGAGING ||
-        system.motion.drive.state != BC_DRIVE_IDLE ||
+        system.motion.forward.state != BC_FORWARD_IDLE ||
         !control_uses_strategies(
             &command,
             BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_LQR,
@@ -128,14 +134,15 @@ int main() {
     }
 
     operator_command.forward_velocity = 10.0F;
-    operator_command.yaw_rate = 20.0F;
+    gimbal_feedback.relative_yaw = 0.2F;
+    gimbal_feedback.relative_yaw_rate = 0.4F;
     bc_system_update(&system, &input, &command);
     if (system.motion.state != BC_MOTION_ACTIVE ||
-        system.motion.drive.state != BC_DRIVE_DRIVING ||
+        system.motion.forward.state != BC_FORWARD_VELOCITY ||
         fabsf(command.state_reference.value[BC_STATE_S] - 1.05F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.5F) > 1.0e-6F ||
-        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.40F) > 1.0e-6F ||
-        fabsf(command.state_reference.value[BC_STATE_DPSI] - 1.0F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.30F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_DPSI] - 0.4F) > 1.0e-6F ||
         command.disabled_state_feedback !=
             BC_STATE_FEEDBACK_MASK(BC_STATE_S)) {
         fputs("active balance did not use rate-limited targets\n", stderr);
@@ -145,12 +152,14 @@ int main() {
     state.value[BC_STATE_S] = 2.0F;
     state.value[BC_STATE_DS] = -0.4F;
     state.value[BC_STATE_PSI] = 0.75F;
+    state.value[BC_STATE_DPSI] = 0.6F;
     operator_command.forward_velocity = 0.2F;
-    operator_command.yaw_rate = 0.0F;
+    gimbal_feedback.relative_yaw = -1.05F;
+    gimbal_feedback.relative_yaw_rate = -0.6F;
     bc_system_update(&system, &input, &command);
     if (fabsf(command.state_reference.value[BC_STATE_S] - 1.07F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.2F) > 1.0e-6F ||
-        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.40F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.30F) > 1.0e-6F ||
         command.state_reference.value[BC_STATE_DPSI] != 0.0F ||
         command.disabled_state_feedback !=
             BC_STATE_FEEDBACK_MASK(BC_STATE_S) ||
@@ -166,14 +175,16 @@ int main() {
 
     state.value[BC_STATE_DS] = 0.0F;
     state.value[BC_STATE_S] = 2.0F;
+    state.value[BC_STATE_DPSI] = 0.0F;
     operator_command.forward_velocity = 0.0F;
-    operator_command.yaw_rate = 2.0F;
+    gimbal_feedback.relative_yaw = 0.4F;
+    gimbal_feedback.relative_yaw_rate = 2.0F;
     for (int step = 0; step < 4; ++step) {
         bc_system_update(&system, &input, &command);
     }
-    if (system.motion.drive.state != BC_DRIVE_HOLD ||
+    if (system.motion.forward.state != BC_FORWARD_HOLD ||
         command.state_reference.value[BC_STATE_S] != 2.0F ||
-        fabsf(command.state_reference.value[BC_STATE_PSI] - 0.30F) >
+        fabsf(command.state_reference.value[BC_STATE_PSI] - 1.15F) >
             1.0e-6F ||
         command.state_reference.value[BC_STATE_DPSI] != 2.0F ||
         command.disabled_state_feedback != 0U) {
@@ -181,13 +192,45 @@ int main() {
         return 1;
     }
 
+    gimbal_feedback.relative_yaw = 0.5F;
+    gimbal_feedback.relative_yaw_rate = 0.0F;
     bc_system_update(&system, &input, &command);
-    if (system.motion.drive.state != BC_DRIVE_HOLD ||
-        fabsf(command.state_reference.value[BC_STATE_PSI] - 0.50F) >
+    if (system.motion.forward.state != BC_FORWARD_HOLD ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] - 1.25F) >
             1.0e-6F ||
-        command.state_reference.value[BC_STATE_DPSI] != 2.0F ||
+        command.state_reference.value[BC_STATE_DPSI] != 0.0F ||
         command.disabled_state_feedback != 0U) {
         fputs("pure yaw did not remain in forward hold\n", stderr);
+        return 1;
+    }
+
+    state.value[BC_STATE_PSI] = 0.0F;
+    operator_command.forward_velocity = 0.2F;
+    gimbal_feedback.relative_yaw = 96.0F * BC_PI_F / 180.0F;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.alignment != BC_CHASSIS_REAR ||
+        fabsf(system.motion.mapped_forward_velocity + 0.2F) > 1.0e-6F ||
+        fabsf(
+            system.motion.heading_error + 84.0F * BC_PI_F / 180.0F) >
+            1.0e-6F ||
+        system.motion.forward.state != BC_FORWARD_VELOCITY) {
+        fputs("normal mapping did not select the rear direction\n", stderr);
+        return 1;
+    }
+
+    gimbal_feedback.relative_yaw = 88.0F * BC_PI_F / 180.0F;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.alignment != BC_CHASSIS_REAR) {
+        fputs("rear alignment ignored hysteresis\n", stderr);
+        return 1;
+    }
+
+    gimbal_feedback.relative_yaw = 84.0F * BC_PI_F / 180.0F;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.alignment != BC_CHASSIS_FRONT ||
+        strcmp(bc_chassis_alignment_name(BC_CHASSIS_FRONT), "front") != 0 ||
+        strcmp(bc_chassis_alignment_name(BC_CHASSIS_REAR), "rear") != 0) {
+        fputs("normal mapping did not return to the front direction\n", stderr);
         return 1;
     }
 
@@ -196,9 +239,8 @@ int main() {
     if (system.motion.state != BC_MOTION_LEG_POSITIONING ||
         system.motion.state_reference.value[BC_STATE_S] != 0.0F ||
         system.motion.state_reference.value[BC_STATE_PSI] != 0.0F ||
-        system.motion.drive.state != BC_DRIVE_IDLE ||
+        system.motion.forward.state != BC_FORWARD_IDLE ||
         system.motion.forward_reference.velocity_ramp.value != 0.0F ||
-        system.motion.yaw_reference.rate_ramp.value != 0.0F ||
         system.motion.engage_hold.elapsed_seconds != 0.0F ||
         !control_uses_strategies(
             &command,

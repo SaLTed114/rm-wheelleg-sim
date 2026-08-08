@@ -10,7 +10,8 @@ extern "C" {
 typedef struct {
     bc_system_state_t system;
     bc_motion_state_t motion;
-    bc_drive_state_t drive;
+    bc_forward_state_t forward;
+    bc_chassis_alignment_t alignment;
 } bc_state_machine_snapshot_t;
 
 typedef struct {
@@ -19,6 +20,9 @@ typedef struct {
     bc_state_vector_t state_reference;
     float roll;
     float roll_rate;
+    bc_gimbal_feedback_t gimbal;
+    float mapped_forward_velocity;
+    float heading_error;
     bc_forward_velocity_output_t forward_velocity;
     bc_velocity_estimator_output_t velocity_estimator;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];

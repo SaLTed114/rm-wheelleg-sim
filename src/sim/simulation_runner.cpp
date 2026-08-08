@@ -38,8 +38,16 @@ void SimulationRunner::reset() {
 }
 
 void SimulationRunner::step(const bc_operator_command_t &command) {
+    step(command, bc_gimbal_feedback_t{});
+}
+
+void SimulationRunner::step(
+    const bc_operator_command_t &command,
+    const bc_gimbal_feedback_t &gimbal_feedback
+) {
     bc_sensor_feedback_t feedback{};
     adapter_.read(plant_.data(), feedback);
+    feedback.gimbal = gimbal_feedback;
     step_with_feedback(command, feedback);
 }
 

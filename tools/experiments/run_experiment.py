@@ -325,8 +325,9 @@ def load_config(path: Path) -> ExperimentConfig:
             raise ExperimentError(f"duplicate case name: {case_name}")
         names.add(case_name)
         axis = case_table.get("axis")
-        if axis not in ("forward", "yaw"):
-            raise ExperimentError(f"case[{index}].axis must be forward or yaw")
+        if axis not in ("forward", "heading"):
+            raise ExperimentError(
+                f"case[{index}].axis must be forward or heading")
         target = finite_float(case_table.get("target"), f"case[{index}].target")
         if target == 0.0:
             raise ExperimentError(f"case[{index}].target must be non-zero")

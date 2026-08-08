@@ -9,11 +9,18 @@ void bc_controller_capture_snapshot(
     memset(snapshot, 0, sizeof(*snapshot));
     snapshot->state_machine.system = controller->system.state;
     snapshot->state_machine.motion = controller->system.motion.state;
-    snapshot->state_machine.drive = controller->system.motion.drive.state;
+    snapshot->state_machine.forward =
+        controller->system.motion.forward.state;
+    snapshot->state_machine.alignment =
+        controller->system.motion.alignment;
     snapshot->state = controller->control_core.observer.state;
     snapshot->state_reference = controller->system.motion.state_reference;
     snapshot->roll = controller->control_core.observer.roll;
     snapshot->roll_rate = controller->control_core.observer.roll_rate;
+    snapshot->gimbal = controller->gimbal_feedback;
+    snapshot->mapped_forward_velocity =
+        controller->system.motion.mapped_forward_velocity;
+    snapshot->heading_error = controller->system.motion.heading_error;
     snapshot->forward_velocity =
         controller->control_core.observer.forward_velocity;
     snapshot->velocity_estimator =

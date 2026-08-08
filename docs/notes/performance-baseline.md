@@ -511,3 +511,30 @@ RMSE 约为 `0.167/0.158 m/s`，最大 pitch 约为 `5.38/5.32 deg`，与旧
 判据；关闭 `S`、保留 `DS` 后最大 pitch 降到 `3.75 deg`，跟踪 RMSE 降到
 `0.061 m/s` 且满足刹停。关闭 `S` 没有改善 `2*pi、15 rad/s^2` 偏航边界，
 说明剩余直线慢恢复主要来自位置误差持续拉车，可在后续作为独立问题处理。
+
+## NORMAL 云台跟随首轮基线（2026-08-08）
+
+旧的 raw yaw-rate 档位和 `yaw-acceleration` suite 已从当前 benchmark CLI
+移除。新的 heading 案例与 GUI 共用 `VirtualGimbal`：虚拟云台以
+`10 rad/s^2` 加减速，并生成与真实 CAN YAW 电机等价的相对角/相对转速反馈；
+front/rear 选择、纵向反号和 NORMAL heading reference 均在 C control core
+中完成。最新输出位于本地 `build/performance/normal-follow-can/`，未纳入 Git。
+
+| 案例 | 跟踪 RMSE | heading-error RMS | 最大 heading error | 最大 pitch / roll | 停止末秒 yaw RMS | 结论 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `heading_pos_1pi` | `0.176 rad/s` | `0.494 rad` | `0.789 rad` | `0.91 / 1.58 deg` | `0.411 rad/s` | tracked，未 settled |
+| `heading_neg_1pi` | `0.163 rad/s` | `0.497 rad` | `0.852 rad` | `1.72 / 1.91 deg` | `0.416 rad/s` | tracked，未 settled |
+| `heading_pos_1p5pi` | `0.242 rad/s` | `0.717 rad` | `1.191 rad` | `1.68 / 1.95 deg` | `0.589 rad/s` | tracked，未 settled |
+| `heading_neg_1p5pi` | `0.234 rad/s` | `0.718 rad` | `1.246 rad` | `2.76 / 2.37 deg` | `0.597 rad/s` | tracked，未 settled |
+
+四档都完整运行、数据有限、腿长有效且无执行器饱和；正向
+`1.5*pi rad/s` 有约 `0.034%` 的双轮接触缺口，但未记录非轮触地。当前结果
+说明直接 heading 跟随足以建立 NORMAL 基线，却还没有解决松开转向后的残振和
+收敛时间。下一轮应先结合 GUI 手感与 trace 区分参考生成和 `PSI/DPSI` 闭环的
+贡献，不把两秒窗口内未 settled 解释成发散，也不恢复低层 yaw-rate 旁路。
+
+将 mapper 从仿真 C++ 层下沉到 C motion、并把 heading 字段从 operator command
+改为云台 sensor feedback 后，12 档 summary 的跟踪、停止、姿态和 heading
+关键指标与下沉前逐值完全一致。新 trace 分别记录
+`command_forward`、`gimbal_relative_yaw/rate`、`alignment`、
+`mapped_forward` 和 `heading_error`，用于明确上板意图、CAN 反馈与下板策略边界。

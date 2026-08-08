@@ -2,10 +2,10 @@
 #define BALANCE_STATE_MACHINE_MOTION_H
 
 #include "balance/reference/forward.h"
-#include "balance/state_machine/condition_hold.h"
-#include "balance/state_machine/drive.h"
-#include "balance/state_machine/input.h"
 #include "balance/reference/yaw.h"
+#include "balance/state_machine/condition_hold.h"
+#include "balance/state_machine/forward_mode.h"
+#include "balance/state_machine/input.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +19,11 @@ typedef enum {
     BC_MOTION_ACTIVE
 } bc_motion_state_t;
 
+typedef enum {
+    BC_CHASSIS_FRONT,
+    BC_CHASSIS_REAR
+} bc_chassis_alignment_t;
+
 typedef struct {
     float leg_length;
     float leg_angle_body;
@@ -28,7 +33,8 @@ typedef struct {
     float angular_velocity_tolerance;
     float stable_duration;
     float engage_duration;
-    bc_drive_config_t drive;
+    float alignment_hysteresis;
+    bc_forward_mode_config_t forward;
     bc_forward_reference_config_t forward_reference;
     bc_yaw_reference_config_t yaw_reference;
 } bc_motion_config_t;
@@ -37,7 +43,10 @@ typedef struct {
     bc_motion_config_t config;
     bc_motion_state_t state;
     bc_state_vector_t state_reference;
-    bc_drive_t drive;
+    bc_chassis_alignment_t alignment;
+    float mapped_forward_velocity;
+    float heading_error;
+    bc_forward_mode_t forward;
     bc_forward_reference_t forward_reference;
     bc_yaw_reference_t yaw_reference;
     bc_condition_hold_t leg_stable_hold;
@@ -57,6 +66,7 @@ void bc_motion_update(
     bc_control_command_t *output);
 
 const char *bc_motion_state_name(bc_motion_state_t state);
+const char *bc_chassis_alignment_name(bc_chassis_alignment_t alignment);
 
 #ifdef __cplusplus
 }

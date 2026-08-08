@@ -7,6 +7,7 @@
 #include <string>
 
 #include "balance/math_utils.h"
+#include "input/virtual_gimbal.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "simulation_runner.hpp"
@@ -66,11 +67,17 @@ struct MotionMetrics {
     int other_contact_steps{};
 };
 
+struct MotionCommandSource {
+    balance::sim::VirtualGimbal gimbal{};
+    bool active_initialized{};
+};
+
 void step_controller(
     balance::sim::SimulationRunner &runner,
     balance::sim::MujocoPlant &plant,
+    MotionCommandSource &source,
     const float forward_velocity,
-    const float yaw_rate
+    const float gimbal_yaw_rate
 ) {
     bc_operator_command_t command{};
     command.system_enabled = static_cast<uint8_t>(
@@ -78,14 +85,31 @@ void step_controller(
     command.balance_restart =
         command.system_enabled &&
         runner.snapshot().state_machine.system == BC_SYSTEM_OFF;
-    command.forward_velocity = forward_velocity;
-    command.yaw_rate = yaw_rate;
-    runner.step(command);
+    if (runner.snapshot().state_machine.motion == BC_MOTION_ACTIVE) {
+        if (!source.active_initialized) {
+            source.gimbal.reset(
+                runner.snapshot().state.value[BC_STATE_PSI]);
+            source.active_initialized = true;
+        }
+        source.gimbal.update(
+            gimbal_yaw_rate, static_cast<float>(plant.timestep()));
+        command.forward_velocity = forward_velocity;
+    } else {
+        source.active_initialized = false;
+    }
+    const bc_gimbal_feedback_t gimbal_feedback =
+        source.active_initialized ?
+            source.gimbal.feedback(
+                runner.snapshot().state.value[BC_STATE_PSI],
+                runner.snapshot().state.value[BC_STATE_DPSI]) :
+            bc_gimbal_feedback_t{};
+    runner.step(command, gimbal_feedback);
 }
 
 MotionMetrics run_motion_phase(
     balance::sim::SimulationRunner &runner,
     balance::sim::MujocoPlant &plant,
+    MotionCommandSource &source,
     const int base_qpos,
     const int ground,
     const std::array<int, BC_SIDE_NUM> &wheel,
@@ -106,7 +130,7 @@ MotionMetrics run_motion_phase(
 
     while (plant.data().time < start_time + duration) {
         step_controller(
-            runner, plant, forward_velocity, yaw_rate);
+            runner, plant, source, forward_velocity, yaw_rate);
         const auto contact = read_contacts(plant.data(), ground, wheel);
         if (contact.wheel[BC_L] && contact.wheel[BC_R]) {
             ++both_wheels_steps;
@@ -167,6 +191,7 @@ int main(int argc, char **argv) {
             std::filesystem::path(argv[1]), 0.001);
         balance::sim::MujocoAdapter adapter(plant.model());
         balance::sim::SimulationRunner runner(plant, adapter);
+        MotionCommandSource command_source{};
         const int weld = require_id(
             plant.model(), mjOBJ_EQUALITY, "base_support_weld");
         const int ground = require_id(
@@ -196,7 +221,7 @@ int main(int argc, char **argv) {
         while (plant.data().time < 8.0 &&
                runner.snapshot().state_machine.motion !=
                    BC_MOTION_ACTIVE) {
-            step_controller(runner, plant, 0.0F, 0.0F);
+            step_controller(runner, plant, command_source, 0.0F, 0.0F);
         }
         if (runner.snapshot().state_machine.motion !=
                 BC_MOTION_ACTIVE ||
@@ -238,7 +263,7 @@ int main(int argc, char **argv) {
         bool finite = true;
 
         while (plant.data().time < end_time) {
-            step_controller(runner, plant, 0.0F, 0.0F);
+            step_controller(runner, plant, command_source, 0.0F, 0.0F);
             if (plant.data().time < end_time - kEvaluationDuration) continue;
 
             ++evaluation_steps;
@@ -345,25 +370,25 @@ int main(int argc, char **argv) {
         }
 
         const auto forward = run_motion_phase(
-            runner, plant, base_qpos, ground, wheel,
+            runner, plant, command_source, base_qpos, ground, wheel,
             0.25F, 0.0F, 3.0);
         run_motion_phase(
-            runner, plant, base_qpos, ground, wheel,
+            runner, plant, command_source, base_qpos, ground, wheel,
             0.0F, 0.0F, 1.5);
         const auto reverse = run_motion_phase(
-            runner, plant, base_qpos, ground, wheel,
+            runner, plant, command_source, base_qpos, ground, wheel,
             -0.25F, 0.0F, 3.0);
         run_motion_phase(
-            runner, plant, base_qpos, ground, wheel,
+            runner, plant, command_source, base_qpos, ground, wheel,
             0.0F, 0.0F, 1.5);
         const auto yaw_left = run_motion_phase(
-            runner, plant, base_qpos, ground, wheel,
+            runner, plant, command_source, base_qpos, ground, wheel,
             0.0F, 1.57F, 3.0);
         run_motion_phase(
-            runner, plant, base_qpos, ground, wheel,
+            runner, plant, command_source, base_qpos, ground, wheel,
             0.0F, 0.0F, 1.5);
         const auto yaw_right = run_motion_phase(
-            runner, plant, base_qpos, ground, wheel,
+            runner, plant, command_source, base_qpos, ground, wheel,
             0.0F, -1.57F, 3.0);
 
         print_motion_metrics("forward", forward);

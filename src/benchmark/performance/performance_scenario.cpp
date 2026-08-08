@@ -13,9 +13,9 @@ constexpr double kDisabledSettleSeconds = 2.0;
 constexpr double kEngagementTimeoutSeconds = 8.0;
 constexpr double kEvaluationSeconds = 1.0;
 constexpr double kForwardRateLimit = 5.0;
-constexpr double kYawRateLimit = 10.0;
+constexpr double kDefaultGimbalAcceleration = 10.0;
 
-constexpr std::array<PerformanceCaseSpec, 16> kCases{{
+constexpr std::array<PerformanceCaseSpec, 12> kCases{{
     {"forward_pos_1", PerformanceAxis::forward, 1.0, 5.0},
     {"forward_neg_1", PerformanceAxis::forward, -1.0, 5.0},
     {"forward_pos_2", PerformanceAxis::forward, 2.0, 5.0},
@@ -24,14 +24,10 @@ constexpr std::array<PerformanceCaseSpec, 16> kCases{{
     {"forward_neg_2p5", PerformanceAxis::forward, -2.5, 5.0},
     {"forward_pos_3", PerformanceAxis::forward, 3.0, 5.0},
     {"forward_neg_3", PerformanceAxis::forward, -3.0, 5.0},
-    {"yaw_pos_1pi", PerformanceAxis::yaw, BC_PI, 5.0},
-    {"yaw_neg_1pi", PerformanceAxis::yaw, -BC_PI, 5.0},
-    {"yaw_pos_2pi", PerformanceAxis::yaw, 2.0 * BC_PI, 5.0},
-    {"yaw_neg_2pi", PerformanceAxis::yaw, -2.0 * BC_PI, 5.0},
-    {"yaw_pos_3pi", PerformanceAxis::yaw, 3.0 * BC_PI, 5.0},
-    {"yaw_neg_3pi", PerformanceAxis::yaw, -3.0 * BC_PI, 5.0},
-    {"yaw_pos_4pi", PerformanceAxis::yaw, 4.0 * BC_PI, 5.0},
-    {"yaw_neg_4pi", PerformanceAxis::yaw, -4.0 * BC_PI, 5.0},
+    {"heading_pos_1pi", PerformanceAxis::heading, BC_PI, 10.0},
+    {"heading_neg_1pi", PerformanceAxis::heading, -BC_PI, 10.0},
+    {"heading_pos_1p5pi", PerformanceAxis::heading, 1.5 * BC_PI, 10.0},
+    {"heading_neg_1p5pi", PerformanceAxis::heading, -1.5 * BC_PI, 10.0},
 }};
 
 constexpr std::array<PerformanceCaseSpec, 10> kForwardAccelerationCases{{
@@ -47,26 +43,9 @@ constexpr std::array<PerformanceCaseSpec, 10> kForwardAccelerationCases{{
     {"forward_neg_2_a5", PerformanceAxis::forward, -2.0, 5.0},
 }};
 
-constexpr std::array<PerformanceCaseSpec, 14> kYawAccelerationCases{{
-    {"yaw_pos_2pi_a1", PerformanceAxis::yaw, 2.0 * BC_PI, 1.0},
-    {"yaw_neg_2pi_a1", PerformanceAxis::yaw, -2.0 * BC_PI, 1.0},
-    {"yaw_pos_2pi_a2", PerformanceAxis::yaw, 2.0 * BC_PI, 2.0},
-    {"yaw_neg_2pi_a2", PerformanceAxis::yaw, -2.0 * BC_PI, 2.0},
-    {"yaw_pos_2pi_a3", PerformanceAxis::yaw, 2.0 * BC_PI, 3.0},
-    {"yaw_neg_2pi_a3", PerformanceAxis::yaw, -2.0 * BC_PI, 3.0},
-    {"yaw_pos_2pi_a5", PerformanceAxis::yaw, 2.0 * BC_PI, 5.0},
-    {"yaw_neg_2pi_a5", PerformanceAxis::yaw, -2.0 * BC_PI, 5.0},
-    {"yaw_pos_2pi_a7p5", PerformanceAxis::yaw, 2.0 * BC_PI, 7.5},
-    {"yaw_neg_2pi_a7p5", PerformanceAxis::yaw, -2.0 * BC_PI, 7.5},
-    {"yaw_pos_2pi_a10", PerformanceAxis::yaw, 2.0 * BC_PI, 10.0},
-    {"yaw_neg_2pi_a10", PerformanceAxis::yaw, -2.0 * BC_PI, 10.0},
-    {"yaw_pos_2pi_a15", PerformanceAxis::yaw, 2.0 * BC_PI, 15.0},
-    {"yaw_neg_2pi_a15", PerformanceAxis::yaw, -2.0 * BC_PI, 15.0},
-}};
-
 } // namespace
 
-const std::array<PerformanceCaseSpec, 16> &
+const std::array<PerformanceCaseSpec, 12> &
 performance_cases() noexcept {
     return kCases;
 }
@@ -74,11 +53,6 @@ performance_cases() noexcept {
 const std::array<PerformanceCaseSpec, 10> &
 forward_acceleration_cases() noexcept {
     return kForwardAccelerationCases;
-}
-
-const std::array<PerformanceCaseSpec, 14> &
-yaw_acceleration_cases() noexcept {
-    return kYawAccelerationCases;
 }
 
 const PerformanceCaseSpec *find_performance_case(
@@ -101,17 +75,11 @@ const PerformanceCaseSpec *find_performance_case(
         return &*acceleration_found;
     }
 
-    const auto yaw_acceleration_found = std::find_if(
-        kYawAccelerationCases.begin(), kYawAccelerationCases.end(),
-        [name](const PerformanceCaseSpec &spec) {
-            return spec.name == name;
-        });
-    return yaw_acceleration_found == kYawAccelerationCases.end() ?
-        nullptr : &*yaw_acceleration_found;
+    return nullptr;
 }
 
 const char *performance_axis_name(const PerformanceAxis axis) noexcept {
-    return axis == PerformanceAxis::forward ? "forward" : "yaw";
+    return axis == PerformanceAxis::forward ? "forward" : "heading";
 }
 
 const char *performance_phase_name(const PerformancePhase phase) noexcept {
@@ -130,7 +98,13 @@ const char *performance_phase_name(const PerformancePhase phase) noexcept {
 
 PerformanceScenario::PerformanceScenario(
     const PerformanceCaseSpec &spec
-) : spec_(spec) {
+) : spec_(spec),
+    virtual_gimbal_(sim::VirtualGimbalConfig{
+        1.5F * BC_PI_F,
+        static_cast<float>(
+            spec.axis == PerformanceAxis::heading ?
+                spec.command_rate : kDefaultGimbalAcceleration),
+    }) {
     if (!std::isfinite(spec_.target) ||
         !std::isfinite(spec_.command_rate) ||
         spec_.command_rate <= 0.0 ||
@@ -139,7 +113,9 @@ PerformanceScenario::PerformanceScenario(
         !std::isfinite(spec_.stop_settle_seconds) ||
         spec_.stop_settle_seconds < 0.0 ||
         !std::isfinite(spec_.standing_seconds) ||
-        spec_.standing_seconds < 0.0) {
+        spec_.standing_seconds < 0.0 ||
+        (spec_.axis == PerformanceAxis::heading &&
+         std::abs(spec_.target) > 1.5 * BC_PI)) {
         throw std::invalid_argument(
             "performance case values and durations must be valid");
     }
@@ -149,8 +125,12 @@ PerformanceScenario::PerformanceScenario(
 void PerformanceScenario::reset(const double simulation_time) noexcept {
     phase_ = PerformancePhase::disabled_settle;
     command_ = {};
+    virtual_gimbal_.reset();
+    gimbal_feedback_ = {};
+    gimbal_initialized_ = false;
     phase_start_time_ = simulation_time;
     simulation_time_ = simulation_time;
+    previous_update_time_ = simulation_time;
 }
 
 void PerformanceScenario::enter(
@@ -168,7 +148,22 @@ void PerformanceScenario::update(
     const bc_controller_snapshot_t &snapshot,
     const double simulation_time
 ) noexcept {
+    const float timestep_seconds = static_cast<float>(
+        std::max(0.0, simulation_time - previous_update_time_));
+    previous_update_time_ = simulation_time;
     simulation_time_ = simulation_time;
+
+    if (snapshot.state_machine.motion == BC_MOTION_ACTIVE) {
+        if (!gimbal_initialized_) {
+            virtual_gimbal_.reset(
+                snapshot.state.value[BC_STATE_PSI]);
+            gimbal_initialized_ = true;
+        }
+    } else {
+        virtual_gimbal_.reset(snapshot.state.value[BC_STATE_PSI]);
+        gimbal_feedback_ = {};
+        gimbal_initialized_ = false;
+    }
 
     switch (phase_) {
     case PerformancePhase::disabled_settle:
@@ -230,14 +225,14 @@ void PerformanceScenario::update(
         command_.balance_restart = static_cast<uint8_t>(
             snapshot.state_machine.system == BC_SYSTEM_OFF);
     }
+    float gimbal_forward_velocity = 0.0F;
+    float target_gimbal_yaw_rate = 0.0F;
     if (phase_ == PerformancePhase::target_ramp ||
         phase_ == PerformancePhase::target_hold) {
         double target = spec_.target;
-        const double controller_rate_limit =
-            spec_.axis == PerformanceAxis::forward ?
-                kForwardRateLimit : kYawRateLimit;
-        if (phase_ == PerformancePhase::target_ramp &&
-            spec_.command_rate < controller_rate_limit) {
+        if (spec_.axis == PerformanceAxis::forward &&
+            phase_ == PerformancePhase::target_ramp &&
+            spec_.command_rate < kForwardRateLimit) {
             target = std::copysign(
                 std::min(
                     std::abs(spec_.target),
@@ -245,25 +240,29 @@ void PerformanceScenario::update(
                 spec_.target);
         }
         if (spec_.axis == PerformanceAxis::forward) {
-            command_.forward_velocity = static_cast<float>(target);
+            gimbal_forward_velocity = static_cast<float>(target);
         } else {
-            command_.yaw_rate = static_cast<float>(target);
+            target_gimbal_yaw_rate = static_cast<float>(target);
         }
     } else if (phase_ == PerformancePhase::stop_ramp &&
-               spec_.command_rate <
-                   (spec_.axis == PerformanceAxis::forward ?
-                       kForwardRateLimit : kYawRateLimit)) {
+               spec_.axis == PerformanceAxis::forward &&
+               spec_.command_rate < kForwardRateLimit) {
         const double target = std::copysign(
             std::max(
                 0.0,
                 std::abs(spec_.target) -
                     spec_.command_rate * phase_elapsed()),
             spec_.target);
-        if (spec_.axis == PerformanceAxis::forward) {
-            command_.forward_velocity = static_cast<float>(target);
-        } else {
-            command_.yaw_rate = static_cast<float>(target);
-        }
+        gimbal_forward_velocity = static_cast<float>(target);
+    }
+
+    if (gimbal_initialized_) {
+        virtual_gimbal_.update(
+            target_gimbal_yaw_rate, timestep_seconds);
+        gimbal_feedback_ = virtual_gimbal_.feedback(
+            snapshot.state.value[BC_STATE_PSI],
+            snapshot.state.value[BC_STATE_DPSI]);
+        command_.forward_velocity = gimbal_forward_velocity;
     }
 }
 
