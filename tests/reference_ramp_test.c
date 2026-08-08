@@ -1,5 +1,5 @@
 #include "balance/math_utils.h"
-#include "balance/reference_ramp.h"
+#include "balance/reference/ramp.h"
 
 #include <math.h>
 #include <stdio.h>

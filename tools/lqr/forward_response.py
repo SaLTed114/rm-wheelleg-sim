@@ -73,9 +73,10 @@ def trace_vector(row: dict[str, str], prefix: str = "") -> np.ndarray:
 def s_feedback_disabled(row: dict[str, str]) -> bool:
     drive = row.get("drive")
     if drive:
-        if drive not in ("idle", "parked", "driving"):
+        if drive not in (
+                "idle", "parked", "driving", "hold", "drive", "spin"):
             raise ValueError(f"unknown drive state: {drive}")
-        return drive == "driving"
+        return drive in ("driving", "drive")
 
     legacy = row.get("position_feedback_enabled")
     if legacy == "0":

@@ -13,10 +13,20 @@ Observability is provided by an on-demand, caller-owned controller snapshot;
 the state machine and low-level control remain internal. `SimulationRunner`
 captures its latest snapshot after construction, reset, and each controller
 execution, so the GUI and tests never need to read controller internals.
-Forward-velocity and yaw-rate references pass through independent linear ramps
-limited to `3 m/s, 5 m/s^2` and `4*pi rad/s, 15 rad/s^2`. Roll and roll rate
-are observable through the snapshot but are not yet used for compensation;
-the lower `1.5*pi rad/s` moving-turn envelope is also not yet enforced.
+Forward velocity and yaw rate are shaped by sibling `forward_reference` and
+`yaw_reference` components, with independent linear ramps limited to
+`3 m/s, 5 m/s^2` and `4*pi rad/s, 10 rad/s^2`. The drive state machine owns no
+reference ramp: it only selects longitudinal `hold` or `drive` feedback policy.
+The two generators and their shared ramp primitive live under
+`include/balance/reference/` and `src/control/reference/`.
+`hold` keeps position feedback enabled, while `drive` releases position and
+tracks the generated forward-velocity reference. Normal yaw has no discrete
+mode, so in-place turning remains in `hold` and forward stopping never waits
+for yaw to settle. `spin` is currently an unreachable placeholder for a future
+explicit rate-only yaw mode; high yaw targets do not select it automatically.
+Roll and roll rate are observable through the snapshot but are not yet used for
+compensation; the lower `1.5*pi rad/s` moving-turn envelope is also not yet
+enforced.
 The current 1 ms LQR schedule was retuned around `0.16 m` and `0.18 m` leg
 lengths. It completes the diagnostic `+/-3 m/s` translation sweep at both
 lengths; in-place yaw above `pi rad/s` remains an investigation target rather
@@ -48,6 +58,22 @@ Run the interactive simulator:
   models/MJCF/COD-2026RoboMaster-Balance.xml
 ```
 
+To drive interactively instead of running the automatic demonstration, append
+`--keyboard`:
+
+```bash
+./build/rm_balance_sim \
+  models/MJCF/COD-2026RoboMaster-Balance.xml \
+  --keyboard
+```
+
+Hold `W/S` or the up/down arrows for `+/-2 m/s`; holding either Shift key at
+the same time boosts the forward target to `+/-3 m/s`. Hold `A/D` or the
+left/right arrows for `+/-pi rad/s`. Forward and yaw inputs can be combined.
+Releasing the keys commands zero; the normal controller ramps perform the
+acceleration and braking. Space pauses, `R` resets, and Escape closes the
+viewer. Keyboard mode cannot be combined with an exact performance case.
+
 The simulation runs in real time until the window is closed. Use the left mouse
 button to rotate, right mouse button to pan, middle button or wheel to zoom,
 Space to pause, and Backspace or `R` to reset.
@@ -56,7 +82,7 @@ The interactive simulator first keeps `SYSTEM_OFF` for two seconds while the
 robot falls and settles. It then enables the system and emits one simulated
 balance-restart event. `LEG_POSITIONING` moves both virtual legs toward
 `0.18 m / -pi/2`; once stable, `ENGAGING` enables the current-model LQR and
-`54 N` axial support per leg. No mocap support or pose teleport is used. The
+`67.5 N` axial support per leg. No mocap support or pose teleport is used. The
 simulator then repeats standing, `+/-0.25 m/s` travel, and `+/-1.57 rad/s` yaw
 phases. It prints the current phase and ten-element state vector every 0.5 s.
 The chassis, leg links, and wheels collide with the infinite ground plane,
@@ -118,8 +144,10 @@ The generated `summary.csv` and `trace.csv` stay under the ignored build tree.
 The benchmark challenges `+/-1, 2, 2.5, 3 m/s` translation and
 `+/-pi, 2*pi, 3*pi, 4*pi rad/s` in-place yaw. These targets map the current
 controller boundary; reaching the configured maximum is not a build-pass
-requirement. See `docs/notes/performance-baseline.md` for the first measured
-baseline and its acceptance criteria.
+requirement. All yaw benchmark cases still use normal heading tracking; they
+do not exercise the reserved `spin` state. See
+`docs/notes/performance-baseline.md` for the first measured baseline and its
+acceptance criteria.
 
 To separate acceleration capability from top speed, run the dedicated
 `+/-2 m/s` sweep at `0.5, 1, 2, 3, 5 m/s^2`:

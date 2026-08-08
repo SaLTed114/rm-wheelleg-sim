@@ -13,7 +13,7 @@ constexpr double kDisabledSettleSeconds = 2.0;
 constexpr double kEngagementTimeoutSeconds = 8.0;
 constexpr double kEvaluationSeconds = 1.0;
 constexpr double kForwardRateLimit = 5.0;
-constexpr double kYawRateLimit = 15.0;
+constexpr double kYawRateLimit = 10.0;
 
 constexpr std::array<PerformanceCaseSpec, 16> kCases{{
     {"forward_pos_1", PerformanceAxis::forward, 1.0, 5.0},

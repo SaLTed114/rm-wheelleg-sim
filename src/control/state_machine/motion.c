@@ -87,14 +87,51 @@ static void bc_motion_transition(
                 motion->config.engage_duration,
                 input->timestep_seconds)) {
             motion->state = BC_MOTION_ACTIVE;
-            bc_drive_start(
-                &motion->drive, input,
+            bc_drive_start(&motion->drive);
+            bc_forward_reference_start(
+                &motion->forward_reference,
+                input->state->value[BC_STATE_S],
+                &motion->state_reference);
+            bc_yaw_reference_start(
+                &motion->yaw_reference,
+                input->state->value[BC_STATE_PSI],
                 &motion->state_reference);
         }
         break;
 
     case BC_MOTION_ACTIVE:
         break;
+    }
+}
+
+static void bc_motion_update_drive(
+    bc_motion_t *motion,
+    const bc_state_machine_input_t *input,
+    bc_control_command_t *output
+) {
+    const bc_drive_state_t previous_state = motion->drive.state;
+    bc_drive_update(
+        &motion->drive,
+        bc_forward_reference_requested(
+            &motion->forward_reference,
+            input->operator_command->forward_velocity),
+        motion->forward_reference.velocity_ramp.value,
+        input->state->value[BC_STATE_DS],
+        input->timestep_seconds,
+        output);
+
+    if (motion->drive.state == BC_DRIVE_HOLD &&
+        previous_state != BC_DRIVE_HOLD) {
+        bc_forward_reference_start(
+            &motion->forward_reference,
+            input->state->value[BC_STATE_S],
+            &motion->state_reference);
+    } else if (motion->drive.state == BC_DRIVE_DRIVING) {
+        bc_forward_reference_update(
+            &motion->forward_reference,
+            input->operator_command->forward_velocity,
+            input->timestep_seconds,
+            &motion->state_reference);
     }
 }
 
@@ -125,16 +162,24 @@ static void bc_motion_action(
 
     case BC_MOTION_ACTIVE:
         bc_motion_set_balance_control(motion, output);
-        bc_drive_update(
-            &motion->drive, input,
-            &motion->state_reference, output);
+        bc_motion_update_drive(motion, input, output);
+        bc_yaw_reference_update(
+            &motion->yaw_reference,
+            input->operator_command->yaw_rate,
+            input->timestep_seconds,
+            &motion->state_reference);
+        output->state_reference = motion->state_reference;
         break;
     }
 }
 
 void bc_motion_default_config(bc_motion_config_t *config) {
     bc_drive_config_t drive;
+    bc_forward_reference_config_t forward_reference;
+    bc_yaw_reference_config_t yaw_reference;
     bc_drive_default_config(&drive);
+    bc_forward_reference_default_config(&forward_reference);
+    bc_yaw_reference_default_config(&yaw_reference);
     *config = (bc_motion_config_t){
         .leg_length                 = 0.18F,
         .leg_angle_body             = -0.5F * BC_PI_F,
@@ -145,6 +190,8 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .stable_duration            = 0.25F,
         .engage_duration            = 0.1F,
         .drive                      = drive,
+        .forward_reference          = forward_reference,
+        .yaw_reference              = yaw_reference,
     };
 }
 
@@ -154,6 +201,11 @@ void bc_motion_init(
 ) {
     motion->config = *config;
     bc_drive_init(&motion->drive, &config->drive);
+    bc_forward_reference_init(
+        &motion->forward_reference,
+        &config->forward_reference);
+    bc_yaw_reference_init(
+        &motion->yaw_reference, &config->yaw_reference);
     bc_motion_reset(motion);
 }
 
@@ -163,6 +215,8 @@ void bc_motion_reset(bc_motion_t *motion) {
         &motion->state_reference, 0,
         sizeof(motion->state_reference));
     bc_drive_reset(&motion->drive);
+    bc_forward_reference_reset(&motion->forward_reference);
+    bc_yaw_reference_reset(&motion->yaw_reference);
     bc_condition_hold_reset(&motion->leg_stable_hold);
     bc_condition_hold_reset(&motion->engage_hold);
 }

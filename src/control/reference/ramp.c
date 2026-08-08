@@ -1,4 +1,4 @@
-#include "balance/reference_ramp.h"
+#include "balance/reference/ramp.h"
 
 #include "balance/math_utils.h"
 

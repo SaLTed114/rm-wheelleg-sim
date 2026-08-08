@@ -66,9 +66,6 @@ void bc_controller_calculate(bc_controller_t *controller) {
         .operator_command = &controller->operator_command,
         .state = &controller->control_core.observer.state,
         .leg = controller->control_core.observer.leg,
-        .wheel_odometry_velocity =
-            controller->control_core.observer
-                .forward_velocity.wheel_odometry,
         .timestep_seconds = controller->timestep_seconds,
     };
     bc_system_update(&controller->system, &input, &control_command);

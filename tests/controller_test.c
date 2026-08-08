@@ -157,6 +157,8 @@ int main() {
         }
     }
 
+    command.forward_velocity = 0.0F;
+
     bc_controller_update(&controller, &feedback, 0.001F);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.velocity_estimator.measurement_accepted) {
@@ -178,12 +180,26 @@ int main() {
     bc_controller_execute(&controller, &actuation);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.motion != BC_MOTION_ACTIVE ||
-        snapshot.state_machine.drive != BC_DRIVE_DRIVING ||
+        snapshot.state_machine.drive != BC_DRIVE_HOLD ||
+        snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
+        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.010F) >
+            1.0e-7F) {
+        fputs("pure yaw did not activate in forward hold\n", stderr);
+        return 1;
+    }
+
+    command.forward_velocity = 10.0F;
+    bc_controller_update(&controller, &feedback, 0.001F);
+    bc_controller_set_command(&controller, &command);
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.drive != BC_DRIVE_DRIVING ||
         fabsf(snapshot.state_reference.value[BC_STATE_DS] - 0.005F) >
             1.0e-7F ||
-        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.015F) >
+        fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.020F) >
             1.0e-7F) {
-        fputs("controller did not activate motion after engagement\n", stderr);
+        fputs("forward command did not leave hold\n", stderr);
         return 1;
     }
 

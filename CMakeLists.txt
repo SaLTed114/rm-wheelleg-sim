@@ -55,10 +55,12 @@ add_library(balance_control_core STATIC
   src/control/control_core.c
   src/control/controller.c
   src/control/controller_snapshot.c
+  src/control/reference/forward.c
   src/control/leg_kinematics.c
   src/control/observer.c
   src/control/velocity_estimator.c
-  src/control/reference_ramp.c
+  src/control/reference/ramp.c
+  src/control/reference/yaw.c
   src/control/state_machine/drive.c
   src/control/state_machine/motion.c
   src/control/state_machine/system.c)
@@ -152,6 +154,16 @@ if(BUILD_TESTING)
   target_link_libraries(reference_ramp_test PRIVATE balance_control_core)
   balance_enable_warnings(reference_ramp_test)
   add_test(NAME reference_ramp COMMAND reference_ramp_test)
+
+  add_executable(forward_reference_test tests/forward_reference_test.c)
+  target_link_libraries(forward_reference_test PRIVATE balance_control_core)
+  balance_enable_warnings(forward_reference_test)
+  add_test(NAME forward_reference COMMAND forward_reference_test)
+
+  add_executable(yaw_reference_test tests/yaw_reference_test.c)
+  target_link_libraries(yaw_reference_test PRIVATE balance_control_core)
+  balance_enable_warnings(yaw_reference_test)
+  add_test(NAME yaw_reference COMMAND yaw_reference_test)
 
   add_executable(lqr_controller_test tests/lqr_controller_test.c)
   target_link_libraries(lqr_controller_test PRIVATE balance_control_core)

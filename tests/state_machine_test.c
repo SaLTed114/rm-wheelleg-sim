@@ -34,7 +34,9 @@ int main() {
 
     bc_motion_default_config(&config);
     if (config.leg_length != 0.18F ||
-        config.engage_duration != 0.1F) {
+        config.engage_duration != 0.1F ||
+        config.forward_reference.velocity_ramp.rate_limit != 5.0F ||
+        config.yaw_reference.rate_ramp.rate_limit != 10.0F) {
         fputs("default motion config is incorrect\n", stderr);
         return 1;
     }
@@ -132,8 +134,8 @@ int main() {
         system.motion.drive.state != BC_DRIVE_DRIVING ||
         fabsf(command.state_reference.value[BC_STATE_S] - 1.05F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.5F) > 1.0e-6F ||
-        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.35F) > 1.0e-6F ||
-        fabsf(command.state_reference.value[BC_STATE_DPSI] - 1.5F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.40F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_DPSI] - 1.0F) > 1.0e-6F ||
         command.disabled_state_feedback !=
             BC_STATE_FEEDBACK_MASK(BC_STATE_S)) {
         fputs("active balance did not use rate-limited targets\n", stderr);
@@ -148,7 +150,7 @@ int main() {
     bc_system_update(&system, &input, &command);
     if (fabsf(command.state_reference.value[BC_STATE_S] - 1.07F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.2F) > 1.0e-6F ||
-        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.35F) > 1.0e-6F ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] + 0.40F) > 1.0e-6F ||
         command.state_reference.value[BC_STATE_DPSI] != 0.0F ||
         command.disabled_state_feedback !=
             BC_STATE_FEEDBACK_MASK(BC_STATE_S) ||
@@ -162,14 +164,41 @@ int main() {
         return 1;
     }
 
+    state.value[BC_STATE_DS] = 0.0F;
+    state.value[BC_STATE_S] = 2.0F;
+    operator_command.forward_velocity = 0.0F;
+    operator_command.yaw_rate = 2.0F;
+    for (int step = 0; step < 4; ++step) {
+        bc_system_update(&system, &input, &command);
+    }
+    if (system.motion.drive.state != BC_DRIVE_HOLD ||
+        command.state_reference.value[BC_STATE_S] != 2.0F ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] - 0.30F) >
+            1.0e-6F ||
+        command.state_reference.value[BC_STATE_DPSI] != 2.0F ||
+        command.disabled_state_feedback != 0U) {
+        fputs("yaw motion prevented independent forward hold\n", stderr);
+        return 1;
+    }
+
+    bc_system_update(&system, &input, &command);
+    if (system.motion.drive.state != BC_DRIVE_HOLD ||
+        fabsf(command.state_reference.value[BC_STATE_PSI] - 0.50F) >
+            1.0e-6F ||
+        command.state_reference.value[BC_STATE_DPSI] != 2.0F ||
+        command.disabled_state_feedback != 0U) {
+        fputs("pure yaw did not remain in forward hold\n", stderr);
+        return 1;
+    }
+
     operator_command.balance_restart = 1U;
     bc_system_update(&system, &input, &command);
     if (system.motion.state != BC_MOTION_LEG_POSITIONING ||
         system.motion.state_reference.value[BC_STATE_S] != 0.0F ||
         system.motion.state_reference.value[BC_STATE_PSI] != 0.0F ||
         system.motion.drive.state != BC_DRIVE_IDLE ||
-        system.motion.drive.forward_velocity_ramp.value != 0.0F ||
-        system.motion.drive.yaw_rate_ramp.value != 0.0F ||
+        system.motion.forward_reference.velocity_ramp.value != 0.0F ||
+        system.motion.yaw_reference.rate_ramp.value != 0.0F ||
         system.motion.engage_hold.elapsed_seconds != 0.0F ||
         !control_uses_strategies(
             &command,
