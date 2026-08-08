@@ -9,6 +9,12 @@ struct GLFWwindow;
 
 namespace balance::sim {
 
+struct KeyboardDriveInput {
+    float forward_axis;
+    float yaw_axis;
+    bool boost;
+};
+
 class MujocoViewer {
 public:
     explicit MujocoViewer(const mjModel &model);
@@ -19,6 +25,7 @@ public:
 
     [[nodiscard]] bool should_close() const;
     [[nodiscard]] bool paused() const noexcept { return paused_; }
+    [[nodiscard]] KeyboardDriveInput keyboard_drive_input() const;
     bool consume_reset_request();
 
     void set_title(const std::string &title);

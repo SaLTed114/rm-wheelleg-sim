@@ -58,6 +58,30 @@ bool MujocoViewer::should_close() const {
     return glfwWindowShouldClose(window_) != 0;
 }
 
+KeyboardDriveInput MujocoViewer::keyboard_drive_input() const {
+    const bool forward =
+        glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS ||
+        glfwGetKey(window_, GLFW_KEY_UP) == GLFW_PRESS;
+    const bool reverse =
+        glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS ||
+        glfwGetKey(window_, GLFW_KEY_DOWN) == GLFW_PRESS;
+    const bool left =
+        glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS ||
+        glfwGetKey(window_, GLFW_KEY_LEFT) == GLFW_PRESS;
+    const bool right =
+        glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS ||
+        glfwGetKey(window_, GLFW_KEY_RIGHT) == GLFW_PRESS;
+    const bool boost =
+        glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+        glfwGetKey(window_, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
+
+    return {
+        static_cast<float>(forward) - static_cast<float>(reverse),
+        static_cast<float>(left) - static_cast<float>(right),
+        boost,
+    };
+}
+
 bool MujocoViewer::consume_reset_request() {
     const bool requested = reset_requested_;
     reset_requested_ = false;

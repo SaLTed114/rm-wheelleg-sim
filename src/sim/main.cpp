@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 
+#include "balance/math_utils.h"
 #include "common/common_diagnostics.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
@@ -57,6 +58,35 @@ MotionTarget make_motion_target(
     return {0.0F, 0.0F, "stopping"};
 }
 
+MotionTarget make_keyboard_motion_target(
+    const bc_controller_snapshot_t &snapshot,
+    const balance::sim::KeyboardDriveInput &input
+) {
+    if (snapshot.state_machine.system == BC_SYSTEM_OFF) {
+        return {
+            0.0F, 0.0F,
+            bc_system_state_name(snapshot.state_machine.system),
+        };
+    }
+    if (snapshot.state_machine.motion != BC_MOTION_ACTIVE) {
+        return {
+            0.0F, 0.0F,
+            bc_motion_state_name(snapshot.state_machine.motion),
+        };
+    }
+
+    constexpr float kKeyboardForwardVelocity = 2.0F;
+    constexpr float kKeyboardBoostForwardVelocity = 3.0F;
+    constexpr float kKeyboardYawRate = BC_PI_F;
+    return {
+        input.forward_axis * (input.boost ?
+            kKeyboardBoostForwardVelocity :
+            kKeyboardForwardVelocity),
+        input.yaw_axis * kKeyboardYawRate,
+        bc_drive_state_name(snapshot.state_machine.drive),
+    };
+}
+
 void print_state(
     const char *phase, const bc_state_vector_t &state
 ) {
@@ -69,8 +99,12 @@ void print_state(
 
 void print_usage() {
     std::cerr
-        << "usage: rm_balance_sim <model.xml> [--case <case-name>] "
+        << "usage: rm_balance_sim <model.xml> [--keyboard] "
+           "[--case <case-name>] "
            "[--leg-length <metres>]\n"
+        << "keyboard mode: W/S forward/reverse, A/D left/right, "
+           "Shift boosts forward speed, "
+           "Space pause, R reset, Esc quit\n"
         << "available performance cases:\n";
     for (const auto &spec : balance::benchmark::performance_cases()) {
         std::cerr << "  " << spec.name << '\n';
@@ -86,9 +120,20 @@ void print_usage() {
 int main(int argc, char **argv) {
     const balance::benchmark::PerformanceCaseSpec *selected_case = nullptr;
     std::optional<float> selected_leg_length;
-    bool arguments_valid = argc >= 2 && (argc - 2) % 2 == 0;
-    for (int index = 2; arguments_valid && index < argc; index += 2) {
+    bool keyboard_drive = false;
+    bool arguments_valid = argc >= 2;
+    for (int index = 2; arguments_valid && index < argc;) {
         const std::string option = argv[index];
+        if (option == "--keyboard" && !keyboard_drive) {
+            keyboard_drive = true;
+            ++index;
+            continue;
+        }
+        if (index + 1 >= argc) {
+            arguments_valid = false;
+            break;
+        }
+
         const std::string value = argv[index + 1];
         if (option == "--case" && selected_case == nullptr) {
             selected_case =
@@ -111,7 +156,10 @@ int main(int argc, char **argv) {
         } else {
             arguments_valid = false;
         }
+        index += 2;
     }
+    arguments_valid = arguments_valid &&
+        !(keyboard_drive && selected_case != nullptr);
     if (!arguments_valid) {
         print_usage();
         return EXIT_FAILURE;
@@ -253,8 +301,12 @@ int main(int argc, char **argv) {
                         balance_start_time = plant.data().time;
                     }
                     previous_motion = snapshot.state_machine.motion;
-                    motion = make_motion_target(
-                        snapshot, balance_start_time, plant.data().time);
+                    motion = keyboard_drive ?
+                        make_keyboard_motion_target(
+                            snapshot, viewer.keyboard_drive_input()) :
+                        make_motion_target(
+                            snapshot, balance_start_time,
+                            plant.data().time);
                     command.system_enabled = static_cast<uint8_t>(
                         plant.data().time >= 2.0);
                     command.balance_restart =
@@ -287,6 +339,15 @@ int main(int argc, char **argv) {
                     title += case_issue;
                 }
                 if (case_finished) title += " | complete - R to replay";
+                viewer.set_title(title);
+            } else if (keyboard_drive) {
+                std::string title = "rm-balance-sim | keyboard | ";
+                title += motion.phase;
+                title += " | v=";
+                title += std::to_string(motion.forward_velocity);
+                title += " m/s | yaw=";
+                title += std::to_string(motion.yaw_rate);
+                title += " rad/s | WASD/arrows, Shift boost, Space, R, Esc";
                 viewer.set_title(title);
             }
 
