@@ -42,12 +42,36 @@ by the Liaoning University of Science and Technology COD RoboMaster team. See
 
 ## Linux build with the official MuJoCo SDK
 
-Download and extract the official Linux release, then point `MUJOCO_ROOT` at
-the directory containing `include` and `lib`:
+Install GLFW and OpenGL development files using the distribution package
+manager. For Ubuntu:
+
+```bash
+sudo apt install libglfw3-dev libgl1-mesa-dev
+```
+
+The GUI also expects the Dear ImGui v1.92.9b source tree at
+`third_party/imgui`, or at the path passed through `IMGUI_ROOT`. Third-party
+source trees are local dependencies and are ignored by Git.
+
+If MuJoCo headers and `libmujoco.so` are installed under a standard system
+prefix such as `/usr` or `/usr/local`, CMake can find them without an explicit
+root. Make sure the dynamic linker cache includes the installed library (for
+example, run `sudo ldconfig` after installing into `/usr/local/lib`):
 
 ```bash
 cmake -S . -B build \
-  -DMUJOCO_ROOT=/path/to/mujoco-3.9.0
+  -DIMGUI_ROOT=/path/to/imgui-1.92.9b
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+```
+
+For an official MuJoCo SDK extracted into a user directory instead, point
+`MUJOCO_ROOT` at the directory containing `include` and `lib`:
+
+```bash
+cmake -S . -B build \
+  -DMUJOCO_ROOT=/path/to/mujoco-3.9.0 \
+  -DIMGUI_ROOT=/path/to/imgui-1.92.9b
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
@@ -78,9 +102,14 @@ left/right arrows rotate the virtual gimbal at `+/-pi rad/s`, with a
 chooses the nearer front or rear direction; rear alignment reverses the mapped
 chassis-frame forward command. Releasing A/D brakes the virtual gimbal to zero
 rate and leaves its final world heading locked. The cyan arrow above the body
-shows that heading, while the title reports front/rear selection, heading error,
-gimbal rate, and mapped velocity. Space pauses, `R` resets, and Escape closes
-the viewer. Keyboard mode cannot be combined with an exact performance case.
+shows that heading. The fixed diagnostics sidebar reports front/rear selection,
+heading error, encoder-equivalent gimbal feedback, state/reference values, leg
+kinematics, and requested/applied actuation. Space pauses, `R` resets, and
+Escape closes the viewer; matching pause/reset controls are also available in
+the sidebar. The viewer opens at `1600x900`; the UI uses an 18-pixel base font
+and enlarged control spacing. Keyboard mode cannot be combined with an exact
+performance case.
+Keyboard and camera input are suppressed while Dear ImGui captures them.
 
 The simulation runs in real time until the window is closed. Use the left mouse
 button to rotate, right mouse button to pan, middle button or wheel to zoom,
@@ -92,8 +121,9 @@ balance-restart event. `LEG_POSITIONING` moves both virtual legs toward
 `0.18 m / -pi/2`; once stable, `ENGAGING` enables the current-model LQR and
 `67.5 N` axial support per leg. No mocap support or pose teleport is used. The
 simulator then repeats standing, `+/-0.25 m/s` travel, and virtual-gimbal
-`+/-1.57 rad/s` turning phases. It prints the current phase and ten-element
-state vector every 0.5 s.
+`+/-1.57 rad/s` turning phases. GUI runtime state and performance-case events
+are shown in the sidebar rather than printed periodically to the terminal; the
+terminal is reserved for usage and fatal errors.
 The chassis, leg links, and wheels collide with the infinite ground plane,
 while self-collision remains disabled. A 40 by 40 m checkerboard and gradient
 skybox provide the visible environment.
@@ -106,17 +136,20 @@ the Visual Studio generator. `MUJOCO_ROOT` must contain `include`, `lib`, and
 `bin/mujoco.dll`. A MuJoCo Python wheel that only contains headers and the DLL
 is not sufficient for linking the C++ targets.
 
-The recommended local layout is `third_party/mujoco-3.9.0`. The directory is
-ignored by Git. If GLFW source is also available at `third_party/glfw`, pass it
-to FetchContent explicitly so configuration does not require a Git clone:
+The recommended local layout is `third_party/mujoco-3.9.0`,
+`third_party/glfw`, and `third_party/imgui`. The entire directory is ignored by
+Git. Pass local GLFW and ImGui source directories explicitly so configuration
+does not require a Git clone and does not depend on a machine-specific default:
 
 ```powershell
 $mujocoRoot = (Resolve-Path .\third_party\mujoco-3.9.0).Path
 $glfwRoot = (Resolve-Path .\third_party\glfw).Path
+$imguiRoot = (Resolve-Path .\third_party\imgui).Path
 
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
   "-DMUJOCO_ROOT=$mujocoRoot" `
-  "-DFETCHCONTENT_SOURCE_DIR_GLFW=$glfwRoot"
+  "-DFETCHCONTENT_SOURCE_DIR_GLFW=$glfwRoot" `
+  "-DIMGUI_ROOT=$imguiRoot"
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 .\build\Release\rm_balance_sim.exe `
@@ -128,13 +161,16 @@ during configuration. This requires working Git network access. On Windows, an
 interrupted FetchContent clone can leave Git child processes and a read-only
 temporary pack file under `build/_deps`; stop those processes before deleting
 the build directory. Passing `MUJOCO_ROOT` only configures MuJoCo and does not
-change how GLFW is obtained. Prefer the explicit `-D` argument over a
-shell-local environment variable, especially when reusing a build directory.
+change how GLFW or ImGui is obtained. ImGui is never downloaded by CMake: a
+missing `IMGUI_ROOT` fails configuration immediately. Prefer explicit `-D`
+arguments over shell-local environment variables, especially when reusing a
+build directory.
 
 The GUI uses a 1 ms physics and control period and renders at the display refresh
 rate. It overrides the MuJoCo timestep in memory and does not modify the source
 MJCF. Headless tests can be built without the viewer using
-`-DBALANCE_BUILD_GUI=OFF`.
+`-DBALANCE_BUILD_GUI=OFF`; this mode neither finds GLFW nor reads
+`IMGUI_ROOT`.
 
 ## Performance benchmark
 

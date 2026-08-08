@@ -18,6 +18,7 @@ public:
 private:
     const mjModel &model_;
     int base_body_{};
+    int dof_count_{};
     bool enabled_{};
     double torque_{};
 };

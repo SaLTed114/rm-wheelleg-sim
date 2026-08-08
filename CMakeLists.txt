@@ -76,6 +76,7 @@ endif()
 balance_enable_warnings(balance_control_core)
 
 add_library(balance_simulation STATIC
+  src/sim/input/interactive_scenario.cpp
   src/sim/input/virtual_gimbal.cpp
   src/sim/mujoco_adapter.cpp
   src/sim/mujoco_plant.cpp
@@ -115,9 +116,34 @@ balance_enable_warnings(rm_balance_trim_scan)
 balance_configure_mujoco_runtime(rm_balance_trim_scan)
 
 if(BALANCE_BUILD_GUI)
+  set(IMGUI_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui"
+    CACHE PATH "Dear ImGui source directory")
+  if(NOT EXISTS "${IMGUI_ROOT}/imgui.cpp" OR
+      NOT EXISTS "${IMGUI_ROOT}/backends/imgui_impl_glfw.cpp" OR
+      NOT EXISTS "${IMGUI_ROOT}/backends/imgui_impl_opengl3.cpp")
+    message(FATAL_ERROR
+      "Dear ImGui sources were not found under IMGUI_ROOT=${IMGUI_ROOT}. "
+      "Provide Dear ImGui v1.92.9b with -DIMGUI_ROOT=<path> or configure "
+      "with -DBALANCE_BUILD_GUI=OFF.")
+  endif()
+  set(BALANCE_IMGUI_DIR "${IMGUI_ROOT}")
+  set(BALANCE_IMGUI_SOURCES
+    "${BALANCE_IMGUI_DIR}/imgui.cpp"
+    "${BALANCE_IMGUI_DIR}/imgui_draw.cpp"
+    "${BALANCE_IMGUI_DIR}/imgui_tables.cpp"
+    "${BALANCE_IMGUI_DIR}/imgui_widgets.cpp"
+    "${BALANCE_IMGUI_DIR}/backends/imgui_impl_glfw.cpp"
+    "${BALANCE_IMGUI_DIR}/backends/imgui_impl_opengl3.cpp")
+
   add_executable(rm_balance_sim
+    ${BALANCE_IMGUI_SOURCES}
     src/sim/main.cpp
+    src/sim/simulation_app.cpp
+    src/sim/simulation_ui.cpp
     src/sim/mujoco_viewer.cpp)
+  target_include_directories(rm_balance_sim SYSTEM PRIVATE
+    "${BALANCE_IMGUI_DIR}"
+    "${BALANCE_IMGUI_DIR}/backends")
   target_link_libraries(rm_balance_sim
     PRIVATE balance_benchmark_support glfw)
   balance_enable_warnings(rm_balance_sim)
@@ -170,6 +196,12 @@ if(BUILD_TESTING)
   target_link_libraries(virtual_gimbal_test PRIVATE balance_simulation)
   balance_enable_warnings(virtual_gimbal_test)
   add_test(NAME virtual_gimbal COMMAND virtual_gimbal_test)
+
+  add_executable(interactive_scenario_test
+    tests/interactive_scenario_test.cpp)
+  target_link_libraries(interactive_scenario_test PRIVATE balance_simulation)
+  balance_enable_warnings(interactive_scenario_test)
+  add_test(NAME interactive_scenario COMMAND interactive_scenario_test)
 
   add_executable(lqr_controller_test tests/lqr_controller_test.c)
   target_link_libraries(lqr_controller_test PRIVATE balance_control_core)

@@ -1,19 +1,13 @@
 #ifndef BALANCE_SIM_MUJOCO_VIEWER_HPP
 #define BALANCE_SIM_MUJOCO_VIEWER_HPP
 
-#include <string>
-
 #include <mujoco/mujoco.h>
+
+#include "input/keyboard_drive.hpp"
 
 struct GLFWwindow;
 
 namespace balance::sim {
-
-struct KeyboardDriveInput {
-    float forward_axis;
-    float yaw_axis;
-    bool boost;
-};
 
 class MujocoViewer {
 public:
@@ -24,14 +18,17 @@ public:
     MujocoViewer &operator=(const MujocoViewer &) = delete;
 
     [[nodiscard]] bool should_close() const;
-    [[nodiscard]] bool paused() const noexcept { return paused_; }
     [[nodiscard]] KeyboardDriveInput keyboard_drive_input() const;
+    [[nodiscard]] GLFWwindow *native_window() const noexcept {
+        return window_;
+    }
+    bool consume_pause_toggle();
     bool consume_reset_request();
 
-    void set_title(const std::string &title);
     void set_virtual_gimbal_heading(
         float world_yaw, bool visible = true) noexcept;
-    void render(mjData &data);
+    void render_scene(mjData &data, float sidebar_width);
+    void present();
     void poll_events();
 
 private:
@@ -61,7 +58,7 @@ private:
     bool left_button_{};
     bool middle_button_{};
     bool right_button_{};
-    bool paused_{};
+    bool pause_toggle_requested_{};
     bool reset_requested_{};
     bool virtual_gimbal_visible_{};
     float virtual_gimbal_yaw_{};

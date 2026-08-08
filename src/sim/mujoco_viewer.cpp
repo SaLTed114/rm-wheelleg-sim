@@ -1,9 +1,11 @@
 #include "mujoco_viewer.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 #include <GLFW/glfw3.h>
+#include <imgui.h>
 
 namespace balance::sim {
 
@@ -14,7 +16,7 @@ MujocoViewer::MujocoViewer(const mjModel &model)
     }
 
     window_ = glfwCreateWindow(
-        1280, 720, "rm-balance-sim", nullptr, nullptr);
+        1600, 900, "rm-balance-sim", nullptr, nullptr);
     if (!window_) {
         glfwTerminate();
         throw std::runtime_error("failed to create GLFW window");
@@ -83,14 +85,16 @@ KeyboardDriveInput MujocoViewer::keyboard_drive_input() const {
     };
 }
 
+bool MujocoViewer::consume_pause_toggle() {
+    const bool requested = pause_toggle_requested_;
+    pause_toggle_requested_ = false;
+    return requested;
+}
+
 bool MujocoViewer::consume_reset_request() {
     const bool requested = reset_requested_;
     reset_requested_ = false;
     return requested;
-}
-
-void MujocoViewer::set_title(const std::string &title) {
-    glfwSetWindowTitle(window_, title.c_str());
 }
 
 void MujocoViewer::set_virtual_gimbal_heading(
@@ -100,9 +104,23 @@ void MujocoViewer::set_virtual_gimbal_heading(
     virtual_gimbal_visible_ = visible;
 }
 
-void MujocoViewer::render(mjData &data) {
+void MujocoViewer::render_scene(
+    mjData &data, const float sidebar_width) {
     mjrRect viewport{};
     glfwGetFramebufferSize(window_, &viewport.width, &viewport.height);
+    int window_width = 0;
+    int window_height = 0;
+    glfwGetWindowSize(window_, &window_width, &window_height);
+    (void)window_height;
+    if (window_width > 0) {
+        const float framebuffer_scale =
+            static_cast<float>(viewport.width) /
+            static_cast<float>(window_width);
+        const int reserved_width = static_cast<int>(
+            std::lround(sidebar_width * framebuffer_scale));
+        viewport.width = std::max(0, viewport.width - reserved_width);
+    }
+    if (viewport.width <= 0 || viewport.height <= 0) return;
     mjv_updateScene(
         &model_, &data, &option_, nullptr,
         &camera_, mjCAT_ALL, &scene_);
@@ -131,6 +149,9 @@ void MujocoViewer::render(mjData &data) {
             &marker, mjGEOM_ARROW, kMarkerWidth, from, to);
     }
     mjr_render(viewport, &scene_, &context_);
+}
+
+void MujocoViewer::present() {
     glfwSwapBuffers(window_);
 }
 
@@ -179,24 +200,43 @@ void MujocoViewer::handle_key(int key, int action) {
 
     if (key == GLFW_KEY_ESCAPE) {
         glfwSetWindowShouldClose(window_, GLFW_TRUE);
-    } else if (key == GLFW_KEY_SPACE) {
-        paused_ = !paused_;
+        return;
+    }
+    if (ImGui::GetCurrentContext() != nullptr &&
+        ImGui::GetIO().WantCaptureKeyboard) {
+        return;
+    }
+    if (key == GLFW_KEY_SPACE) {
+        pause_toggle_requested_ = true;
     } else if (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_R) {
         reset_requested_ = true;
     }
 }
 
 void MujocoViewer::handle_mouse_button() {
+    glfwGetCursorPos(window_, &cursor_x_, &cursor_y_);
+    if (ImGui::GetCurrentContext() != nullptr &&
+        ImGui::GetIO().WantCaptureMouse) {
+        left_button_ = false;
+        middle_button_ = false;
+        right_button_ = false;
+        return;
+    }
     left_button_ =
         glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
     middle_button_ =
         glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS;
     right_button_ =
         glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
-    glfwGetCursorPos(window_, &cursor_x_, &cursor_y_);
 }
 
 void MujocoViewer::handle_cursor_position(double x, double y) {
+    if (ImGui::GetCurrentContext() != nullptr &&
+        ImGui::GetIO().WantCaptureMouse) {
+        cursor_x_ = x;
+        cursor_y_ = y;
+        return;
+    }
     if (!left_button_ && !middle_button_ && !right_button_) {
         return;
     }
@@ -232,6 +272,10 @@ void MujocoViewer::handle_cursor_position(double x, double y) {
 }
 
 void MujocoViewer::handle_scroll(double y_offset) {
+    if (ImGui::GetCurrentContext() != nullptr &&
+        ImGui::GetIO().WantCaptureMouse) {
+        return;
+    }
     mjv_moveCamera(
         &model_, mjMOUSE_ZOOM, 0.0, -0.05 * y_offset,
         &scene_, &camera_);
