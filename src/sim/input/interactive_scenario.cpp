@@ -54,11 +54,6 @@ const InteractiveScenarioFrame &InteractiveScenario::update(
     }
 
     frame_.gimbal = virtual_gimbal_.state();
-    frame_.gimbal_feedback = virtual_gimbal_initialized_ ?
-        virtual_gimbal_.feedback(
-            snapshot.state.value[BC_STATE_PSI],
-            snapshot.state.value[BC_STATE_DPSI]) :
-        bc_gimbal_feedback_t{};
     frame_.phase = target.phase;
     return frame_;
 }

@@ -16,7 +16,8 @@ int main() {
     bc_state_vector_t reference = {0};
 
     bc_yaw_reference_default_config(&config);
-    if (!nearly_equal(config.rate_limit, 1.5F * BC_PI_F)) {
+    if (!nearly_equal(config.rate_limit, 1.5F * BC_PI_F) ||
+        !nearly_equal(config.acceleration_limit, 10.0F)) {
         fputs("default yaw reference config is incorrect\n", stderr);
         return 1;
     }
@@ -24,7 +25,8 @@ int main() {
     bc_yaw_reference_init(&yaw, &config);
     bc_yaw_reference_start(&yaw, -0.75F, 0.25F, &reference);
     if (reference.value[BC_STATE_PSI] != -0.75F ||
-        reference.value[BC_STATE_DPSI] != 0.25F) {
+        reference.value[BC_STATE_DPSI] != 0.25F ||
+        yaw.acceleration_reference != 0.0F) {
         fputs("yaw reference start did not capture heading\n", stderr);
         return 1;
     }
@@ -32,16 +34,17 @@ int main() {
     state.value[BC_STATE_PSI] = 7.0F;
     state.value[BC_STATE_DPSI] = 0.5F;
     bc_yaw_reference_update(
-        &yaw, &state, 0.3F, 0.2F, &reference);
+        &yaw, &state, 0.3F, 0.2F, 0.1F, &reference);
     if (!nearly_equal(reference.value[BC_STATE_PSI], 7.3F) ||
-        !nearly_equal(reference.value[BC_STATE_DPSI], 0.7F)) {
+        !nearly_equal(reference.value[BC_STATE_DPSI], 0.7F) ||
+        !nearly_equal(yaw.acceleration_reference, 4.5F)) {
         fputs("relative heading target was not reconstructed\n", stderr);
         return 1;
     }
 
     bc_yaw_reference_update(
         &yaw, &state, 2.0F * BC_PI_F + 0.25F,
-        100.0F, &reference);
+        100.0F, 0.1F, &reference);
     if (!nearly_equal(reference.value[BC_STATE_PSI], 7.25F) ||
         !nearly_equal(
             reference.value[BC_STATE_DPSI], 1.5F * BC_PI_F)) {
@@ -50,7 +53,7 @@ int main() {
     }
 
     bc_yaw_reference_update(
-        &yaw, &state, -0.4F, -100.0F, &reference);
+        &yaw, &state, -0.4F, -100.0F, 0.1F, &reference);
     if (!nearly_equal(reference.value[BC_STATE_PSI], 6.6F) ||
         !nearly_equal(
             reference.value[BC_STATE_DPSI], -1.5F * BC_PI_F)) {
@@ -58,8 +61,20 @@ int main() {
         return 1;
     }
 
+    bc_yaw_reference_update(
+        &yaw, &state, 0.1F, 0.5F, 0.0F, &reference);
+    if (!nearly_equal(reference.value[BC_STATE_DPSI], 1.0F) ||
+        yaw.acceleration_reference != 0.0F ||
+        yaw.previous_rate != 1.0F) {
+        fputs("non-positive dt produced yaw acceleration\n", stderr);
+        return 1;
+    }
+
     bc_yaw_reference_reset(&yaw);
-    if (!nearly_equal(yaw.config.rate_limit, 1.5F * BC_PI_F)) {
+    if (!nearly_equal(yaw.config.rate_limit, 1.5F * BC_PI_F) ||
+        !nearly_equal(yaw.config.acceleration_limit, 10.0F) ||
+        yaw.previous_rate != 0.0F ||
+        yaw.acceleration_reference != 0.0F) {
         fputs("yaw reference reset changed configuration\n", stderr);
         return 1;
     }

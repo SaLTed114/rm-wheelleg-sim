@@ -5,6 +5,8 @@
 #include <limits>
 #include <stdexcept>
 
+#include "balance/math_utils.h"
+
 namespace balance::sim {
 
 namespace {
@@ -28,6 +30,10 @@ SimulationRunner::SimulationRunner(
 ) : plant_(plant), adapter_(adapter) {
     bc_controller_init(&controller_, &config);
     bc_controller_capture_snapshot(&controller_, &snapshot_);
+    bc_sensor_feedback_t feedback{};
+    adapter_.read(plant_.data(), feedback);
+    yaw_frame_offset_ = feedback.imu.yaw -
+        snapshot_.state.value[BC_STATE_PSI];
 }
 
 void SimulationRunner::reset() {
@@ -35,6 +41,10 @@ void SimulationRunner::reset() {
     bc_controller_reset(&controller_);
     bc_controller_capture_snapshot(&controller_, &snapshot_);
     feedback_ = {};
+    bc_sensor_feedback_t feedback{};
+    adapter_.read(plant_.data(), feedback);
+    yaw_frame_offset_ = feedback.imu.yaw -
+        snapshot_.state.value[BC_STATE_PSI];
 }
 
 void SimulationRunner::step(const bc_operator_command_t &command) {
@@ -49,6 +59,29 @@ void SimulationRunner::step(
     adapter_.read(plant_.data(), feedback);
     feedback.gimbal = gimbal_feedback;
     step_with_feedback(command, feedback);
+}
+
+void SimulationRunner::step_with_gimbal_heading(
+    const bc_operator_command_t &command,
+    const float world_yaw,
+    const float world_yaw_rate
+) {
+    bc_sensor_feedback_t feedback{};
+    adapter_.read(plant_.data(), feedback);
+    feedback.gimbal = gimbal_feedback(
+        world_yaw, world_yaw_rate, feedback.imu);
+    step_with_feedback(command, feedback);
+}
+
+bc_gimbal_feedback_t SimulationRunner::gimbal_feedback(
+    const float world_yaw,
+    const float world_yaw_rate,
+    const bc_imu_feedback_t &imu
+) const noexcept {
+    return {
+        bc_wrap_anglef(world_yaw + yaw_frame_offset_ - imu.yaw),
+        world_yaw_rate - imu.yaw_rate,
+    };
 }
 
 void SimulationRunner::step_with_feedback(

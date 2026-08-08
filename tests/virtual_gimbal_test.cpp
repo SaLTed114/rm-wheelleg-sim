@@ -69,14 +69,5 @@ int main() {
         return 1;
     }
 
-    gimbal.reset(2.0F);
-    gimbal.update(1.0F, 0.1F);
-    const auto feedback = gimbal.feedback(1.8F, -0.3F);
-    if (!near(feedback.relative_yaw, 0.3F) ||
-        !near(feedback.relative_yaw_rate, 1.3F)) {
-        std::cerr << "virtual gimbal feedback mapping is incorrect\n";
-        return 1;
-    }
-
     return 0;
 }

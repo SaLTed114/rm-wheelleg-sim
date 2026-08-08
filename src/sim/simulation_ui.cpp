@@ -202,6 +202,11 @@ void SimulationUi::draw_motion(const SimulationUiFrame &frame) {
         ImGui::Text("% .3f rad", snapshot.heading_error);
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Yaw ref acceleration");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("% .3f rad/s^2", snapshot.yaw_acceleration_reference);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
         ImGui::TextUnformatted("Gimbal encoder");
         ImGui::TableSetColumnIndex(1);
         ImGui::Text("% .3f rad", snapshot.gimbal.relative_yaw);

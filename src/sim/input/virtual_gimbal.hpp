@@ -31,9 +31,6 @@ public:
     [[nodiscard]] const VirtualGimbalState &state() const noexcept {
         return state_;
     }
-    [[nodiscard]] bc_gimbal_feedback_t feedback(
-        float chassis_yaw, float chassis_yaw_rate) const noexcept;
-
 private:
     VirtualGimbalConfig config_;
     bc_reference_ramp_config_t rate_config_{};

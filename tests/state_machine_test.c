@@ -41,7 +41,8 @@ int main() {
         config.engage_duration != 0.1F ||
         config.forward_reference.velocity_ramp.rate_limit != 5.0F ||
         fabsf(config.yaw_reference.rate_limit - 1.5F * BC_PI_F) >
-            1.0e-6F) {
+            1.0e-6F ||
+        config.yaw_reference.acceleration_limit != 10.0F) {
         fputs("default motion config is incorrect\n", stderr);
         return 1;
     }
@@ -143,6 +144,7 @@ int main() {
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.5F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_PSI] + 0.30F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DPSI] - 0.4F) > 1.0e-6F ||
+        fabsf(command.yaw_acceleration_reference - 4.0F) > 1.0e-6F ||
         command.disabled_state_feedback !=
             BC_STATE_FEEDBACK_MASK(BC_STATE_S)) {
         fputs("active balance did not use rate-limited targets\n", stderr);
@@ -161,6 +163,7 @@ int main() {
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.2F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_PSI] + 0.30F) > 1.0e-6F ||
         command.state_reference.value[BC_STATE_DPSI] != 0.0F ||
+        fabsf(command.yaw_acceleration_reference + 4.0F) > 1.0e-6F ||
         command.disabled_state_feedback !=
             BC_STATE_FEEDBACK_MASK(BC_STATE_S) ||
         command.state_reference.value[BC_STATE_THETA_L] != 0.0F ||
@@ -199,6 +202,7 @@ int main() {
         fabsf(command.state_reference.value[BC_STATE_PSI] - 1.25F) >
             1.0e-6F ||
         command.state_reference.value[BC_STATE_DPSI] != 0.0F ||
+        command.yaw_acceleration_reference != -10.0F ||
         command.disabled_state_feedback != 0U) {
         fputs("pure yaw did not remain in forward hold\n", stderr);
         return 1;
@@ -241,6 +245,7 @@ int main() {
         system.motion.state_reference.value[BC_STATE_PSI] != 0.0F ||
         system.motion.forward.state != BC_FORWARD_IDLE ||
         system.motion.forward_reference.velocity_ramp.value != 0.0F ||
+        system.motion.yaw_reference.acceleration_reference != 0.0F ||
         system.motion.engage_hold.elapsed_seconds != 0.0F ||
         !control_uses_strategies(
             &command,

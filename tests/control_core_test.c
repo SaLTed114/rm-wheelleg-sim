@@ -16,7 +16,8 @@ int main() {
     bc_control_default_config(&config);
     if (fabsf(
             config.lqr_compensation.leg_angle_trim -
-            5.5F * BC_PI_F / 180.0F) > 1.0e-7F) {
+            5.5F * BC_PI_F / 180.0F) > 1.0e-7F ||
+        config.lqr_compensation.yaw_acceleration_feedforward_scale != 0.9F) {
         fputs("default LQR leg-angle trim is incorrect\n", stderr);
         return 1;
     }
@@ -104,6 +105,39 @@ int main() {
         }
     }
 
+    bc_control_config_t feedforward_config = config;
+    feedforward_config.lqr_compensation.leg_angle_trim = 0.0F;
+    feedforward_config.lqr_compensation.
+        yaw_acceleration_feedforward_scale = 0.5F;
+    bc_control_core_t feedforward_core;
+    bc_control_core_init(&feedforward_core, &feedforward_config);
+    bc_control_core_update(&feedforward_core, &feedback, 0.001F, 0U);
+    bc_control_command_t feedforward_command = {
+        .wheel_strategy = BC_WHEEL_LQR,
+        .state_reference = feedforward_core.observer.state,
+        .yaw_acceleration_reference = 2.0F,
+    };
+    bc_control_core_calculate(&feedforward_core, &feedforward_command);
+    const float feedforward_length = 0.5F * (
+        feedforward_core.observer.leg[BC_L].length +
+        feedforward_core.observer.leg[BC_R].length);
+    bc_state_vector_t zero_error = {0};
+    bc_lqr_output_t expected_feedforward = {0};
+    bc_lqr_calculate(
+        feedforward_length, &zero_error, 1.0F,
+        &expected_feedforward);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        if (fabsf(
+                feedforward_core.actuation_request.wheel_torque[side] -
+                expected_feedforward.wheel_torque[side]) > 1.0e-6F) {
+            fprintf(
+                stderr,
+                "wheel %d did not apply yaw acceleration feedforward\n",
+                side);
+            return 1;
+        }
+    }
+
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         feedback.leg[side].joint[BC_FRONT].angle = 3.10F;
         feedback.leg[side].joint[BC_REAR].angle = 3.10F;
@@ -168,7 +202,7 @@ int main() {
         state_error.value[state] = effective_reference.value[state] -
             trim_core.observer.state.value[state];
     }
-    bc_lqr_calculate(trim_length, &state_error, &expected_lqr);
+    bc_lqr_calculate(trim_length, &state_error, 0.0F, &expected_lqr);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         if (fabsf(
                 trim_core.actuation_request.wheel_torque[side] -

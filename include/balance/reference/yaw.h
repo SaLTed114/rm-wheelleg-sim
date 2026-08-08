@@ -9,10 +9,13 @@ extern "C" {
 
 typedef struct {
     float rate_limit;
+    float acceleration_limit;
 } bc_yaw_reference_config_t;
 
 typedef struct {
     bc_yaw_reference_config_t config;
+    float previous_rate;
+    float acceleration_reference;
 } bc_yaw_reference_t;
 
 void bc_yaw_reference_default_config(
@@ -27,10 +30,11 @@ void bc_yaw_reference_start(
     float current_yaw_rate,
     bc_state_vector_t *reference);
 void bc_yaw_reference_update(
-    const bc_yaw_reference_t *yaw,
+    bc_yaw_reference_t *yaw,
     const bc_state_vector_t *state,
     float heading_error,
     float relative_yaw_rate,
+    float timestep_seconds,
     bc_state_vector_t *reference);
 
 #ifdef __cplusplus

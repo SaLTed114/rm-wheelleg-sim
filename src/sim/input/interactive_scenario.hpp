@@ -14,7 +14,6 @@ enum class InteractiveMode {
 
 struct InteractiveScenarioFrame {
     bc_operator_command_t command{};
-    bc_gimbal_feedback_t gimbal_feedback{};
     VirtualGimbalState gimbal{};
     const char *phase{"off"};
 };

@@ -11,6 +11,7 @@ extern "C" {
 
 typedef struct {
     float leg_angle_trim;
+    float yaw_acceleration_feedforward_scale;
 } bc_lqr_compensation_t;
 
 typedef struct {

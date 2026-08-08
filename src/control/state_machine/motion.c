@@ -200,8 +200,11 @@ static void bc_motion_action(
             input->state,
             motion->heading_error,
             input->gimbal_feedback->relative_yaw_rate,
+            input->timestep_seconds,
             &motion->state_reference);
         output->state_reference = motion->state_reference;
+        output->yaw_acceleration_reference =
+            motion->yaw_reference.acceleration_reference;
         break;
     }
 }

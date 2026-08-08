@@ -15,6 +15,8 @@ void bc_controller_capture_snapshot(
         controller->system.motion.alignment;
     snapshot->state = controller->control_core.observer.state;
     snapshot->state_reference = controller->system.motion.state_reference;
+    snapshot->yaw_acceleration_reference =
+        controller->system.motion.yaw_reference.acceleration_reference;
     snapshot->roll = controller->control_core.observer.roll;
     snapshot->roll_rate = controller->control_core.observer.roll_rate;
     snapshot->gimbal = controller->gimbal_feedback;

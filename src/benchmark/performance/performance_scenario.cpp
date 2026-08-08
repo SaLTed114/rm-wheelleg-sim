@@ -126,7 +126,6 @@ void PerformanceScenario::reset(const double simulation_time) noexcept {
     phase_ = PerformancePhase::disabled_settle;
     command_ = {};
     virtual_gimbal_.reset();
-    gimbal_feedback_ = {};
     gimbal_initialized_ = false;
     phase_start_time_ = simulation_time;
     simulation_time_ = simulation_time;
@@ -161,7 +160,6 @@ void PerformanceScenario::update(
         }
     } else {
         virtual_gimbal_.reset(snapshot.state.value[BC_STATE_PSI]);
-        gimbal_feedback_ = {};
         gimbal_initialized_ = false;
     }
 
@@ -259,9 +257,6 @@ void PerformanceScenario::update(
     if (gimbal_initialized_) {
         virtual_gimbal_.update(
             target_gimbal_yaw_rate, timestep_seconds);
-        gimbal_feedback_ = virtual_gimbal_.feedback(
-            snapshot.state.value[BC_STATE_PSI],
-            snapshot.state.value[BC_STATE_DPSI]);
         command_.forward_velocity = gimbal_forward_velocity;
     }
 }

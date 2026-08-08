@@ -31,9 +31,24 @@ static float bc_lqr_gain(
     return gain;
 }
 
+static float bc_lqr_yaw_acceleration_feedforward(
+    const int input, const float normalized_length
+) {
+    const float *coefficient =
+        bc_lqr_generated_yaw_acceleration_feedforward_coefficients[input];
+    float feedforward = coefficient[0];
+
+    for (int index = 1;
+         index < BC_LQR_GENERATED_COEFFICIENT_COUNT; ++index) {
+        feedforward = feedforward * normalized_length + coefficient[index];
+    }
+    return feedforward;
+}
+
 void bc_lqr_calculate(
     const float leg_length,
     const bc_state_vector_t *state_error,
+    const float yaw_acceleration_reference,
     bc_lqr_output_t *output
 ) {
     const float normalized_length = bc_clampf(
@@ -44,6 +59,9 @@ void bc_lqr_calculate(
 
     for (int input_index = 0;
          input_index < BC_LQR_GENERATED_INPUT_COUNT; ++input_index) {
+        input[input_index] = bc_lqr_yaw_acceleration_feedforward(
+            input_index, normalized_length) *
+            yaw_acceleration_reference;
         for (int state_index = 0;
              state_index < BC_LQR_GENERATED_STATE_COUNT; ++state_index) {
             input[input_index] += bc_lqr_gain(

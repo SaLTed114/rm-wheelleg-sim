@@ -97,13 +97,22 @@ void step_controller(
     } else {
         source.active_initialized = false;
     }
-    const bc_gimbal_feedback_t gimbal_feedback =
-        source.active_initialized ?
-            source.gimbal.feedback(
-                runner.snapshot().state.value[BC_STATE_PSI],
-                runner.snapshot().state.value[BC_STATE_DPSI]) :
-            bc_gimbal_feedback_t{};
-    runner.step(command, gimbal_feedback);
+    const auto &gimbal = source.gimbal.state();
+    runner.step_with_gimbal_heading(
+        command, gimbal.world_yaw, gimbal.world_yaw_rate);
+
+    const auto &snapshot = runner.snapshot();
+    const float heading_error = bc_wrap_anglef(
+        snapshot.state.value[BC_STATE_PSI] +
+        snapshot.gimbal.relative_yaw - gimbal.world_yaw);
+    const float rate_error =
+        snapshot.state.value[BC_STATE_DPSI] +
+        snapshot.gimbal.relative_yaw_rate - gimbal.world_yaw_rate;
+    if (std::abs(heading_error) > 1.0e-5F ||
+        std::abs(rate_error) > 1.0e-5F) {
+        throw std::runtime_error(
+            "virtual gimbal feedback was not sampled with the current IMU");
+    }
 }
 
 MotionMetrics run_motion_phase(

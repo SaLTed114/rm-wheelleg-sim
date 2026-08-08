@@ -13,7 +13,8 @@ void print_usage() {
     std::cerr
         << "usage: rm_balance_sim <model.xml> [--keyboard] "
            "[--case <case-name>] "
-           "[--leg-length <metres>]\n"
+           "[--leg-length <metres>] "
+           "[--yaw-acceleration-feedforward <scale>]\n"
         << "keyboard mode: W/S forward/reverse, A/D left/right, "
            "Shift boosts forward speed, "
            "Space pause, R reset, Esc quit\n"
@@ -61,6 +62,21 @@ bool parse_arguments(
             if (consumed != value.size() ||
                 !std::isfinite(*options.leg_length) ||
                 *options.leg_length <= 0.0F) {
+                return false;
+            }
+        } else if (option == "--yaw-acceleration-feedforward" &&
+                   !options.yaw_acceleration_feedforward_scale) {
+            std::size_t consumed = 0U;
+            try {
+                options.yaw_acceleration_feedforward_scale =
+                    std::stof(value, &consumed);
+            } catch (const std::exception &) {
+                return false;
+            }
+            if (consumed != value.size() ||
+                !std::isfinite(
+                    *options.yaw_acceleration_feedforward_scale) ||
+                *options.yaw_acceleration_feedforward_scale < 0.0F) {
                 return false;
             }
         } else {

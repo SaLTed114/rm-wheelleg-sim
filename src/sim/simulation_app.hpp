@@ -14,6 +14,7 @@ struct SimulationAppOptions {
     std::filesystem::path model_path;
     const benchmark::PerformanceCaseSpec *performance_case{};
     std::optional<float> leg_length;
+    std::optional<float> yaw_acceleration_feedforward_scale;
     bool keyboard_drive{};
 };
 

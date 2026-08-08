@@ -33,8 +33,7 @@ int main() {
     const auto &disabled = keyboard.update(
         snapshot, KeyboardDriveInput{}, 1.0, 0.001F);
     if (disabled.command.system_enabled ||
-        disabled.command.balance_restart ||
-        disabled.gimbal_feedback.relative_yaw != 0.0F) {
+        disabled.command.balance_restart) {
         std::cerr << "disabled keyboard scenario produced a command\n";
         return 1;
     }
@@ -52,8 +51,7 @@ int main() {
     const auto &moving = keyboard.update(snapshot, input, 3.0, 0.001F);
     if (!near(moving.command.forward_velocity, 2.0F) ||
         !near(moving.gimbal.world_yaw_rate, 0.01F) ||
-        moving.gimbal_feedback.relative_yaw <= 0.0F ||
-        !near(moving.gimbal_feedback.relative_yaw_rate, 0.21F)) {
+        moving.gimbal.world_yaw <= 0.5F) {
         std::cerr << "keyboard motion was not mapped through the gimbal\n";
         return 1;
     }
@@ -61,9 +59,7 @@ int main() {
     snapshot.state_machine.motion = BC_MOTION_LEG_POSITIONING;
     const auto &inactive = keyboard.update(snapshot, input, 3.1, 0.001F);
     if (inactive.command.forward_velocity != 0.0F ||
-        inactive.gimbal.world_yaw_rate != 0.0F ||
-        inactive.gimbal_feedback.relative_yaw != 0.0F ||
-        inactive.gimbal_feedback.relative_yaw_rate != 0.0F) {
+        inactive.gimbal.world_yaw_rate != 0.0F) {
         std::cerr << "inactive motion did not reset interactive input\n";
         return 1;
     }

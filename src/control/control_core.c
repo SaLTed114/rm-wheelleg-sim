@@ -51,6 +51,7 @@ void bc_control_default_config(bc_control_config_t *config) {
         },
         .lqr_compensation = {
             .leg_angle_trim = 5.5F * BC_PI_F / 180.0F,
+            .yaw_acceleration_feedforward_scale = 0.9F,
         },
         .support_force      = 67.5F,
         .wheel_torque_limit = 6.32F,
@@ -120,7 +121,11 @@ void bc_control_core_calculate(
         }
 
         bc_lqr_calculate(
-            average_length, &state_error, &lqr_output);
+            average_length, &state_error,
+            core->config.lqr_compensation.
+                yaw_acceleration_feedforward_scale *
+                command->yaw_acceleration_reference,
+            &lqr_output);
     }
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {

@@ -192,7 +192,8 @@ int main() {
         fabsf(snapshot.state_reference.value[BC_STATE_PSI] - 0.1F) >
             1.0e-7F ||
         fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.2F) >
-            1.0e-7F) {
+            1.0e-7F ||
+        snapshot.yaw_acceleration_reference != 10.0F) {
         fputs("pure yaw did not activate in forward hold\n", stderr);
         return 1;
     }
@@ -210,7 +211,8 @@ int main() {
         fabsf(snapshot.state_reference.value[BC_STATE_PSI] - 0.1F) >
             1.0e-7F ||
         fabsf(snapshot.state_reference.value[BC_STATE_DPSI] - 0.2F) >
-            1.0e-7F) {
+            1.0e-7F ||
+        snapshot.yaw_acceleration_reference != 0.0F) {
         fputs("forward command did not leave hold\n", stderr);
         return 1;
     }
@@ -265,6 +267,7 @@ int main() {
         snapshot.gimbal.relative_yaw_rate != 0.0F ||
         snapshot.mapped_forward_velocity != 0.0F ||
         snapshot.heading_error != 0.0F ||
+        snapshot.yaw_acceleration_reference != 0.0F ||
         !actuation_is_zero(&snapshot.actuation_request) ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("reset did not clear the captured output\n", stderr);

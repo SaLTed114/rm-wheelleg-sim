@@ -26,6 +26,7 @@ struct PerformanceBenchmarkConfig {
     ForwardVelocityObservation forward_velocity_observation{
         ForwardVelocityObservation::wheel_odometry};
     bool roll_restrained{};
+    std::optional<double> yaw_acceleration_feedforward_scale;
 };
 
 struct PerformanceResult {
@@ -33,6 +34,7 @@ struct PerformanceResult {
     double leg_length_target{};
     ForwardVelocityObservation forward_velocity_observation{};
     bool roll_restrained{};
+    double yaw_acceleration_feedforward_scale{};
     bool completed{};
     bool balance_engaged{};
     bool leg_length_valid{true};
@@ -75,7 +77,6 @@ private:
         const PerformanceCaseSpec &spec, const char *phase,
         const bc_operator_command_t &command,
         const sim::VirtualGimbalState &gimbal,
-        const bc_gimbal_feedback_t &gimbal_feedback,
         PerformanceResult *result, bool evaluate_tracking,
         bool evaluate_settle, bool stopping);
     bool collect(
@@ -85,7 +86,7 @@ private:
         bool stopping) const;
     void step_runner(
         const bc_operator_command_t &command,
-        const bc_gimbal_feedback_t &gimbal_feedback);
+        const sim::VirtualGimbalState &gimbal);
     void finish_result(PerformanceResult &result) const;
     void write_trace(
         const PerformanceCaseSpec &spec, const char *phase,
@@ -103,6 +104,7 @@ private:
     CsvWriter summary_;
     CsvWriter trace_;
     double leg_length_target_{};
+    double yaw_acceleration_feedforward_scale_{};
     std::size_t trace_stride_{};
     std::size_t sample_index_{};
 };

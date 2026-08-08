@@ -63,4 +63,13 @@ static const float bc_lqr_generated_coefficients
     }
 };
 
+static const float bc_lqr_generated_yaw_acceleration_feedforward_coefficients
+    [BC_LQR_GENERATED_INPUT_COUNT]
+    [BC_LQR_GENERATED_COEFFICIENT_COUNT] = {
+    { 0.000009866F, -0.000015916F,  0.000038626F, -0.427015692F},
+    { 0.000009882F, -0.000015939F,  0.000038650F,  0.426838517F},
+    { 0.000863073F, -0.001738397F, -0.793996274F, -2.346767664F},
+    {-0.000925827F,  0.001851514F,  0.793792844F,  2.347097158F}
+};
+
 #endif

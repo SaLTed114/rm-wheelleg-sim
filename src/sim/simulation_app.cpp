@@ -94,6 +94,11 @@ private:
         if (options.leg_length) {
             config.motion.leg_length = *options.leg_length;
         }
+        if (options.yaw_acceleration_feedforward_scale) {
+            config.control.lqr_compensation.
+                yaw_acceleration_feedforward_scale =
+                    *options.yaw_acceleration_feedforward_scale;
+        }
         return config;
     }
 
@@ -119,7 +124,10 @@ private:
             static_cast<float>(plant_.timestep()));
         phase_ = frame.phase;
         displayed_gimbal_ = frame.gimbal;
-        runner_.step(frame.command, frame.gimbal_feedback);
+        runner_.step_with_gimbal_heading(
+            frame.command,
+            frame.gimbal.world_yaw,
+            frame.gimbal.world_yaw_rate);
         return true;
     }
 
@@ -137,8 +145,10 @@ private:
         }
 
         const bool monitored = performance_->monitored();
-        runner_.step(
-            performance_->command(), performance_->gimbal_feedback());
+        runner_.step_with_gimbal_heading(
+            performance_->command(),
+            performance_->gimbal().world_yaw,
+            performance_->gimbal().world_yaw_rate);
         if (!monitored) return true;
 
         const auto sample = sampler_.read(

@@ -75,6 +75,7 @@ int main(int argc, char **argv) {
     std::optional<double> leg_length;
     std::optional<std::size_t> trace_stride;
     bool roll_restrained = false;
+    std::optional<double> yaw_acceleration_feedforward_scale;
     ForwardVelocityObservation forward_observation =
         ForwardVelocityObservation::wheel_odometry;
     const PerformanceCaseSpec *selected_case = nullptr;
@@ -173,6 +174,18 @@ int main(int argc, char **argv) {
         } else if (option == "--roll-restraint" && !roll_restrained) {
             roll_restrained = value == "on";
             arguments_valid = roll_restrained;
+        } else if (option == "--yaw-acceleration-feedforward" &&
+                   !yaw_acceleration_feedforward_scale) {
+            std::size_t consumed = 0U;
+            try {
+                yaw_acceleration_feedforward_scale =
+                    std::stod(value, &consumed);
+            } catch (const std::exception &) {
+                arguments_valid = false;
+                break;
+            }
+            arguments_valid = consumed == value.size() &&
+                *yaw_acceleration_feedforward_scale >= 0.0;
         } else if (option == "--forward-observation" &&
                    forward_observation ==
                        ForwardVelocityObservation::wheel_odometry) {
@@ -210,6 +223,7 @@ int main(int argc, char **argv) {
                "--stop-settle-seconds <seconds>] "
                "[--leg-length <metres>] [--trace-stride <steps>] "
                "[--roll-restraint on] "
+               "[--yaw-acceleration-feedforward <scale>] "
                "[--forward-observation base-truth|contact-gated]\n";
         return EXIT_FAILURE;
     }
@@ -220,6 +234,7 @@ int main(int argc, char **argv) {
             trace_stride.value_or(kDefaultTraceStride),
             forward_observation,
             roll_restrained,
+            yaw_acceleration_feedforward_scale,
         };
         PerformanceBenchmark benchmark(argv[1], argv[2], config);
         std::vector<PerformanceCaseSpec> cases;

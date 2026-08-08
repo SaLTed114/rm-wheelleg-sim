@@ -29,14 +29,4 @@ void VirtualGimbal::update(
     state_.world_yaw_rate = rate;
 }
 
-bc_gimbal_feedback_t VirtualGimbal::feedback(
-    const float chassis_yaw,
-    const float chassis_yaw_rate
-) const noexcept {
-    return {
-        bc_wrap_anglef(state_.world_yaw - chassis_yaw),
-        state_.world_yaw_rate - chassis_yaw_rate,
-    };
-}
-
 } // namespace balance::sim

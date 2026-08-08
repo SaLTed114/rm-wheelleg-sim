@@ -25,8 +25,12 @@ NORMAL motion selects the nearer chassis front/rear direction from the gimbal
 motor feedback, reverses the chassis-frame forward command when rear is chosen,
 and passes the selected relative angle/rate to `yaw_reference`. `PSI/DPSI` stay
 enabled throughout NORMAL motion and the target rate is limited to
-`1.5*pi rad/s`. The simulation provides a shared virtual gimbal, while the
-front/rear policy lives in the C control core just as it will on the lower board;
+`1.5*pi rad/s`. The yaw reference also reports the bounded derivative of
+`DPSI_ref` as `DDPSI_ref`. A model-generated, leg-length-scheduled yaw
+acceleration feedforward uses a default scale of `0.9`; the scale remains
+configurable so experiments can compare it with zero feedforward. The simulation provides a shared virtual
+gimbal. Its encoder-equivalent angle and rate use the same current IMU sample
+as the controller, while the front/rear policy lives in the C control core;
 task-level `SPIN` remains a documented future feature and is not represented by
 an axis-level state or a low-level test bypass.
 Roll and roll rate are observable through the snapshot but are not yet used for
@@ -213,12 +217,14 @@ options do not change the controller defaults:
 - `--forward-observation contact-gated` freezes the common wheel-speed
   observation for 50 ms after either wheel loses contact.
 - `--roll-restraint on` applies a benchmark-only ideal base roll restraint.
+- `--yaw-acceleration-feedforward <scale>` overrides the generated yaw
+  acceleration feedforward scale; pass `0` for a no-feedforward comparison.
 
 At trace level, `wheel_encoder_velocity_l/r` and
 `wheel_center_velocity_l/r` separate encoder slip from motion of the wheel
 axis. These fields are diagnostic telemetry and are not control inputs.
 `command_forward`, `gimbal_relative_yaw/rate`, `alignment`,
-`mapped_forward`, and `heading_error` separately expose upper-board intent,
+`mapped_forward`, `heading_error`, and `ref_ddpsi` separately expose upper-board intent,
 motor-equivalent CAN feedback, and the lower-board NORMAL mapping result.
 The simulated accelerometer reports FLU body-frame specific force, so a level,
 stationary robot reads approximately `[0, 0, +9.81] m/s^2`. The
@@ -290,13 +296,16 @@ The GUI can replay any one of the exact same benchmark cases:
 ```powershell
 .\build\Release\rm_balance_sim.exe `
   .\models\MJCF\COD-2026RoboMaster-Balance.xml `
-  --case forward_pos_2
+  --case heading_pos_1p5pi
 ```
 
 Valid names are `forward_pos_1` through `forward_pos_3`, their `forward_neg_*`
 counterparts, and `heading_pos_1pi`, `heading_neg_1pi`,
 `heading_pos_1p5pi`, and `heading_neg_1p5pi`. Forward-acceleration cases use
-names such as `forward_pos_2_a0p5` and `forward_neg_2_a2`. The camera follows
+names such as `forward_pos_2_a0p5` and `forward_neg_2_a2`. Yaw acceleration
+feedforward defaults to `0.9` in both keyboard and case modes; append
+`--yaw-acceleration-feedforward 0` to reproduce the feedback-only behavior.
+The camera follows
 the chassis and displays the virtual-gimbal arrow. Playback notes problems in
-the title and continues to the scheduled end; press `R` to replay the case and
+the diagnostics sidebar and continues to the scheduled end; press `R` to replay the case and
 use Space to pause or resume while it is running.

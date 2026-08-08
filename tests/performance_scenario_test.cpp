@@ -78,8 +78,7 @@ int main() {
     heading.update(snapshot, 2.41);
     heading.update(snapshot, 2.42);
     if (heading.phase() != PerformancePhase::target_ramp ||
-        heading.gimbal_feedback().relative_yaw <= 0.0F ||
-        heading.gimbal_feedback().relative_yaw_rate <= 0.0F ||
+        heading.gimbal().world_yaw <= 0.0F ||
         heading.gimbal().world_yaw_rate <= 0.0F) {
         std::cerr << "heading scenario did not drive virtual gimbal\n";
         return 1;

@@ -17,7 +17,8 @@ constexpr double kYawBaseTolerance = 0.20;
 constexpr double kRelativeTrackingTolerance = 0.10;
 
 bc_controller_config_t controller_config(
-    const std::optional<double> leg_length
+    const std::optional<double> leg_length,
+    const std::optional<double> yaw_acceleration_feedforward_scale
 ) {
     bc_controller_config_t config{};
     bc_controller_default_config(&config);
@@ -28,7 +29,25 @@ bc_controller_config_t controller_config(
         }
         config.motion.leg_length = static_cast<float>(*leg_length);
     }
+    if (yaw_acceleration_feedforward_scale) {
+        if (!std::isfinite(*yaw_acceleration_feedforward_scale) ||
+            *yaw_acceleration_feedforward_scale < 0.0) {
+            throw std::invalid_argument(
+                "yaw acceleration feedforward scale must be finite and non-negative");
+        }
+        config.control.lqr_compensation.yaw_acceleration_feedforward_scale =
+            static_cast<float>(*yaw_acceleration_feedforward_scale);
+    }
     return config;
+}
+
+double effective_yaw_acceleration_feedforward_scale(
+    const std::optional<double> override
+) {
+    const bc_controller_config_t config =
+        controller_config(std::nullopt, override);
+    return config.control.lqr_compensation.
+        yaw_acceleration_feedforward_scale;
 }
 
 } // namespace
@@ -39,17 +58,22 @@ PerformanceBenchmark::PerformanceBenchmark(
     const PerformanceBenchmarkConfig &config
 ) : plant_(model_path, kTimestepSeconds),
     adapter_(plant_.model()),
-    runner_(plant_, adapter_, controller_config(config.leg_length)),
+    runner_(plant_, adapter_, controller_config(
+        config.leg_length,
+        config.yaw_acceleration_feedforward_scale)),
     sampler_(plant_.model()),
     roll_restraint_(plant_.model(), config.roll_restrained),
     forward_velocity_(
         config.forward_velocity_observation,
         controller_config(
-            config.leg_length).control.observer.wheel_radius),
+            config.leg_length,
+            config.yaw_acceleration_feedforward_scale).
+                control.observer.wheel_radius),
     summary_(output_directory / "summary.csv", {
         "case", "axis", "target", "command_rate", "target_hold_seconds",
         "stop_settle_seconds", "standing_seconds", "leg_length_target",
         "forward_velocity_observation", "roll_restrained",
+        "yaw_acceleration_feedforward_scale",
         "completed", "balance_engaged",
         "leg_length_valid", "finite",
         "tracked", "settled", "issue", "issue_phase",
@@ -88,7 +112,7 @@ PerformanceBenchmark::PerformanceBenchmark(
         "gimbal_yaw", "gimbal_yaw_rate",
         "gimbal_relative_yaw", "gimbal_relative_yaw_rate",
         "alignment", "command_forward", "mapped_forward",
-        "heading_error",
+        "heading_error", "ref_ddpsi",
         "system", "motion", "forward", "s", "ds", "psi", "dpsi",
         "theta_l",
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
@@ -107,12 +131,17 @@ PerformanceBenchmark::PerformanceBenchmark(
         "contact_wheel_l", "contact_wheel_r", "other_contact",
         "normal_force_l", "normal_force_r",
     }),
+    yaw_acceleration_feedforward_scale_(
+        effective_yaw_acceleration_feedforward_scale(
+            config.yaw_acceleration_feedforward_scale)),
     trace_stride_(config.trace_stride) {
     if (trace_stride_ == 0U) {
         throw std::invalid_argument("trace stride must be positive");
     }
     const bc_controller_config_t controller =
-        controller_config(config.leg_length);
+        controller_config(
+            config.leg_length,
+            config.yaw_acceleration_feedforward_scale);
     leg_length_target_ = controller.motion.leg_length;
 }
 
@@ -128,6 +157,8 @@ PerformanceResult PerformanceBenchmark::run(
     result.leg_length_target = leg_length_target_;
     result.forward_velocity_observation = forward_velocity_.observation();
     result.roll_restrained = roll_restraint_.enabled();
+    result.yaw_acceleration_feedforward_scale =
+        yaw_acceleration_feedforward_scale_;
     PerformanceScenario scenario(spec);
     scenario.reset(plant_.data().time);
 
@@ -142,7 +173,7 @@ PerformanceResult PerformanceBenchmark::run(
             scenario.monitored() ? &result : nullptr;
         if (!step(
                 spec, scenario.phase_name(), scenario.command(),
-                scenario.gimbal(), scenario.gimbal_feedback(), monitored,
+                scenario.gimbal(), monitored,
                 scenario.tracking_evaluation(),
                 scenario.settle_evaluation(),
                 scenario.phase() == PerformancePhase::stop_ramp ||
@@ -176,6 +207,7 @@ void PerformanceBenchmark::write_summary(
         .value(forward_observation_name(
             result.forward_velocity_observation))
         .value(result.roll_restrained)
+        .value(result.yaw_acceleration_feedforward_scale)
         .value(result.completed)
         .value(result.balance_engaged)
         .value(result.leg_length_valid)
@@ -228,7 +260,6 @@ bool PerformanceBenchmark::step(
     const PerformanceCaseSpec &spec, const char *phase,
     const bc_operator_command_t &command,
     const sim::VirtualGimbalState &gimbal,
-    const bc_gimbal_feedback_t &gimbal_feedback,
     PerformanceResult *result, const bool evaluate_tracking,
     const bool evaluate_settle, const bool stopping
 ) {
@@ -237,7 +268,7 @@ bool PerformanceBenchmark::step(
         runner_.snapshot().roll_rate);
     const ImuMotionState velocity_truth =
         sampler_.read_imu_motion(plant_.data());
-    step_runner(command, gimbal_feedback);
+    step_runner(command, gimbal);
     const SimulationSample sample = sampler_.read(
         plant_.data(), runner_.snapshot());
     if (sample_index_ % trace_stride_ == 0U) {
@@ -255,17 +286,19 @@ bool PerformanceBenchmark::step(
 
 void PerformanceBenchmark::step_runner(
     const bc_operator_command_t &command,
-    const bc_gimbal_feedback_t &gimbal_feedback
+    const sim::VirtualGimbalState &gimbal
 ) {
     if (forward_velocity_.observation() ==
         ForwardVelocityObservation::wheel_odometry) {
-        runner_.step(command, gimbal_feedback);
+        runner_.step_with_gimbal_heading(
+            command, gimbal.world_yaw, gimbal.world_yaw_rate);
         return;
     }
 
     bc_sensor_feedback_t feedback{};
     adapter_.read(plant_.data(), feedback);
-    feedback.gimbal = gimbal_feedback;
+    feedback.gimbal = runner_.gimbal_feedback(
+        gimbal.world_yaw, gimbal.world_yaw_rate, feedback.imu);
     forward_velocity_.apply(
         plant_.data(), sampler_,
         runner_.snapshot().state.value[BC_STATE_DS], feedback);
@@ -427,6 +460,7 @@ void PerformanceBenchmark::write_trace(
         .value(command.forward_velocity)
         .value(snapshot.mapped_forward_velocity)
         .value(snapshot.heading_error)
+        .value(snapshot.yaw_acceleration_reference)
         .value(snapshot.state_machine.system)
         .value(snapshot.state_machine.motion)
         .value(bc_forward_state_name(snapshot.state_machine.forward));

@@ -52,6 +52,7 @@ class ControllerConfig:
     forward_observation: str
     roll_restrained: bool
     trace_stride: int
+    yaw_acceleration_feedforward_scale: float
 
 
 @dataclass(frozen=True)
@@ -221,7 +222,7 @@ def load_config(path: Path) -> ExperimentConfig:
     controller_table = require_table(document, "controller")
     reject_unknown(controller_table, {
         "leg_length", "forward_observation", "roll_restrained",
-        "trace_stride",
+        "trace_stride", "yaw_acceleration_feedforward_scale",
     }, "controller")
     forward_observation = controller_table.get(
         "forward_observation", "wheel-odometry")
@@ -234,6 +235,12 @@ def load_config(path: Path) -> ExperimentConfig:
         trace_stride <= 0
     ):
         raise ExperimentError("controller.trace_stride must be a positive integer")
+    yaw_acceleration_feedforward_scale = finite_float(
+        controller_table.get("yaw_acceleration_feedforward_scale", 0.9),
+        "controller.yaw_acceleration_feedforward_scale")
+    if yaw_acceleration_feedforward_scale < 0.0:
+        raise ExperimentError(
+            "controller.yaw_acceleration_feedforward_scale must be non-negative")
     controller = ControllerConfig(
         leg_length=positive_float(
             controller_table.get("leg_length", 0.18),
@@ -242,6 +249,8 @@ def load_config(path: Path) -> ExperimentConfig:
         roll_restrained=boolean_value(
             controller_table, "roll_restrained", False),
         trace_stride=trace_stride,
+        yaw_acceleration_feedforward_scale=(
+            yaw_acceleration_feedforward_scale),
     )
 
     lqr_table = require_table(document, "lqr")
@@ -601,6 +610,10 @@ def case_command(
     ]
     if config.controller.roll_restrained:
         command.extend(["--roll-restraint", "on"])
+    command.extend([
+        "--yaw-acceleration-feedforward",
+        str(config.controller.yaw_acceleration_feedforward_scale),
+    ])
     if config.controller.forward_observation != "wheel-odometry":
         command.extend([
             "--forward-observation", config.controller.forward_observation,

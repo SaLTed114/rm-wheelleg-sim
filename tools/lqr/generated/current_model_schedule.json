@@ -1033,22 +1033,50 @@
           -6.402256488800049
         ]
       ]
+    ],
+    "yaw_acceleration_feedforward_coefficients": [
+      [
+        9.86601571639767e-06,
+        -1.5915582480374724e-05,
+        3.862618905259296e-05,
+        -0.4270156919956207
+      ],
+      [
+        9.881584446702618e-06,
+        -1.5938709111651406e-05,
+        3.865030157612637e-05,
+        0.4268385171890259
+      ],
+      [
+        0.000863072753418237,
+        -0.0017383965896442533,
+        -0.793996274471283,
+        -2.3467676639556885
+      ],
+      [
+        -0.0009258274221792817,
+        0.0018515142146497965,
+        0.7937928438186646,
+        2.347097158432007
+      ]
     ]
   },
   "validation": {
     "legacy": {
-      "maximum_coefficient_difference": 4.974873846208538e-10,
-      "maximum_fit_error": 0.024836971963576815,
-      "maximum_raw_eigenvalue": 0.9950967306397708,
-      "maximum_are_residual": 2.0264900868482982e-12
+      "maximum_coefficient_difference": 4.962483757253722e-10,
+      "maximum_fit_error": 0.024836971963239307,
+      "maximum_raw_eigenvalue": 0.9950967306397711,
+      "maximum_are_residual": 2.951416888663516e-12
     },
     "current": {
       "minimum_controllability_rank": 10,
-      "maximum_raw_eigenvalue": 0.9988836061572512,
-      "maximum_fitted_eigenvalue": 0.9988834210067142,
-      "maximum_are_residual": 1.409372618610405e-12,
-      "maximum_fit_error": 0.01731711633039623,
-      "maximum_float_horner_error": 1.2216341218618254e-06
+      "maximum_raw_eigenvalue": 0.998883606157253,
+      "maximum_fitted_eigenvalue": 0.9988834210067138,
+      "maximum_are_residual": 1.5447226831000194e-12,
+      "maximum_fit_error": 0.017317116344382377,
+      "maximum_float_horner_error": 1.2216341218618254e-06,
+      "maximum_yaw_feedforward_inverse_residual": 0.0002720732075045529,
+      "maximum_yaw_feedforward_fit_error": 5.3731819814606396e-05
     },
     "yaw_inertia_sensitivity": {
       "selected_source": "base-link",
@@ -1057,8 +1085,8 @@
       "comparison_source": "2x-base-link",
       "comparison_scale": 2.0,
       "comparison_model_inertia": 6.094399940937173,
-      "comparison_maximum_raw_eigenvalue": 0.9992716250875736,
-      "maximum_raw_gain_difference": 2.065007623974479
+      "comparison_maximum_raw_eigenvalue": 0.9992716250875745,
+      "maximum_raw_gain_difference": 2.065007623979299
     }
   }
 }

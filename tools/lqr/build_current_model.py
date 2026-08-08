@@ -18,9 +18,11 @@ from lqr_generator import (
     LqrSettings,
     PhysicalParameters,
     STATE_NAMES,
+    build_state_matrix_functions,
     build_state_cost_matrix,
     compute_gain_samples,
     evaluate_gain,
+    evaluate_state_matrices,
     fit_gain_schedule,
     validate_fitted_schedule,
 )
@@ -82,6 +84,50 @@ def make_physical_parameters(
         body_yaw_inertia_actual=rigid["body_yaw_inertia_actual"],
         body_yaw_inertia_scale=yaw_scale,
     )
+
+
+def build_yaw_acceleration_feedforward_schedule(
+    physical: PhysicalParameters,
+    settings: LqrSettings,
+    leg_provider,
+    gain_schedule: GainSchedule,
+) -> tuple[np.ndarray, float, float]:
+    """Fit the actuator request for one rad/s^2 of pure yaw acceleration."""
+    functions = build_state_matrix_functions(physical)
+    lengths = np.linspace(
+        settings.length_min, settings.length_max, settings.sample_count)
+    samples = np.zeros((len(INPUT_NAMES), len(lengths)))
+    target_derivative = np.zeros(len(STATE_NAMES))
+    target_derivative[STATE_NAMES.index("dpsi")] = 1.0
+    maximum_inverse_residual = 0.0
+
+    for index, length in enumerate(lengths):
+        _, matrix_b = evaluate_state_matrices(
+            functions, float(length), leg_provider(float(length)))
+        feedforward, _, _, _ = np.linalg.lstsq(
+            matrix_b, target_derivative, rcond=None)
+        samples[:, index] = feedforward
+        maximum_inverse_residual = max(
+            maximum_inverse_residual,
+            float(np.max(np.abs(
+                matrix_b @ feedforward - target_derivative))))
+
+    normalized = (
+        lengths - gain_schedule.length_midpoint
+    ) / gain_schedule.length_scale
+    coefficient = np.zeros((len(INPUT_NAMES), gain_schedule.polynomial_order + 1))
+    for input_index in range(len(INPUT_NAMES)):
+        coefficient[input_index] = np.polyfit(
+            normalized, samples[input_index],
+            gain_schedule.polynomial_order)
+    coefficient = coefficient.astype(np.float32)
+
+    fitted = np.asarray([
+        np.polyval(coefficient[input_index], normalized)
+        for input_index in range(len(INPUT_NAMES))
+    ])
+    maximum_fit_error = float(np.max(np.abs(fitted - samples)))
+    return coefficient, maximum_inverse_residual, maximum_fit_error
 
 
 def quantize_schedule(
@@ -214,6 +260,12 @@ def build_result(
         raise RuntimeError("current raw LQR gains are not stable")
     schedule = select_schedule(
         physical, settings, leg_provider, samples)
+    (
+        yaw_acceleration_feedforward,
+        yaw_feedforward_inverse_residual,
+        yaw_feedforward_fit_error,
+    ) = build_yaw_acceleration_feedforward_schedule(
+        physical, settings, leg_provider, schedule)
     horner_error = maximum_float_horner_error(schedule)
     if horner_error > 1.0e-5:
         raise RuntimeError("float Horner evaluation exceeds tolerance")
@@ -269,6 +321,8 @@ def build_result(
             "length_midpoint": schedule.length_midpoint,
             "length_scale": schedule.length_scale,
             "coefficients": schedule.coefficient.tolist(),
+            "yaw_acceleration_feedforward_coefficients": (
+                yaw_acceleration_feedforward.tolist()),
         },
         "validation": {
             "legacy": legacy_metrics,
@@ -281,6 +335,10 @@ def build_result(
                 "maximum_are_residual": samples.maximum_are_residual,
                 "maximum_fit_error": schedule.maximum_fit_error,
                 "maximum_float_horner_error": horner_error,
+                "maximum_yaw_feedforward_inverse_residual": (
+                    yaw_feedforward_inverse_residual),
+                "maximum_yaw_feedforward_fit_error": (
+                    yaw_feedforward_fit_error),
             },
             "yaw_inertia_sensitivity": {
                 "selected_source": yaw_inertia_source,
@@ -301,6 +359,8 @@ def build_result(
 def emit_header(result: dict[str, object], path: Path) -> None:
     schedule = result["schedule"]
     coefficient = np.asarray(schedule["coefficients"])
+    yaw_feedforward = np.asarray(
+        schedule["yaw_acceleration_feedforward_coefficients"])
     lines = [
         "#ifndef BALANCE_GENERATED_CURRENT_MODEL_LQR_H",
         "#define BALANCE_GENERATED_CURRENT_MODEL_LQR_H",
@@ -330,6 +390,18 @@ def emit_header(result: dict[str, object], path: Path) -> None:
             lines.append(f"        {{{values}}}{comma}")
         comma = "," if input_index + 1 < coefficient.shape[0] else ""
         lines.append(f"    }}{comma}")
+    lines.extend(("};", ""))
+    lines.extend((
+        "static const float "
+        "bc_lqr_generated_yaw_acceleration_feedforward_coefficients",
+        "    [BC_LQR_GENERATED_INPUT_COUNT]",
+        "    [BC_LQR_GENERATED_COEFFICIENT_COUNT] = {",
+    ))
+    for input_index in range(yaw_feedforward.shape[0]):
+        values = ", ".join(
+            f"{value: .9f}F" for value in yaw_feedforward[input_index])
+        comma = "," if input_index + 1 < yaw_feedforward.shape[0] else ""
+        lines.append(f"    {{{values}}}{comma}")
     lines.extend(("};", "", "#endif", ""))
     path.write_text("\n".join(lines), encoding="ascii")
 

@@ -68,10 +68,6 @@ public:
     [[nodiscard]] const sim::VirtualGimbalState &gimbal() const noexcept {
         return virtual_gimbal_.state();
     }
-    [[nodiscard]] const bc_gimbal_feedback_t &gimbal_feedback()
-        const noexcept {
-        return gimbal_feedback_;
-    }
     [[nodiscard]] bool monitored() const noexcept;
     [[nodiscard]] bool tracking_evaluation() const noexcept;
     [[nodiscard]] bool settle_evaluation() const noexcept;
@@ -85,7 +81,6 @@ private:
     PerformancePhase phase_{PerformancePhase::disabled_settle};
     bc_operator_command_t command_{};
     sim::VirtualGimbal virtual_gimbal_;
-    bc_gimbal_feedback_t gimbal_feedback_{};
     bool gimbal_initialized_{};
     double phase_start_time_{};
     double simulation_time_{};

@@ -123,6 +123,7 @@ typedef struct {
     bc_wheel_strategy_t wheel_strategy;
     uint16_t disabled_state_feedback;
     bc_state_vector_t state_reference;
+    float yaw_acceleration_reference;
 } bc_control_command_t;
 
 typedef struct {

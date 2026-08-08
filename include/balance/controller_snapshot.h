@@ -18,6 +18,7 @@ typedef struct {
     bc_state_machine_snapshot_t state_machine;
     bc_state_vector_t state;
     bc_state_vector_t state_reference;
+    float yaw_acceleration_reference;
     float roll;
     float roll_rate;
     bc_gimbal_feedback_t gimbal;

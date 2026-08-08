@@ -65,6 +65,8 @@ class ExperimentConfigTest(unittest.TestCase):
         self.assertEqual(config.build.configuration, "Release")
         self.assertEqual(config.controller.leg_length, 0.18)
         self.assertEqual(config.controller.trace_stride, 10)
+        self.assertEqual(
+            config.controller.yaw_acceleration_feedforward_scale, 0.9)
         self.assertFalse(config.analysis.forward_linear)
         self.assertEqual(config.cases[0].target_hold_seconds, 3.0)
         self.assertEqual(config.cases[0].standing_seconds, 2.0)

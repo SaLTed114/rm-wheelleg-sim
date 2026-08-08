@@ -15,6 +15,7 @@ typedef struct {
 void bc_lqr_calculate(
     float leg_length,
     const bc_state_vector_t *state_error,
+    float yaw_acceleration_reference,
     bc_lqr_output_t *output);
 
 #ifdef __cplusplus
