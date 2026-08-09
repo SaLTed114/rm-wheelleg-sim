@@ -621,3 +621,21 @@ complete、tracked、settled，双轮全程接触且无执行器饱和。直线 
 积分或继续提高 PD 增益。结果位于本地
 `build/performance/mass-baseline-roll-pd/` 和
 `mass-coupled-roll-pd-{pos,neg}/`。
+
+## 快速反转 KF 重捕获（2026-08-09）
+
+keyboard trace 复现了 `+2/-2 m/s` 快速反转后的 estimator 自锁：正确轮速相对
+已经漂移的纯 IMU 预测持续超出 `NIS <= 9`，状态机又只用融合 `DS` 判断停稳，
+导致真值仍为 `0.042 m/s` 时误入 HOLD。HOLD 后约七秒内车体移动 `0.538 m`，
+而积分 `S` 只变化 `11.5 mm`。
+
+修复保留 NIS 和 `20 ms` 迟滞；轮速由可靠转为不可靠时，将 `P[vx][vx]`
+提升到 `0.0008 (m/s)^2`，但不重置状态或 bias。HOLD 入口同时要求 estimator
+可靠、融合 `DS` 和原始轮速均小于 `0.05 m/s`。同一
+`1.173 s` 前进、`0.032 s` 空挡、`1.767 s` 后退时序下，不可靠区间缩短为
+`20 ms`，五秒后真值速度约 `0.00020 m/s`，`S`/物理位移误差约 `1.33 mm`。
+
+修改前后 `forward_pos/neg_2_a1` 的 tracking RMSE 均保持
+`0.05466/0.07398`；`yaw_pos/neg_2pi_a3` 为
+`0.03195/0.03056 -> 0.03178/0.03056`。四项均 complete、tracked、settled，
+且没有轮或关节饱和。

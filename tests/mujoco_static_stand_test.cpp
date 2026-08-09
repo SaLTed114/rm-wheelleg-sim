@@ -230,6 +230,7 @@ int main(int argc, char **argv) {
         const int base_joint = require_id(
             plant.model(), mjOBJ_JOINT, "base_free_joint");
         const int base_qpos = plant.model().jnt_qposadr[base_joint];
+        const int base_dof = plant.model().jnt_dofadr[base_joint];
 
         runner.reset();
         if (plant.data().eq_active[weld]) {
@@ -406,6 +407,143 @@ int main(int argc, char **argv) {
                       << runner.snapshot().actuation.leg[BC_R]
                              .joint_torque[BC_REAR] << '\n';
             std::cerr << "controller did not maintain static standing\n";
+            return EXIT_FAILURE;
+        }
+
+        constexpr double kReversalForwardSeconds = 1.173;
+        constexpr double kReversalNeutralSeconds = 0.032;
+        constexpr double kReversalReverseSeconds = 1.767;
+        constexpr double kReversalSettleSeconds = 5.0;
+        constexpr double kStopVelocityTolerance = 0.05;
+        constexpr double kPositionTrackingTolerance = 0.05;
+        constexpr double kRecoveryVelocityVariance = 0.0008;
+
+        const double reversal_start_x = plant.data().qpos[base_qpos];
+        const double reversal_start_y = plant.data().qpos[base_qpos + 1];
+        const double reversal_start_yaw =
+            runner.snapshot().state.value[BC_STATE_PSI];
+        const double reversal_start_s =
+            runner.snapshot().state.value[BC_STATE_S];
+        const auto run_reversal_command = [&](const float velocity,
+                                              const double duration) {
+            const double end = plant.data().time + duration;
+            while (plant.data().time < end) {
+                step_controller(
+                    runner, plant, command_source, velocity, 0.0F);
+            }
+        };
+        run_reversal_command(2.0F, kReversalForwardSeconds);
+        run_reversal_command(0.0F, kReversalNeutralSeconds);
+        run_reversal_command(-2.0F, kReversalReverseSeconds);
+
+        bool saw_unreliable = false;
+        bool saw_recovery_covariance = false;
+        bool saw_reaccepted_measurement = false;
+        bool entered_valid_hold = false;
+        bool invalid_hold_transition = false;
+        double unreliable_start = -1.0;
+        double maximum_unreliable_duration = 0.0;
+        bc_forward_state_t previous_forward =
+            runner.snapshot().state_machine.forward;
+        const double reversal_settle_end =
+            plant.data().time + kReversalSettleSeconds;
+        while (plant.data().time < reversal_settle_end) {
+            step_controller(
+                runner, plant, command_source, 0.0F, 0.0F);
+            const auto &snapshot = runner.snapshot();
+            const auto &velocity = snapshot.velocity_estimator;
+            if (!velocity.wheel_velocity_reliable) {
+                saw_unreliable = true;
+                saw_recovery_covariance = saw_recovery_covariance ||
+                    velocity.velocity_variance_x + 1.0e-9F >=
+                        kRecoveryVelocityVariance;
+                if (unreliable_start < 0.0) {
+                    unreliable_start = plant.data().time;
+                }
+            } else if (unreliable_start >= 0.0) {
+                maximum_unreliable_duration = std::max(
+                    maximum_unreliable_duration,
+                    plant.data().time - unreliable_start);
+                unreliable_start = -1.0;
+                saw_reaccepted_measurement =
+                    saw_reaccepted_measurement ||
+                    velocity.measurement_accepted;
+            }
+
+            if (previous_forward == BC_FORWARD_VELOCITY &&
+                snapshot.state_machine.forward == BC_FORWARD_HOLD) {
+                const bool valid = velocity.wheel_velocity_reliable &&
+                    std::abs(static_cast<double>(
+                        snapshot.state.value[BC_STATE_DS])) <
+                        kStopVelocityTolerance &&
+                    std::abs(static_cast<double>(
+                        snapshot.forward_velocity.wheel_odometry)) <
+                        kStopVelocityTolerance;
+                entered_valid_hold = entered_valid_hold || valid;
+                invalid_hold_transition = invalid_hold_transition || !valid;
+            }
+            previous_forward = snapshot.state_machine.forward;
+        }
+        if (unreliable_start >= 0.0) {
+            maximum_unreliable_duration = std::max(
+                maximum_unreliable_duration,
+                plant.data().time - unreliable_start);
+        }
+
+        const auto &reversal_final = runner.snapshot();
+        const double reversal_truth_velocity =
+            plant.data().qvel[base_dof] *
+                std::cos(reversal_final.state.value[BC_STATE_PSI]) +
+            plant.data().qvel[base_dof + 1] *
+                std::sin(reversal_final.state.value[BC_STATE_PSI]);
+        const double reversal_delta_x =
+            plant.data().qpos[base_qpos] - reversal_start_x;
+        const double reversal_delta_y =
+            plant.data().qpos[base_qpos + 1] - reversal_start_y;
+        const double reversal_displacement =
+            reversal_delta_x * std::cos(reversal_start_yaw) +
+            reversal_delta_y * std::sin(reversal_start_yaw);
+        const double reversal_delta_s =
+            reversal_final.state.value[BC_STATE_S] - reversal_start_s;
+        const double reversal_position_error =
+            reversal_delta_s - reversal_displacement;
+
+        std::cout << "keyboard reversal: forward="
+                  << kReversalForwardSeconds
+                  << " s, neutral=" << kReversalNeutralSeconds
+                  << " s, reverse=" << kReversalReverseSeconds
+                  << " s, final state="
+                  << bc_forward_state_name(
+                         reversal_final.state_machine.forward)
+                  << ", reliable="
+                  << static_cast<int>(reversal_final.velocity_estimator.
+                         wheel_velocity_reliable)
+                  << ", max unreliable="
+                  << maximum_unreliable_duration
+                  << " s, truth velocity=" << reversal_truth_velocity
+                  << " m/s, ds="
+                  << reversal_final.state.value[BC_STATE_DS]
+                  << " m/s, displacement=" << reversal_displacement
+                  << " m, delta s=" << reversal_delta_s
+                  << " m, position error=" << reversal_position_error
+                  << " m\n";
+
+        const bool reversal_valid = saw_unreliable &&
+            saw_recovery_covariance && saw_reaccepted_measurement &&
+            entered_valid_hold && !invalid_hold_transition &&
+            reversal_final.velocity_estimator.wheel_velocity_reliable &&
+            reversal_final.state_machine.forward == BC_FORWARD_HOLD &&
+            std::abs(reversal_truth_velocity) <= kStopVelocityTolerance &&
+            std::abs(reversal_position_error) <=
+                kPositionTrackingTolerance;
+        if (!reversal_valid) {
+            std::cerr << "keyboard reversal did not recover and stop safely: "
+                      << "unreliable=" << saw_unreliable
+                      << ", covariance=" << saw_recovery_covariance
+                      << ", reaccepted=" << saw_reaccepted_measurement
+                      << ", valid hold=" << entered_valid_hold
+                      << ", invalid hold=" << invalid_hold_transition
+                      << '\n';
             return EXIT_FAILURE;
         }
 

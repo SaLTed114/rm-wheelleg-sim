@@ -136,7 +136,7 @@ forward: IDLE / HOLD / VELOCITY
 ```
 
 - 进入 ACTIVE 后从 `HOLD` 开始；有非零前进命令时进入 `VELOCITY`。
-- `VELOCITY` 关闭 `S` 位置误差但保留 `DS`；命令、forward ramp 和融合 `DS` 连续归零 `0.25 s` 后回到 `HOLD` 并重新捕获 `S`。
+- `VELOCITY` 关闭 `S` 位置误差但保留 `DS`；命令和 forward ramp 归零后，还要求融合 `DS` 与原始轮速均小于 `0.05 m/s`、轮速估计可靠，所有条件连续成立 `0.25 s` 才回到 `HOLD` 并重新捕获 `S`。
 - 普通 heading follow 与 forward mode 独立，在 `HOLD/VELOCITY` 中始终启用 `PSI/DPSI`。
 - operator command 当前只有系统使能、单周期 restart 和云台坐标下的前进速度。上下板和云台 YAW 电机共用 CAN，下板可直接监听电机相对角/速度，不需要上板发送世界 heading。
 - motion 根据云台相对角在 chassis front/rear 中选择误差较小的一侧，以 `5 deg` 差值滞回切换；选择 rear 时反转纵向速度。
@@ -146,7 +146,7 @@ forward: IDLE / HOLD / VELOCITY
 
 - forward reference：上限 `3 m/s`、默认加速度 `5 m/s^2`，写入 `DS_ref` 并积分 `S_ref`。
 - yaw reference：由云台相对角/速度直接重建 `PSI_ref/DPSI_ref`，`DPSI_ref` 限制为 `+/-1.5*pi rad/s`，并输出受限差分得到的 `DDPSI_ref`。
-- observer 使用 IMU 与共同轮速融合得到正式 `DS`，`S` 对该融合速度积分；轮速创新通过 NIS 和 `20 ms` 可信度迟滞拒绝接触闪断污染。IMU 外参、噪声和迟滞仍是仿真初值，实车到位后必须标定。
+- observer 使用 IMU 与共同轮速融合得到正式 `DS`，`S` 对该融合速度积分；轮速创新通过 NIS 和 `20 ms` 可信度迟滞拒绝接触闪断污染。连续拒绝使轮速降级时只把纵向速度方差提升到 `0.0008 (m/s)^2`，不改写速度或 bias；后续仍需连续 `20 ms` inlier 才恢复 update，避免纯 IMU 预测过度自信后永久拒绝正确轮速。IMU 外参、噪声和迟滞仍是仿真初值，实车到位后必须标定。
 - 十维 LQR 状态为 `[s, ds, psi, dpsi, theta_l, dtheta_l, theta_r, dtheta_r, theta_b, dtheta_b]`，输入为 `[T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]`。
 - 当前调度覆盖 `0.160-0.390 m`；`0.160-0.186 m` 是等效腿参数拟合延伸区。当前 `Q=[90,60,40,15,240,4,240,4,300,60]`、`R=[3.2,3.2,0.7,0.7]`，腿角共同/差分权重为 `240/1920`，腿角速度为 `4/32`。
 - 默认腿长 `0.18 m`；站立区 adapter 标定后重新扫描的工作点使用 `+2.42 deg` 共同腿角补偿和每腿 `76.204 N` 支撑前馈。`LEG_POSITIONING` 只使用长度/角度位置反馈，定位腿角 PD 的 `Kp=50`；支撑与 roll 差分力只属于 `POSITION_SUPPORT`。
@@ -161,6 +161,7 @@ forward: IDLE / HOLD / VELOCITY
 - 站立：质量重整后先按总质量比例把支撑前馈调为 `76.204 N/leg`。adapter 标定使旧坐标下选出的 `+0.7 deg` trim 产生约 `0.15 m` HOLD 位置残差。trim scanner 已改为与 keyboard/GUI 一致地固定虚拟云台世界朝向；重新粗扫并在 `2.34–2.46 deg` 以 `0.01 deg` 加密后选定 `+2.42 deg`。该点三秒评估窗最大位置误差约 `1.110 mm`、位移约 `0.013 mm`、平均 `DS` 约 `4.4e-5 m/s`，双轮持续接地且无饱和。
 - 直线：`0.18 m、5 m/s^2` 下 `+/-1、+/-2、+/-2.5、+/-3 m/s` 全部完成、tracked 且 settled；`3 m/s` 最大 pitch 约 `2.22 deg`，没有轮或关节饱和。
 - 普通 heading：`0.18 m、10 rad/s^2` 下 `+/-pi、+/-1.5*pi rad/s` 全部完成、tracked 且 settled；最大 pitch/roll 分别约 `1.38/0.97 deg`，没有执行器饱和。
+- keyboard 反转：实测 `+2/-2 m/s` 快速反转曾使轮速在 `7.533 s` 降级并永久拒绝 update，`8.910 s` 以真值 `0.042 m/s`、估计 `DS=-0.013 m/s` 误入 HOLD；随后车体移动约 `0.538 m` 而 `S` 只变化 `11.5 mm`。加入恢复方差和 HOLD 双重停稳条件后，同一 `1.173/0.032/1.767 s` 时序的最长不可靠区间为 `20 ms`，五秒后真值速度约 `0.00020 m/s`，`S` 与物理位移差约 `1.33 mm`。
 - 用户实车代码的 roll PVI 为 `Kp=800`、`Kv=60`、`Ki=0.2`、输出限幅 `200 N`。当前仿真第一版采用相同 P/D 和限幅但暂不积分，以 `+/-` 差分叠加到左右腿轴向力。
 - 无 roll 回路时，新质量 plant 在 `2.3 m/s + 1.5*pi rad/s` 正负转向均于 target-hold 翻倒，最大 pitch 约 `68-78 deg`、roll 到 `180 deg`，轮请求饱和比例约 `0.84-0.86`。
 - 加入正式 roll PD 后，正负案例都完整运行并 tracked：最大 pitch 为 `4.76/5.35 deg`、最大 roll 为 `4.79/4.37 deg`、腿角差为 `3.46/3.00 deg`，roll 差分力峰值为 `93.5/88.8 N`，轮与关节均无饱和。这证明缺少 roll 回路确实是此前翻倒的主因。
@@ -173,6 +174,7 @@ forward: IDLE / HOLD / VELOCITY
 - C++ 仿真层由 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner`、`MujocoViewer`、`SimulationUi` 和场景编排组成；GUI `main.cpp` 只负责参数解析和启动。
 - Dear ImGui 固定侧栏显示状态机、完整 state/reference、roll、云台相对反馈、腿运动学和限幅前后输出；UI 捕获输入时不会同时驾驶或移动相机。
 - performance benchmark 与 GUI case 回放共用 `PerformanceScenario`。benchmark 输出逐周期 trace、summary、接触、姿态、限幅前后输出和问题标记，不作为 CTest 门禁。
+- GUI 可通过 `--trace <csv>` 在交互驾驶时写出 1 kHz CSV；除状态、真值、命令和 NIS 外，还记录纵向速度方差以及拒绝/恢复计时，每 `0.1 s` 刷盘。
 - `tools/experiments/run_experiment.py` 用于生成独立 LQR 候选、隔离构建和批量案例；实验开关不得进入生产 controller config。
 - 本地 MuJoCo、GLFW、ImGui 依赖放在被忽略的 `third_party/`，通过 `MUJOCO_ROOT`、`FETCHCONTENT_SOURCE_DIR_GLFW`、`IMGUI_ROOT` 显式提供；Linux 系统安装的 MuJoCo 可走标准搜索路径。详细命令见根 README。
 

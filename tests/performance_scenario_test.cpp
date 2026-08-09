@@ -111,17 +111,23 @@ int main() {
         return 1;
     }
 
+    const PerformanceCaseSpec two_pi{
+        "two_pi", PerformanceAxis::heading,
+        2.0 * BC_PI, 3.0, 1.0, 1.0, 1.0};
+    PerformanceScenario maximum_heading(two_pi);
+    (void)maximum_heading;
+
     bool invalid_rejected = false;
     try {
         const PerformanceCaseSpec invalid{
             "invalid", PerformanceAxis::heading,
-            2.0 * BC_PI, 1.0, 1.0, 1.0, 1.0};
+            2.01 * BC_PI, 1.0, 1.0, 1.0, 1.0};
         PerformanceScenario ignored(invalid);
     } catch (const std::invalid_argument &) {
         invalid_rejected = true;
     }
     if (!invalid_rejected) {
-        std::cerr << "invalid custom timing was accepted\n";
+        std::cerr << "out-of-range heading target was accepted\n";
         return 1;
     }
     return 0;

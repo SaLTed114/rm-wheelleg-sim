@@ -13,6 +13,8 @@ typedef struct {
     const bc_gimbal_feedback_t *gimbal_feedback;
     const bc_state_vector_t *state;
     const bc_leg_kinematics_t *leg;
+    float wheel_odometry_velocity;
+    uint8_t wheel_velocity_reliable;
     float timestep_seconds;
 } bc_state_machine_input_t;
 

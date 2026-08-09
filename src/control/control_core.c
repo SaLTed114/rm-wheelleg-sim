@@ -23,6 +23,7 @@ void bc_control_default_config(bc_control_config_t *config) {
                 .acceleration_variance     = 0.02F,
                 .bias_walk_variance        = 0.00000001F,
                 .wheel_velocity_variance   = 0.0004F,
+                .recovery_velocity_variance = 0.0008F,
                 .nis_gate                  = 9.0F,
                 .wheel_rejection_duration  = 0.02F,
                 .wheel_recovery_duration   = 0.02F,

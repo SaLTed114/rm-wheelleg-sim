@@ -16,6 +16,7 @@ typedef enum {
 
 typedef struct {
     float stop_forward_velocity_tolerance;
+    float stop_wheel_velocity_tolerance;
     float stop_duration;
 } bc_forward_mode_config_t;
 
@@ -37,6 +38,8 @@ void bc_forward_mode_update(
     uint8_t forward_motion_requested,
     float reference_velocity,
     float measured_velocity,
+    float wheel_velocity,
+    uint8_t wheel_velocity_reliable,
     float timestep_seconds,
     bc_control_command_t *output);
 

@@ -32,7 +32,9 @@ InteractiveTraceWriter::InteractiveTraceWriter(
     "kf_velocity_error_x", "kf_velocity_error_y",
     "kf_acceleration_bias_x", "kf_acceleration_bias_y",
     "kf_wheel_velocity_measurement", "kf_innovation",
-    "kf_innovation_variance", "kf_nis", "kf_measurement_accepted",
+    "kf_innovation_variance", "kf_nis", "kf_velocity_variance_x",
+    "kf_rejection_elapsed_seconds", "kf_recovery_elapsed_seconds",
+    "kf_measurement_accepted",
     "kf_wheel_velocity_reliable", "wheel_odometry_velocity",
     "estimated_axle_velocity", "wheel_angular_velocity_l",
     "wheel_angular_velocity_r", "wheel_center_velocity_l",
@@ -121,6 +123,9 @@ void InteractiveTraceWriter::write(
         .value(velocity.innovation)
         .value(velocity.innovation_variance)
         .value(velocity.nis)
+        .value(velocity.velocity_variance_x)
+        .value(velocity.rejection_elapsed_seconds)
+        .value(velocity.recovery_elapsed_seconds)
         .value(static_cast<int>(velocity.measurement_accepted))
         .value(static_cast<int>(velocity.wheel_velocity_reliable))
         .value(snapshot.forward_velocity.wheel_odometry)

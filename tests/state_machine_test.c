@@ -33,6 +33,8 @@ int main() {
         .gimbal_feedback = &gimbal_feedback,
         .state = &state,
         .leg = leg,
+        .wheel_odometry_velocity = 0.0F,
+        .wheel_velocity_reliable = 1U,
         .timestep_seconds = 0.1F,
     };
 

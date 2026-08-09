@@ -147,6 +147,8 @@ static void bc_motion_update_forward(
             forward_velocity),
         motion->forward_reference.velocity_ramp.value,
         input->state->value[BC_STATE_DS],
+        input->wheel_odometry_velocity,
+        input->wheel_velocity_reliable,
         input->timestep_seconds,
         output);
 

@@ -6,12 +6,17 @@ static uint8_t bc_forward_mode_is_stopped(
     const bc_forward_mode_t *forward,
     const uint8_t forward_motion_requested,
     const float reference_velocity,
-    const float measured_velocity
+    const float measured_velocity,
+    const float wheel_velocity,
+    const uint8_t wheel_velocity_reliable
 ) {
-    return !forward_motion_requested &&
+    return wheel_velocity_reliable &&
+        !forward_motion_requested &&
         reference_velocity == 0.0F &&
         fabsf(measured_velocity) <
-            forward->config.stop_forward_velocity_tolerance;
+            forward->config.stop_forward_velocity_tolerance &&
+        fabsf(wheel_velocity) <
+            forward->config.stop_wheel_velocity_tolerance;
 }
 
 static void bc_forward_mode_transition(
@@ -19,6 +24,8 @@ static void bc_forward_mode_transition(
     const uint8_t forward_motion_requested,
     const float reference_velocity,
     const float measured_velocity,
+    const float wheel_velocity,
+    const uint8_t wheel_velocity_reliable,
     const float timestep_seconds
 ) {
     switch (forward->state) {
@@ -37,7 +44,8 @@ static void bc_forward_mode_transition(
                 &forward->stopped_hold,
                 bc_forward_mode_is_stopped(
                     forward, forward_motion_requested,
-                    reference_velocity, measured_velocity),
+                    reference_velocity, measured_velocity,
+                    wheel_velocity, wheel_velocity_reliable),
                 forward->config.stop_duration,
                 timestep_seconds)) break;
 
@@ -65,6 +73,7 @@ static void bc_forward_mode_action(
 void bc_forward_mode_default_config(bc_forward_mode_config_t *config) {
     *config = (bc_forward_mode_config_t){
         .stop_forward_velocity_tolerance = 0.05F,
+        .stop_wheel_velocity_tolerance = 0.05F,
         .stop_duration = 0.25F,
     };
 }
@@ -92,12 +101,15 @@ void bc_forward_mode_update(
     const uint8_t forward_motion_requested,
     const float reference_velocity,
     const float measured_velocity,
+    const float wheel_velocity,
+    const uint8_t wheel_velocity_reliable,
     const float timestep_seconds,
     bc_control_command_t *output
 ) {
     bc_forward_mode_transition(
         forward, forward_motion_requested,
         reference_velocity, measured_velocity,
+        wheel_velocity, wheel_velocity_reliable,
         timestep_seconds);
     bc_forward_mode_action(forward, output);
 }

@@ -110,6 +110,8 @@ PerformanceBenchmark::PerformanceBenchmark(
         "acceleration_bias_x", "acceleration_bias_y",
         "wheel_velocity_measurement", "velocity_innovation",
         "velocity_innovation_variance", "velocity_nis",
+        "velocity_variance_x", "velocity_rejection_elapsed_seconds",
+        "velocity_recovery_elapsed_seconds",
         "velocity_measurement_accepted", "wheel_velocity_reliable",
         "wheel_odometry_velocity", "estimated_axle_velocity",
         "gimbal_yaw", "gimbal_yaw_rate",
@@ -457,6 +459,9 @@ void PerformanceBenchmark::write_trace(
         .value(velocity.innovation)
         .value(velocity.innovation_variance)
         .value(velocity.nis)
+        .value(velocity.velocity_variance_x)
+        .value(velocity.rejection_elapsed_seconds)
+        .value(velocity.recovery_elapsed_seconds)
         .value(static_cast<int>(velocity.measurement_accepted))
         .value(static_cast<int>(velocity.wheel_velocity_reliable))
         .value(snapshot.forward_velocity.wheel_odometry)

@@ -100,7 +100,9 @@ PerformanceScenario::PerformanceScenario(
     const PerformanceCaseSpec &spec
 ) : spec_(spec),
     virtual_gimbal_(sim::VirtualGimbalConfig{
-        1.5F * BC_PI_F,
+        std::max(
+            1.5F * BC_PI_F,
+            static_cast<float>(std::abs(spec.target))),
         static_cast<float>(
             spec.axis == PerformanceAxis::heading ?
                 spec.command_rate : kDefaultGimbalAcceleration),
@@ -125,7 +127,7 @@ PerformanceScenario::PerformanceScenario(
         (spec_.coupled_forward_velocity == 0.0 &&
          spec_.forward_lead_seconds != 0.0) ||
         (spec_.axis == PerformanceAxis::heading &&
-         std::abs(spec_.target) > 1.5 * BC_PI)) {
+         std::abs(spec_.target) > 2.0 * BC_PI)) {
         throw std::invalid_argument(
             "performance case values and durations must be valid");
     }

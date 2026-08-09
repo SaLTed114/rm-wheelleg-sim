@@ -23,6 +23,7 @@ static bc_velocity_estimator_config_t test_config(void) {
         .acceleration_variance = 2.0F,
         .bias_walk_variance = 0.02F,
         .wheel_velocity_variance = 0.0004F,
+        .recovery_velocity_variance = 0.0008F,
         .nis_gate = 9.0F,
         .wheel_rejection_duration = 0.003F,
         .wheel_recovery_duration = 0.002F,
@@ -199,32 +200,96 @@ static int test_measurement_health(void) {
         bc_velocity_estimator_update(&estimator, 1.0F, 0.001F);
     }
     if (estimator.output.measurement_accepted ||
-        !estimator.output.wheel_velocity_reliable) {
+        !estimator.output.wheel_velocity_reliable ||
+        estimator.output.rejection_elapsed_seconds <= 0.0F) {
         fputs("transient rejection changed wheel reliability\n", stderr);
         return 1;
     }
 
+    estimator.state[2] = 0.25F;
+    const float velocity_before_recovery = estimator.state[0];
+    const float bias_before_recovery = estimator.state[2];
+    float covariance_before_recovery[4][4];
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            covariance_before_recovery[row][column] =
+                estimator.covariance[row][column];
+        }
+    }
     bc_velocity_estimator_update(&estimator, 1.0F, 0.001F);
     if (estimator.output.measurement_accepted ||
-        estimator.output.wheel_velocity_reliable) {
+        estimator.output.wheel_velocity_reliable ||
+        expect_near(
+            "rejection preserved velocity", estimator.state[0],
+            velocity_before_recovery, 0.0F) ||
+        expect_near(
+            "rejection preserved bias", estimator.state[2],
+            bias_before_recovery, 0.0F) ||
+        estimator.covariance[0][0] <
+            config.recovery_velocity_variance ||
+        estimator.output.velocity_variance_x <
+            config.recovery_velocity_variance) {
         fputs("sustained rejection did not invalidate wheel velocity\n", stderr);
         return 1;
     }
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            if (row == 0 && column == 0) continue;
+            if (expect_near(
+                    "recovery preserved covariance",
+                    estimator.covariance[row][column],
+                    covariance_before_recovery[row][column], 0.0F)) {
+                return 1;
+            }
+        }
+    }
 
     bc_velocity_estimator_update(
-        &estimator, estimator.state[0], 0.001F);
+        &estimator, estimator.state[0] + 0.07F, 0.001F);
     if (estimator.output.measurement_accepted ||
-        estimator.output.wheel_velocity_reliable) {
+        estimator.output.wheel_velocity_reliable ||
+        estimator.output.recovery_elapsed_seconds <= 0.0F) {
         fputs("wheel velocity recovered without a sufficient hold\n", stderr);
         return 1;
     }
 
     bc_velocity_estimator_update(
-        &estimator, estimator.state[0], 0.001F);
+        &estimator, estimator.state[0] + 0.07F, 0.001F);
     if (!estimator.output.measurement_accepted ||
         !estimator.output.wheel_velocity_reliable) {
         fputs("wheel velocity did not recover after valid samples\n", stderr);
         return 1;
+    }
+
+    for (int sample = 0; sample < 3; ++sample) {
+        bc_velocity_estimator_update(
+            &estimator, estimator.state[0] + 0.17F, 0.001F);
+    }
+    if (estimator.output.wheel_velocity_reliable) {
+        fputs("gross wheel outlier did not invalidate reliability\n", stderr);
+        return 1;
+    }
+    for (int sample = 0; sample < 10; ++sample) {
+        bc_velocity_estimator_update(
+            &estimator, estimator.state[0] + 0.17F, 0.001F);
+    }
+    if (estimator.output.measurement_accepted ||
+        estimator.output.wheel_velocity_reliable ||
+        estimator.output.nis <= config.nis_gate) {
+        fputs("gross wheel outlier bypassed recovery gate\n", stderr);
+        return 1;
+    }
+
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            if (!isfinite(estimator.covariance[row][column]) ||
+                expect_near(
+                    "recovery covariance symmetry",
+                    estimator.covariance[row][column],
+                    estimator.covariance[column][row], 1.0e-6F)) {
+                return 1;
+            }
+        }
     }
 
     bc_velocity_estimator_skip_update(&estimator);

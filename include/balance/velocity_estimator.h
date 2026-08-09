@@ -14,6 +14,7 @@ typedef struct {
     float acceleration_variance;
     float bias_walk_variance;
     float wheel_velocity_variance;
+    float recovery_velocity_variance;
     float nis_gate;
     float wheel_rejection_duration;
     float wheel_recovery_duration;
@@ -32,6 +33,9 @@ typedef struct {
     float innovation;
     float innovation_variance;
     float nis;
+    float velocity_variance_x;
+    float rejection_elapsed_seconds;
+    float recovery_elapsed_seconds;
     uint8_t measurement_accepted;
     uint8_t wheel_velocity_reliable;
 } bc_velocity_estimator_output_t;
