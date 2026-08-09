@@ -21,6 +21,8 @@ int main() {
         config.roll_controller.kp != 800.0F ||
         config.roll_controller.kd != 60.0F ||
         config.roll_controller.output_limit != 200.0F ||
+        config.roll_force_sign[BC_L] != +1.0F ||
+        config.roll_force_sign[BC_R] != -1.0F ||
         fabsf(config.support_force - 76.204F) > 1.0e-4F) {
         fputs("default LQR compensation is incorrect\n", stderr);
         return 1;
@@ -330,8 +332,34 @@ int main() {
     }
     roll_command.wheel_strategy = BC_WHEEL_DISABLED;
     bc_control_core_calculate(&roll_core, &roll_command);
+    if (fabsf(
+            roll_core.roll_force_request - expected_roll_force) > 1.0e-5F) {
+        fputs("wheel strategy unexpectedly disabled roll PD\n", stderr);
+        return 1;
+    }
+    roll_core.config.roll_force_sign[BC_L] = -1.0F;
+    roll_core.config.roll_force_sign[BC_R] = +1.0F;
+    bc_control_core_calculate(&roll_core, &roll_command);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        const float sign = side == BC_L ? -1.0F : +1.0F;
+        for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+            const float expected = sign * expected_roll_force *
+                roll_core.observer.leg[side]
+                    .jacobian[BC_LEG_LENGTH][joint];
+            if (fabsf(
+                    roll_core.actuation_request.leg[side]
+                        .joint_torque[joint] - expected) > 1.0e-5F) {
+                fputs("roll force polarity did not reverse both legs\n", stderr);
+                return 1;
+            }
+        }
+    }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        roll_command.leg[side].length_strategy = BC_LEG_LENGTH_POSITION;
+    }
+    bc_control_core_calculate(&roll_core, &roll_command);
     if (roll_core.roll_force_request != 0.0F) {
-        fputs("roll PD remained enabled outside balance control\n", stderr);
+        fputs("position-only leg control did not disable roll PD\n", stderr);
         return 1;
     }
 

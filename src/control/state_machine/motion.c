@@ -178,7 +178,7 @@ static void bc_motion_action(
     case BC_MOTION_LEG_POSITIONING:
         bc_motion_set_leg_control(
             motion,
-            BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_POSITION,
+            BC_LEG_LENGTH_POSITION, BC_LEG_ANGLE_POSITION,
             output);
         break;
 

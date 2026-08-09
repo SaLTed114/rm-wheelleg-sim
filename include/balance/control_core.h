@@ -19,6 +19,7 @@ typedef struct {
     bc_pd_controller_t length_controller;
     bc_pd_controller_t angle_controller;
     bc_pd_controller_t roll_controller;
+    float roll_force_sign[BC_SIDE_NUM];
     bc_lqr_compensation_t lqr_compensation;
     float support_force;
     float wheel_torque_limit;

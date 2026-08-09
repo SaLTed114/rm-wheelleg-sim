@@ -134,16 +134,16 @@ forward: IDLE / HOLD / VELOCITY
 - observer 使用 IMU 与共同轮速融合得到正式 `DS`，`S` 对该融合速度积分；轮速创新通过 NIS 和 `20 ms` 可信度迟滞拒绝接触闪断污染。IMU 外参、噪声和迟滞仍是仿真初值，实车到位后必须标定。
 - 十维 LQR 状态为 `[s, ds, psi, dpsi, theta_l, dtheta_l, theta_r, dtheta_r, theta_b, dtheta_b]`，输入为 `[T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]`。
 - 当前调度覆盖 `0.160-0.390 m`；`0.160-0.186 m` 是等效腿参数拟合延伸区。当前 `Q=[90,60,40,15,240,4,240,4,300,60]`、`R=[3.2,3.2,0.7,0.7]`，腿角共同/差分权重为 `240/1920`，腿角速度为 `4/32`。
-- 默认腿长 `0.18 m`；当前模型工作点使用 `+0.7 deg` 共同腿角补偿和每腿 `76.204 N` 支撑前馈。`LEG_POSITIONING` 同样带支撑前馈，定位腿角 PD 的 `Kp=50`。
+- 默认腿长 `0.18 m`；当前模型工作点使用 `+0.7 deg` 共同腿角补偿和每腿 `76.204 N` 支撑前馈。`LEG_POSITIONING` 只使用长度/角度位置反馈，定位腿角 PD 的 `Kp=50`；支撑与 roll 差分力只属于 `POSITION_SUPPORT`。
 - 轮力矩限幅 `6.32 N*m`，关节力矩限幅 `40 N*m`。
 - yaw 加速度前馈为 `u = K(r-x) + 0.9*F_yaw*DDPSI_ref`。它显著改善普通原地 heading 停转过冲，但其线性化工作点接近零前进速度，尚未做速度调度。
-- roll/roll rate 不进入十维 LQR，而是驱动独立 PD：`Kp=800 N/rad`、`Kd=60 N/(rad/s)`、差分力限幅 `200 N`。控制输出是左腿轴向力修正，右腿取相反数；只在两腿长度支撑、腿角 LQR 和轮 LQR 同时启用时生效。snapshot、UI 和 benchmark trace 直接记录 `roll_force_request`。
+- roll/roll rate 不进入十维 LQR，而是驱动独立 PD：`Kp=800 N/rad`、`Kd=60 N/(rad/s)`、差分力限幅 `200 N`。roll 是 `POSITION_SUPPORT` 的固有组成，不再根据 wheel/angle 策略反推是否启用；左右轴向力符号由配置数组给出，默认为 `{+1,-1}`，计算循环不临时判断左右侧。snapshot、UI 和 benchmark trace 直接记录 `roll_force_request`。
 - 当前 sensor feedback 尚无可信接触状态，因此第一版没有照搬实车“任一侧离地便关闭 roll 回路”的门控；system OFF、定位和其他非平衡策略会自动将 roll 请求清零。
 
 ## 当前验证结论
 
 - 构建与基础测试：Windows Release 18/18 CTest 和 9 项实验配置单测通过；LQR golden test 以旧实车参数复现固件 schedule，最大系数误差约 `5e-10`。
-- 站立：质量重整后先按总质量比例把支撑前馈调为 `76.204 N/leg`，trim 粗扫和 `0.1 deg` 细扫选定 `+0.7 deg`，稳态平均 pitch 约 `-0.003 deg`、速度漂移接近零。自由落地、带支撑腿部定位和 LQR 接管均通过。
+- 站立：质量重整后先按总质量比例把支撑前馈调为 `76.204 N/leg`，trim 粗扫和 `0.1 deg` 细扫选定 `+0.7 deg`，稳态平均 pitch 约 `-0.003 deg`、速度漂移接近零。自由落地和 LQR 接管已经验证；恢复纯位置腿部定位后需要重新确认新质量下的接管条件。
 - 直线：`0.18 m、5 m/s^2` 下 `+/-1、+/-2、+/-2.5、+/-3 m/s` 全部完成、tracked 且 settled；`3 m/s` 最大 pitch 约 `2.22 deg`，没有轮或关节饱和。
 - 普通 heading：`0.18 m、10 rad/s^2` 下 `+/-pi、+/-1.5*pi rad/s` 全部完成、tracked 且 settled；最大 pitch/roll 分别约 `1.38/0.97 deg`，没有执行器饱和。
 - 用户实车代码的 roll PVI 为 `Kp=800`、`Kv=60`、`Ki=0.2`、输出限幅 `200 N`。当前仿真第一版采用相同 P/D 和限幅但暂不积分，以 `+/-` 差分叠加到左右腿轴向力。
@@ -165,18 +165,20 @@ forward: IDLE / HOLD / VELOCITY
 
 - performance 自定义 heading 案例新增 `--coupled-forward` 和 `--forward-lead-seconds`，用于可复现的边走边转隔离；对应场景测试已加入。
 - MJCF 已写入实车聚合质量、质心和惯量；参数提取器新增 `0.18 m` 整机 yaw 惯量工作点，LQR 正式使用 `0.588029054 kg*m^2`，生成 JSON/schema/header 和报告均已更新。
-- 起立阶段已改为带支撑定位；默认支撑、trim 和腿角定位 PD 已按新质量基线更新。
+- 起立阶段已恢复纯位置定位；默认支撑、trim 和腿角定位 PD 已按新质量基线更新。
 - 正式 roll PD 已接入左右腿差分轴向力；snapshot、UI、summary 和 trace 已加入 roll 力请求诊断。
+- 提交后的语义清理已将 `LEG_POSITIONING` 恢复为纯 `POSITION`，并令 roll 固定从属于 `POSITION_SUPPORT`；这暴露出新质量 plant 下纯 PD 稳态腿长只有约 `0.158/0.149 m`，无法满足当前 `0.18+/-0.025 m` 接管条件。当前 MuJoCo static-stand 测试因此失败，不能再写成全量通过；需要单独决定定位目标、控制器或接管条件，而不是重新偷加支撑前馈。
 - LQR 生成器的一倍/两倍偏航惯量倍率和来源选择均已删除，生成 JSON schema 为 v2。
 - `docs/notes/hardware-bringup.md` 已新增但尚未提交。
 - 上述工作与现有 18 项 CTest 均已通过，工作区尚未提交。
 
 ## 下一步
 
-1. 设计可迁移到实车的轮地接触观测输入，先复刻实车“任一侧离地则关闭 roll 回路”，观察能否消除 target-hold 的长期单轮离地。
-2. 扫描更低的前进/heading 组合网格，确定双轮接触开始恶化的边界，并区分物理载荷转移与控制振荡。
-3. 将 yaw 加速度前馈至少限制在近零前进速度，之后再根据 `|DS|` 或 `|v*omega|` 实验平滑调度。
-4. NORMAL 稳定后再实现任务级 SPIN；实车部署按 `hardware-bringup.md` 逐级进行，不一次上线完整功能。
+1. 重新设计纯位置腿部定位到支撑平衡的接管条件；保持策略语义，不用 `POSITION_SUPPORT` 让测试虚假通过。
+2. 设计可迁移到实车的轮地接触观测输入，先复刻实车“任一侧离地则关闭 roll 回路”，观察能否消除 target-hold 的长期单轮离地。
+3. 扫描更低的前进/heading 组合网格，确定双轮接触开始恶化的边界，并区分物理载荷转移与控制振荡。
+4. 将 yaw 加速度前馈至少限制在近零前进速度，之后再根据 `|DS|` 或 `|v*omega|` 实验平滑调度。
+5. NORMAL 稳定后再实现任务级 SPIN；实车部署按 `hardware-bringup.md` 逐级进行，不一次上线完整功能。
 
 ## 快速恢复阅读顺序
 

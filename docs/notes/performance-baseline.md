@@ -584,10 +584,11 @@ base-link/assembly 来源开关。
 
 ## 正式 Roll PD 首轮结果（2026-08-09）
 
-控制核心现已在正式 LQR 平衡策略下使用独立 roll PD。默认参数来自实车 PVI
+控制核心现已把独立 roll PD 作为 `POSITION_SUPPORT` 的固有组成。默认参数来自实车 PVI
 的 P/D 部分：`Kp=800 N/rad`、`Kd=60 N/(rad/s)`、差分力限幅 `200 N`；
 目标固定为零 roll。PD 输出作为左腿轴向力修正，右腿取相反数，然后与长度
-PD 和支撑前馈相加并通过同一个 Jacobian、关节限幅和 system 输出门控。
+PD 和支撑前馈相加并通过同一个 Jacobian、关节限幅和 system 输出门控；左右
+映射符号由配置数组给出，当前默认为 `{+1,-1}`。
 第一版没有积分，也没有接触门控，因为当前 C sensor feedback 尚无可迁移到
 实车的接触观测。
 

@@ -54,6 +54,7 @@ void bc_control_default_config(bc_control_config_t *config) {
             .kd           = 60.0F,
             .output_limit = 200.0F,
         },
+        .roll_force_sign = {+1.0F, -1.0F},
         .lqr_compensation = {
             .leg_angle_trim = 0.7F * BC_PI_F / 180.0F,
             .yaw_acceleration_feedforward_scale = 0.9F,
@@ -135,20 +136,10 @@ void bc_control_core_calculate(
             &lqr_output);
     }
 
-    uint8_t roll_control_enabled =
-        command->wheel_strategy == BC_WHEEL_LQR;
-    for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        roll_control_enabled = roll_control_enabled &&
-            command->leg[side].length_strategy ==
-                BC_LEG_LENGTH_POSITION_SUPPORT &&
-            command->leg[side].angle_strategy == BC_LEG_ANGLE_LQR;
-    }
-    if (roll_control_enabled) {
-        core->roll_force_request = bc_pd_calculate(
-            &core->config.roll_controller,
-            -core->observer.roll,
-            -core->observer.roll_rate);
-    }
+    const float roll_force = bc_pd_calculate(
+        &core->config.roll_controller,
+        -core->observer.roll,
+        -core->observer.roll_rate);
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const bc_leg_kinematics_t *leg = &core->observer.leg[side];
@@ -169,11 +160,10 @@ void bc_control_core_calculate(
                 target->length - leg->length, -leg->length_velocity);
             if (leg_command->length_strategy ==
                 BC_LEG_LENGTH_POSITION_SUPPORT) {
+                core->roll_force_request = roll_force;
                 axial_force += core->config.support_force;
-            }
-            if (roll_control_enabled) {
-                const float roll_sign = side == BC_L ? +1.0F : -1.0F;
-                axial_force += roll_sign * core->roll_force_request;
+                axial_force +=
+                    core->config.roll_force_sign[side] * roll_force;
             }
             break;
         }
