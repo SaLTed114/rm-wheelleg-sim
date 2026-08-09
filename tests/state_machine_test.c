@@ -78,7 +78,7 @@ int main() {
     if (system.motion.state != BC_MOTION_LEG_POSITIONING ||
         !control_uses_strategies(
             &command,
-            BC_LEG_LENGTH_POSITION, BC_LEG_ANGLE_POSITION,
+            BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_POSITION,
             BC_WHEEL_DISABLED)) {
         fputs("balance restart did not start leg positioning\n", stderr);
         return 1;
@@ -249,7 +249,7 @@ int main() {
         system.motion.engage_hold.elapsed_seconds != 0.0F ||
         !control_uses_strategies(
             &command,
-            BC_LEG_LENGTH_POSITION, BC_LEG_ANGLE_POSITION,
+            BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_POSITION,
             BC_WHEEL_DISABLED)) {
         fputs("balance restart did not return to leg positioning\n", stderr);
         return 1;

@@ -30,12 +30,7 @@ class PhysicalParameters:
     gravity: float
     wheel_inertia: float
     body_pitch_inertia: float
-    body_yaw_inertia_actual: float
-    body_yaw_inertia_scale: float = 1.0
-
-    @property
-    def body_yaw_inertia_model(self) -> float:
-        return self.body_yaw_inertia_actual * self.body_yaw_inertia_scale
+    body_yaw_inertia: float
 
 
 @dataclass(frozen=True)
@@ -90,7 +85,7 @@ def legacy_parameters() -> PhysicalParameters:
         gravity=9.807,
         wheel_inertia=wheel_mass * wheel_radius**2 / 2.0,
         body_pitch_inertia=367565e-6,
-        body_yaw_inertia_actual=413477e-6,
+        body_yaw_inertia=413477e-6,
     )
 
 
@@ -168,7 +163,7 @@ def build_state_matrix_functions(
     gravity = physical.gravity
     iw = physical.wheel_inertia
     ib = physical.body_pitch_inertia
-    iz = physical.body_yaw_inertia_model
+    iz = physical.body_yaw_inertia
 
     equations = [
         sp.Eq(

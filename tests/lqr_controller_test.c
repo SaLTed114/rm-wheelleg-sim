@@ -78,16 +78,16 @@ int main() {
 #ifdef BALANCE_DEFAULT_LQR_SCHEDULE
     if (expect_near(
             "default left wheel", output.wheel_torque[BC_L],
-            0.8964367F, 2.0e-6F) ||
+            0.3923210F, 2.0e-6F) ||
         expect_near(
             "default right wheel", output.wheel_torque[BC_R],
-            0.8981590F, 2.0e-6F) ||
+            0.3923532F, 2.0e-6F) ||
         expect_near(
             "default left leg", output.leg_torque[BC_L],
-            1.0312429F, 2.0e-6F) ||
+            1.3461510F, 2.0e-6F) ||
         expect_near(
             "default right leg", output.leg_torque[BC_R],
-            1.0329542F, 2.0e-6F)) {
+            1.3470198F, 2.0e-6F)) {
         return 1;
     }
 #endif

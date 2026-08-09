@@ -46,6 +46,7 @@ struct PerformanceResult {
     double maximum_roll{};
     double maximum_leg_common{};
     double maximum_leg_difference{};
+    double maximum_roll_force_request{};
     double maximum_roll_restraint_torque{};
     std::array<double, BC_SIDE_NUM> minimum_vertical_projection{{
         std::numeric_limits<double>::infinity(),

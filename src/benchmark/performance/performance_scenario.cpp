@@ -114,6 +114,16 @@ PerformanceScenario::PerformanceScenario(
         spec_.stop_settle_seconds < 0.0 ||
         !std::isfinite(spec_.standing_seconds) ||
         spec_.standing_seconds < 0.0 ||
+        !std::isfinite(spec_.coupled_forward_velocity) ||
+        std::abs(spec_.coupled_forward_velocity) > 3.0 ||
+        !std::isfinite(spec_.forward_lead_seconds) ||
+        spec_.forward_lead_seconds < 0.0 ||
+        spec_.forward_lead_seconds > spec_.standing_seconds ||
+        (spec_.axis != PerformanceAxis::heading &&
+         (spec_.coupled_forward_velocity != 0.0 ||
+          spec_.forward_lead_seconds != 0.0)) ||
+        (spec_.coupled_forward_velocity == 0.0 &&
+         spec_.forward_lead_seconds != 0.0) ||
         (spec_.axis == PerformanceAxis::heading &&
          std::abs(spec_.target) > 1.5 * BC_PI)) {
         throw std::invalid_argument(
@@ -225,6 +235,20 @@ void PerformanceScenario::update(
     }
     float gimbal_forward_velocity = 0.0F;
     float target_gimbal_yaw_rate = 0.0F;
+    const bool coupled_forward_active =
+        spec_.axis == PerformanceAxis::heading &&
+        spec_.coupled_forward_velocity != 0.0 &&
+        ((phase_ == PerformancePhase::standing &&
+          spec_.forward_lead_seconds > 0.0 &&
+          phase_elapsed() >=
+              spec_.standing_seconds - spec_.forward_lead_seconds) ||
+         phase_ == PerformancePhase::target_ramp ||
+         phase_ == PerformancePhase::target_hold ||
+         phase_ == PerformancePhase::stop_ramp);
+    if (coupled_forward_active) {
+        gimbal_forward_velocity =
+            static_cast<float>(spec_.coupled_forward_velocity);
+    }
     if (phase_ == PerformancePhase::target_ramp ||
         phase_ == PerformancePhase::target_hold) {
         double target = spec_.target;

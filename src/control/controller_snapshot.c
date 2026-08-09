@@ -19,6 +19,8 @@ void bc_controller_capture_snapshot(
         controller->system.motion.yaw_reference.acceleration_reference;
     snapshot->roll = controller->control_core.observer.roll;
     snapshot->roll_rate = controller->control_core.observer.roll_rate;
+    snapshot->roll_force_request =
+        controller->control_core.roll_force_request;
     snapshot->gimbal = controller->gimbal_feedback;
     snapshot->mapped_forward_velocity =
         controller->system.motion.mapped_forward_velocity;

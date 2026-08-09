@@ -59,6 +59,8 @@ void print_result(const PerformanceResult &result) {
               << result.maximum_pitch * 180.0 / BC_PI
               << " roll=" << std::setw(8)
               << result.maximum_roll * 180.0 / BC_PI
+              << " roll_force=" << std::setw(8)
+              << result.maximum_roll_force_request
               << " wheel_sat=" << maximum_wheel_saturation
               << " joint_sat=" << maximum_joint_saturation;
     if (result.issue != "none") {
@@ -86,6 +88,8 @@ int main(int argc, char **argv) {
     std::optional<double> custom_target_hold;
     std::optional<double> custom_stop_settle;
     std::optional<double> custom_standing;
+    std::optional<double> coupled_forward_velocity;
+    std::optional<double> forward_lead_seconds;
     bool arguments_valid = argc >= 3 && (argc - 3) % 2 == 0;
     for (int index = 3; arguments_valid && index < argc; index += 2) {
         const std::string option = argv[index];
@@ -171,6 +175,26 @@ int main(int argc, char **argv) {
                 break;
             }
             arguments_valid = consumed == value.size();
+        } else if (option == "--coupled-forward" &&
+                   !coupled_forward_velocity) {
+            std::size_t consumed = 0U;
+            try {
+                coupled_forward_velocity = std::stod(value, &consumed);
+            } catch (const std::exception &) {
+                arguments_valid = false;
+                break;
+            }
+            arguments_valid = consumed == value.size();
+        } else if (option == "--forward-lead-seconds" &&
+                   !forward_lead_seconds) {
+            std::size_t consumed = 0U;
+            try {
+                forward_lead_seconds = std::stod(value, &consumed);
+            } catch (const std::exception &) {
+                arguments_valid = false;
+                break;
+            }
+            arguments_valid = consumed == value.size();
         } else if (option == "--roll-restraint" && !roll_restrained) {
             roll_restrained = value == "on";
             arguments_valid = roll_restrained;
@@ -203,7 +227,8 @@ int main(int argc, char **argv) {
         }
     }
     const bool any_custom = custom_name || custom_axis || custom_target ||
-        custom_command_rate || custom_target_hold || custom_stop_settle;
+        custom_command_rate || custom_target_hold || custom_stop_settle ||
+        coupled_forward_velocity || forward_lead_seconds;
     const bool any_custom_timing = custom_standing.has_value();
     const bool complete_custom = custom_name && custom_axis && custom_target &&
         custom_command_rate;
@@ -220,7 +245,9 @@ int main(int argc, char **argv) {
                "--target <value> --command-rate <value> "
                "--standing-seconds <seconds> "
                "--target-hold-seconds <seconds> "
-               "--stop-settle-seconds <seconds>] "
+               "--stop-settle-seconds <seconds> "
+               "--coupled-forward <m/s> "
+               "--forward-lead-seconds <seconds>] "
                "[--leg-length <metres>] [--trace-stride <steps>] "
                "[--roll-restraint on] "
                "[--yaw-acceleration-feedforward <scale>] "
@@ -250,6 +277,13 @@ int main(int argc, char **argv) {
             }
             if (custom_standing) {
                 spec.standing_seconds = *custom_standing;
+            }
+            if (coupled_forward_velocity) {
+                spec.coupled_forward_velocity =
+                    *coupled_forward_velocity;
+            }
+            if (forward_lead_seconds) {
+                spec.forward_lead_seconds = *forward_lead_seconds;
             }
             cases.push_back(spec);
         } else if (selected_case != nullptr) {

@@ -45,15 +45,20 @@ void bc_control_default_config(bc_control_config_t *config) {
             .output_limit = 220.0F,
         },
         .angle_controller = {
-            .kp           = 40.0F,
+            .kp           = 50.0F,
             .kd           = 6.0F,
             .output_limit = 30.0F,
         },
+        .roll_controller = {
+            .kp           = 800.0F,
+            .kd           = 60.0F,
+            .output_limit = 200.0F,
+        },
         .lqr_compensation = {
-            .leg_angle_trim = 5.5F * BC_PI_F / 180.0F,
+            .leg_angle_trim = 0.7F * BC_PI_F / 180.0F,
             .yaw_acceleration_feedforward_scale = 0.9F,
         },
-        .support_force      = 67.5F,
+        .support_force      = 76.204F,
         .wheel_torque_limit = 6.32F,
         .joint_torque_limit = 40.0F,
     };
@@ -71,6 +76,7 @@ void bc_control_core_init(
 void bc_control_core_reset(bc_control_core_t *core) {
     bc_observer_reset(&core->observer);
     memset(&core->actuation_request, 0, sizeof(core->actuation_request));
+    core->roll_force_request = 0.0F;
     core->tick_count = 0U;
 }
 
@@ -90,6 +96,7 @@ void bc_control_core_calculate(
     const bc_control_command_t *command
 ) {
     memset(&core->actuation_request, 0, sizeof(core->actuation_request));
+    core->roll_force_request = 0.0F;
     core->tick_count += 1U;
 
     uint8_t lqr_required =
@@ -128,6 +135,21 @@ void bc_control_core_calculate(
             &lqr_output);
     }
 
+    uint8_t roll_control_enabled =
+        command->wheel_strategy == BC_WHEEL_LQR;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        roll_control_enabled = roll_control_enabled &&
+            command->leg[side].length_strategy ==
+                BC_LEG_LENGTH_POSITION_SUPPORT &&
+            command->leg[side].angle_strategy == BC_LEG_ANGLE_LQR;
+    }
+    if (roll_control_enabled) {
+        core->roll_force_request = bc_pd_calculate(
+            &core->config.roll_controller,
+            -core->observer.roll,
+            -core->observer.roll_rate);
+    }
+
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const bc_leg_kinematics_t *leg = &core->observer.leg[side];
         const bc_leg_control_command_t *leg_command =
@@ -148,6 +170,10 @@ void bc_control_core_calculate(
             if (leg_command->length_strategy ==
                 BC_LEG_LENGTH_POSITION_SUPPORT) {
                 axial_force += core->config.support_force;
+            }
+            if (roll_control_enabled) {
+                const float roll_sign = side == BC_L ? +1.0F : -1.0F;
+                axial_force += roll_sign * core->roll_force_request;
             }
             break;
         }

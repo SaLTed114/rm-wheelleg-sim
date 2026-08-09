@@ -21,6 +21,7 @@ typedef struct {
     float yaw_acceleration_reference;
     float roll;
     float roll_rate;
+    float roll_force_request;
     bc_gimbal_feedback_t gimbal;
     float mapped_forward_velocity;
     float heading_error;

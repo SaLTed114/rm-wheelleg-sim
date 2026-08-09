@@ -33,12 +33,23 @@ gimbal. Its encoder-equivalent angle and rate use the same current IMU sample
 as the controller, while the front/rear policy lives in the C control core;
 task-level `SPIN` remains a documented future feature and is not represented by
 an axis-level state or a low-level test bypass.
-Roll and roll rate are observable through the snapshot but are not yet used for
-compensation.
-The current 1 ms LQR schedule was retuned around `0.16 m` and `0.18 m` leg
-lengths. It completes the diagnostic `+/-3 m/s` translation sweep at both
-lengths; in-place yaw above `pi rad/s` remains an investigation target rather
-than a validated operating range.
+Roll and roll rate drive a dedicated PD correction during LQR balance control.
+The default `800/60` gains produce one bounded differential axial-force request:
+the left leg receives the request and the right leg receives its negative. The
+snapshot, UI, and performance trace expose this request directly. Contact-based
+disable logic is intentionally deferred until wheel contact is a real control
+input rather than MuJoCo-only ground truth.
+The current plant keeps the imported mechanism geometry but uses the validated
+real-robot mass partition: `17.65 kg` base, `1.19 kg` per leg without the
+wheel, and `0.71 kg` per wheel (`21.45 kg` total). The base-link pitch/yaw
+inertias are `0.367565/0.413477 kg*m^2`; the LQR uses the complete
+`0.588029 kg*m^2` assembly yaw inertia extracted at the default `0.18 m` leg
+length. The current 1 ms schedule completes the diagnostic `+/-3 m/s`
+translation and `+/-1.5*pi rad/s` in-place heading sweeps at `0.18 m`.
+The roll PD prevents the previous overturn in the combined
+`2.3 m/s + 1.5*pi rad/s` case, but target-hold dual-wheel contact is still poor;
+the combined case therefore remains diagnostic rather than a validated
+operating point.
 
 The robot assets under `models/` are imported from the open-source model released
 by the Liaoning University of Science and Technology COD RoboMaster team. See
@@ -122,8 +133,9 @@ Space to pause, and Backspace or `R` to reset.
 The interactive simulator first keeps `SYSTEM_OFF` for two seconds while the
 robot falls and settles. It then enables the system and emits one simulated
 balance-restart event. `LEG_POSITIONING` moves both virtual legs toward
-`0.18 m / -pi/2`; once stable, `ENGAGING` enables the current-model LQR and
-`67.5 N` axial support per leg. No mocap support or pose teleport is used. The
+`0.18 m / -pi/2`; positioning already includes gravity support, and once
+stable, `ENGAGING` enables the current-model LQR with `76.204 N` axial support
+per leg. No mocap support or pose teleport is used. The
 simulator then repeats standing, `+/-0.25 m/s` travel, and virtual-gimbal
 `+/-1.57 rad/s` turning phases. GUI runtime state and performance-case events
 are shown in the sidebar rather than printed periodically to the terminal; the
@@ -226,6 +238,8 @@ axis. These fields are diagnostic telemetry and are not control inputs.
 `command_forward`, `gimbal_relative_yaw/rate`, `alignment`,
 `mapped_forward`, `heading_error`, and `ref_ddpsi` separately expose upper-board intent,
 motor-equivalent CAN feedback, and the lower-board NORMAL mapping result.
+`roll_force_request` records the signed correction applied to the left leg;
+the right leg receives the opposite correction.
 The simulated accelerometer reports FLU body-frame specific force, so a level,
 stationary robot reads approximately `[0, 0, +9.81] m/s^2`. The
 `velocity_prior_*`, `velocity_estimate_*`, `velocity_truth_*`, innovation,
@@ -264,7 +278,7 @@ channel to hide steady drift, run the dedicated trim scan:
 The default scan covers `-5` through `+15 deg` in `1 deg` steps. Each case uses
 the normal free-drop and balance-engagement path, sets the LQR `S` error to
 zero while retaining `DS`, and writes `summary.csv` plus a 100 Hz `trace.csv`.
-The controller defaults use the calibrated `+5.5 deg` trim at the `0.18 m`
+The controller defaults use the calibrated `+0.7 deg` trim at the `0.18 m`
 baseline leg length. The scanner overrides that value for each case; use the
 range and step options shown by the executable to refine another interval.
 

@@ -235,6 +235,11 @@ void SimulationUi::draw_motion(const SimulationUiFrame &frame) {
         ImGui::TextUnformatted("Roll rate");
         ImGui::TableSetColumnIndex(1);
         ImGui::Text("% .3f rad/s", snapshot.roll_rate);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Roll differential force");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("% .1f N", snapshot.roll_force_request);
         ImGui::EndTable();
     }
 }

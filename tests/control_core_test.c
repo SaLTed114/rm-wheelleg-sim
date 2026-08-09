@@ -16,9 +16,13 @@ int main() {
     bc_control_default_config(&config);
     if (fabsf(
             config.lqr_compensation.leg_angle_trim -
-            5.5F * BC_PI_F / 180.0F) > 1.0e-7F ||
-        config.lqr_compensation.yaw_acceleration_feedforward_scale != 0.9F) {
-        fputs("default LQR leg-angle trim is incorrect\n", stderr);
+            0.7F * BC_PI_F / 180.0F) > 1.0e-7F ||
+        config.lqr_compensation.yaw_acceleration_feedforward_scale != 0.9F ||
+        config.roll_controller.kp != 800.0F ||
+        config.roll_controller.kd != 60.0F ||
+        config.roll_controller.output_limit != 200.0F ||
+        fabsf(config.support_force - 76.204F) > 1.0e-4F) {
+        fputs("default LQR compensation is incorrect\n", stderr);
         return 1;
     }
     bc_control_core_init(&core, &config);
@@ -154,7 +158,7 @@ int main() {
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
             const float torque = actuation.leg[side].joint_torque[joint];
-            if (torque <= 0.0F || torque >= 2.0F) {
+            if (torque <= 0.0F || torque >= 3.0F) {
                 fprintf(
                     stderr, "leg %d joint %d did not use wrapped angle error\n",
                     side, joint);
@@ -276,6 +280,59 @@ int main() {
                 return 1;
             }
         }
+    }
+
+    bc_control_config_t roll_config = config;
+    roll_config.lqr_compensation.leg_angle_trim = 0.0F;
+    roll_config.lqr_compensation.yaw_acceleration_feedforward_scale = 0.0F;
+    roll_config.support_force = 0.0F;
+    roll_config.joint_torque_limit = 1000.0F;
+    bc_control_core_t roll_core;
+    bc_sensor_feedback_t roll_feedback = {0};
+    bc_control_core_init(&roll_core, &roll_config);
+    bc_control_core_update(&roll_core, &roll_feedback, 0.001F, 0U);
+    roll_core.observer.roll = 0.1F;
+    roll_core.observer.roll_rate = 0.2F;
+    bc_control_command_t roll_command = {
+        .wheel_strategy = BC_WHEEL_LQR,
+        .state_reference = roll_core.observer.state,
+    };
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        roll_command.leg[side].length_strategy =
+            BC_LEG_LENGTH_POSITION_SUPPORT;
+        roll_command.leg[side].angle_strategy = BC_LEG_ANGLE_LQR;
+        roll_command.leg[side].target.length =
+            roll_core.observer.leg[side].length;
+    }
+    bc_control_core_calculate(&roll_core, &roll_command);
+    const float expected_roll_force = -92.0F;
+    if (fabsf(
+            roll_core.roll_force_request - expected_roll_force) > 1.0e-5F) {
+        fputs("roll PD output is incorrect\n", stderr);
+        return 1;
+    }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        const float sign = side == BC_L ? +1.0F : -1.0F;
+        for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+            const float expected = sign * expected_roll_force *
+                roll_core.observer.leg[side]
+                    .jacobian[BC_LEG_LENGTH][joint];
+            if (fabsf(
+                    roll_core.actuation_request.leg[side]
+                        .joint_torque[joint] - expected) > 1.0e-5F) {
+                fprintf(
+                    stderr,
+                    "leg %d joint %d did not apply roll differential force\n",
+                    side, joint);
+                return 1;
+            }
+        }
+    }
+    roll_command.wheel_strategy = BC_WHEEL_DISABLED;
+    bc_control_core_calculate(&roll_core, &roll_command);
+    if (roll_core.roll_force_request != 0.0F) {
+        fputs("roll PD remained enabled outside balance control\n", stderr);
+        return 1;
     }
 
     bc_control_core_reset(&core);

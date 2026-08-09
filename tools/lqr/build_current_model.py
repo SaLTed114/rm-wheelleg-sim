@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -37,7 +36,6 @@ R_DIAGONAL = (3.2, 3.2, 0.7, 0.7)
 LEG_ANGLE_DIFFERENCE_WEIGHT = 1920.0
 LEG_ANGULAR_VELOCITY_DIFFERENCE_WEIGHT = 32.0
 CONTROLLER_LENGTH_MINIMUM = 0.16
-YAW_INERTIA_SOURCES = ("base-link", "assembly")
 
 
 def make_leg_provider(
@@ -68,7 +66,7 @@ def make_leg_provider(
 
 
 def make_physical_parameters(
-    extracted: dict[str, object], yaw_scale: float,
+    extracted: dict[str, object],
 ) -> PhysicalParameters:
     rigid = extracted["rigid"]
     return PhysicalParameters(
@@ -81,8 +79,7 @@ def make_physical_parameters(
         gravity=9.81,
         wheel_inertia=rigid["wheel_inertia"],
         body_pitch_inertia=rigid["body_pitch_inertia"],
-        body_yaw_inertia_actual=rigid["body_yaw_inertia_actual"],
-        body_yaw_inertia_scale=yaw_scale,
+        body_yaw_inertia=rigid["assembly_yaw_inertia_reference"],
     )
 
 
@@ -197,22 +194,8 @@ def physical_to_dict(physical: PhysicalParameters) -> dict[str, float]:
         "gravity": physical.gravity,
         "wheel_inertia": physical.wheel_inertia,
         "body_pitch_inertia": physical.body_pitch_inertia,
-        "body_yaw_inertia_actual": physical.body_yaw_inertia_actual,
-        "body_yaw_inertia_scale": physical.body_yaw_inertia_scale,
-        "body_yaw_inertia_model": physical.body_yaw_inertia_model,
+        "body_yaw_inertia": physical.body_yaw_inertia,
     }
-
-
-def yaw_inertia_scale(
-    extracted: dict[str, object], source: str,
-) -> float:
-    rigid = extracted["rigid"]
-    if source == "base-link": return 1.0
-    if source == "assembly":
-        return (
-            rigid["assembly_yaw_inertia_diagnostic"] /
-            rigid["body_yaw_inertia_actual"])
-    raise ValueError(f"unknown yaw inertia source: {source}")
 
 
 def build_result(
@@ -220,7 +203,6 @@ def build_result(
     q_diagonal: tuple[float, ...] = Q_DIAGONAL,
     r_diagonal: tuple[float, ...] = R_DIAGONAL,
     extracted: dict[str, object] | None = None,
-    yaw_inertia_source: str = "base-link",
     leg_angle_difference_weight: float | None = (
         LEG_ANGLE_DIFFERENCE_WEIGHT),
     leg_angular_velocity_difference_weight: float | None = (
@@ -248,8 +230,7 @@ def build_result(
             leg_angular_velocity_difference_weight),
     )
 
-    selected_scale = yaw_inertia_scale(extracted, yaw_inertia_source)
-    physical = make_physical_parameters(extracted, selected_scale)
+    physical = make_physical_parameters(extracted)
     samples = compute_gain_samples(physical, settings, leg_provider)
     if samples.minimum_controllability_rank != len(STATE_NAMES):
         raise RuntimeError(
@@ -270,16 +251,6 @@ def build_result(
     if horner_error > 1.0e-5:
         raise RuntimeError("float Horner evaluation exceeds tolerance")
 
-    comparison_source = (
-        "2x-base-link" if yaw_inertia_source == "base-link" else "base-link")
-    comparison_scale = 2.0 if yaw_inertia_source == "base-link" else 1.0
-    comparison = replace(
-        physical, body_yaw_inertia_scale=comparison_scale)
-    comparison_samples = compute_gain_samples(
-        comparison, settings, leg_provider)
-    comparison_difference = float(np.max(np.abs(
-        samples.gains - comparison_samples.gains)))
-
     matrix_q = build_state_cost_matrix(settings)
     left_angle = STATE_NAMES.index("theta_l")
     right_angle = STATE_NAMES.index("theta_r")
@@ -287,7 +258,7 @@ def build_result(
     right_angular_velocity = STATE_NAMES.index("dtheta_r")
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "model": extracted,
         "controller": {
             "state_order": list(STATE_NAMES),
@@ -339,18 +310,6 @@ def build_result(
                     yaw_feedforward_inverse_residual),
                 "maximum_yaw_feedforward_fit_error": (
                     yaw_feedforward_fit_error),
-            },
-            "yaw_inertia_sensitivity": {
-                "selected_source": yaw_inertia_source,
-                "selected_scale": selected_scale,
-                "selected_model_inertia": physical.body_yaw_inertia_model,
-                "comparison_source": comparison_source,
-                "comparison_scale": comparison_scale,
-                "comparison_model_inertia": (
-                    comparison.body_yaw_inertia_model),
-                "comparison_maximum_raw_eigenvalue": (
-                    comparison_samples.maximum_eigenvalue),
-                "maximum_raw_gain_difference": comparison_difference,
             },
         },
     }
@@ -411,20 +370,10 @@ def emit_report(result: dict[str, object], path: Path) -> None:
     rigid = model["rigid"]
     current = result["validation"]["current"]
     legacy = result["validation"]["legacy"]
-    sensitivity = result["validation"]["yaw_inertia_sensitivity"]
     controller = result["controller"]
     schedule = result["schedule"]
     left_fit = model["fit_diagnostics"]["left"]
     right_fit = model["fit_diagnostics"]["right"]
-    if sensitivity["selected_source"] == "base-link":
-        yaw_conclusion = (
-            "正式调度采用 `base_link` 实际惯量。两倍惯量只保留为敏感性对照，"
-            "不能在其他位置再次乘二。")
-    else:
-        yaw_conclusion = (
-            "本调度采用整机偏航惯量，仅用于诊断控制器与 plant 的惯量匹配，"
-            "不能替代正式的 `base-link` 调度。")
-
     text = f"""# LQR 参数生成与验证
 
 本文由 `tools/lqr/build_current_model.py` 自动生成。
@@ -444,16 +393,18 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 方程中没有遗留的二分之一系数。
 
 - `base_link` 实际 Izz：`{rigid['body_yaw_inertia_actual']:.9f} kg*m^2`。
-- 选定来源：`{sensitivity['selected_source']}`，倍率：
-  `{sensitivity['selected_scale']:.9f}x`，建模值：
-  `{sensitivity['selected_model_inertia']:.9f} kg*m^2`。
-- 对照来源：`{sensitivity['comparison_source']}`，倍率：
-  `{sensitivity['comparison_scale']:.9f}x`，对应
-  `{sensitivity['comparison_model_inertia']:.9f} kg*m^2`。
-- 两种情况的原始增益最大差：
-  `{sensitivity['maximum_raw_gain_difference']:.9f}`。
+- 提取器 nominal 姿态下的整机诊断 Izz：
+  `{rigid['assembly_yaw_inertia_diagnostic']:.9f} kg*m^2`。
+- 整机 Izz 参考腿长：
+  `{rigid['assembly_yaw_inertia_reference_length']:.3f} m`，LQR 建模值：
+  `{controller['physical_parameters']['body_yaw_inertia']:.9f} kg*m^2`。
+- 在 `{rigid['assembly_yaw_inertia_range_lengths'][0]:.3f}` 至
+  `{rigid['assembly_yaw_inertia_range_lengths'][1]:.3f} m` 腿长采样中的整机 Izz
+  范围：`{rigid['assembly_yaw_inertia_range'][0]:.9f}` 至
+  `{rigid['assembly_yaw_inertia_range'][1]:.9f} kg*m^2`。
 
-{yaw_conclusion}
+生成器固定使用参考腿长处聚合得到的整机惯量，不提供 base-link/assembly
+来源开关，也不进行额外倍率换算。
 
 ## 当前模型参数
 
@@ -548,10 +499,6 @@ def main() -> int:
         "--leg-angular-velocity-difference-weight", type=float,
         default=LEG_ANGULAR_VELOCITY_DIFFERENCE_WEIGHT,
         help="eigenweight of the differential leg-angular-velocity mode")
-    parser.add_argument(
-        "--yaw-inertia-source", choices=YAW_INERTIA_SOURCES,
-        default="base-link",
-        help="yaw inertia used by the reduced controller model")
     arguments = parser.parse_args()
 
     extracted = None
@@ -564,7 +511,6 @@ def main() -> int:
         q_diagonal=tuple(arguments.q_diagonal),
         r_diagonal=tuple(arguments.r_diagonal),
         extracted=extracted,
-        yaw_inertia_source=arguments.yaw_inertia_source,
         leg_angle_difference_weight=(
             arguments.leg_angle_difference_weight),
         leg_angular_velocity_difference_weight=(
@@ -590,11 +536,10 @@ def main() -> int:
     print(
         "Generated polynomial order: "
         f"{result['schedule']['polynomial_order']}")
-    sensitivity = result["validation"]["yaw_inertia_sensitivity"]
     print(
-        "Yaw inertia source: "
-        f"{sensitivity['selected_source']} "
-        f"({sensitivity['selected_model_inertia']:.9f} kg*m^2)")
+        "Assembly yaw inertia: "
+        f"{result['controller']['physical_parameters']['body_yaw_inertia']:.9f} "
+        "kg*m^2")
     print(
         "Dense fitted closed-loop max |eigenvalue|: "
         f"{validation['maximum_fitted_eigenvalue']:.9f}")

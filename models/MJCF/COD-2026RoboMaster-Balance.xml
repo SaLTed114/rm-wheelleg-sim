@@ -35,7 +35,7 @@
     <body name="base_support" mocap="true"/>
     <body name="base_link">
       <freejoint name="base_free_joint"/>
-      <inertial pos="-0.019917 -0.00040396 0.021412" quat="0.9995742 0.000019294397 -0.00019993757 -0.029182209" mass="11" diaginertia="2.8640678 2.8736324 3.0472"/>
+      <inertial pos="-0.019917 -0.00040396 -0.037" mass="17.65" diaginertia="0.3663415964 0.367565 0.413477"/>
       <geom type="mesh" rgba="1 1 1 1" mesh="base_link" />
       <!-- Placeholder until the physical IMU extrinsic is measured. -->
       <site name="imu_site" pos="-0.10 0 -0.03" size="0.006" rgba="0 0.8 1 1"/>
@@ -43,24 +43,24 @@
       <site name="Right_virtual_hip_site" pos="-0.0193914 0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
     
     <body name="Left_front_link" pos="-0.0193914 -0.1837 -0.05">
-      <inertial pos="0.032009 -0.002932 -0.003563" quat="0.472786 0.528055 0.525808 0.470275" mass="0.7" diaginertia="0.000152893 0.000125485 2.9469e-05" />
+      <inertial pos="0.032009 -0.002932 -0.003563" quat="0.472786 0.528055 0.525808 0.470275" mass="0.268709677419" diaginertia="5.8691183871e-05 4.81700483871e-05 1.13122935484e-05" />
       <joint name="Left_front_joint" pos="0 0 0" axis="0 1 0" damping="0.1"  range="-1 1"/>
       <geom type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="Left_front_link" />
       
       <body name="Left_front_child1_link" pos="0.0993862 0.00145 -0.011063">
-        <inertial pos="-0.038168 0.0023981 -0.022193" quat="0.612915 0.352613 0.352613 0.612915" mass="0.25" diaginertia="5.3755e-05 5.27361e-05 1.58089e-06" />
+        <inertial pos="-0.038168 0.0023981 -0.022193" quat="0.612915 0.352613 0.352613 0.612915" mass="0.0959677419355" diaginertia="2.0634983871e-05 2.02438577419e-05 6.06857774194e-07" />
         <joint name="Left_front_child1_joint" pos="0 0 0" axis="0 1 0" damping="0.02"  range="-1.35 0"/>
         <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_child1_link" />
         
         <body name="Left_front_child2_link" pos="-0.10213 0.00 -0.0593844">
-          <inertial pos="-0.070408 -0.0065 0.055735" quat="0.300789 0.639942 0.639942 0.300789" mass="0.45" diaginertia="0.00027733 0.000261923 1.71071e-05" />
+          <inertial pos="-0.070408 -0.0065 0.055735" quat="0.300789 0.639942 0.639942 0.300789" mass="0.172741935484" diaginertia="0.000106458935484 0.000100544635484 6.56691903226e-06" />
           <joint name="Left_front_child2_joint" pos="0 0 0" axis="0 1 0" damping="0.02"  range="0 0.98"/>
           <site name="Left_front_site1" pos="-0.098 -0.002 0.0665" size="0.005" rgba="1 0 0 1"/>
           <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_child2_link" />
          
           
           <body name="Left_front_child3_link" pos="-0.131927 0.001 0.116079">
-            <inertial pos="-0.056516 0.0047872 -0.0018655" quat="0.50818 0.491683 0.491683 0.50818" mass="0.25" diaginertia="4.8247e-05 4.75555e-05 1.17022e-06" />
+            <inertial pos="-0.056516 0.0047872 -0.0018655" quat="0.50818 0.491683 0.491683 0.50818" mass="0.0959677419355" diaginertia="1.85206225806e-05 1.82551758065e-05 4.49213483871e-07" />
             <joint name="Left_front_child3_joint" pos="0 0 0" axis="0 1 0" damping="0.02"  range="-1.3 0"/>
             <site name="Left_front_site2" pos="-0.115 0 -0.005" size="0.005" rgba="1 0 0 1"/>  
             <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_child3_link" />
@@ -71,20 +71,20 @@
     </body>
     
     <body name="Left_rear_link" pos="-0.0193914 -0.1597 -0.05">
-      <inertial pos="-0.088717 -0.014548 -0.002836" quat="0.504264 0.494926 0.493803 0.506877" mass="0.7" diaginertia="0.0015394 0.00142065 0.000124696" />
+      <inertial pos="-0.088717 -0.014548 -0.002836" quat="0.504264 0.494926 0.493803 0.506877" mass="0.268709677419" diaginertia="0.000590930967742 0.000545346290323 4.78671741935e-05" />
       <joint name="Left_rear_joint" pos="0 0 0" axis="0 -1 0" damping="0.1"  range="-1 1"/>
       <site name="Left_rear_site1" pos="-0.1005 -0.025 -0.0035" size="0.005" rgba="1 1 0 1"/>           
       <geom type="mesh" rgba="1 1 1 1" mesh="Left_rear_link" />
       
      
       <body name="Left_rear_child1_link" pos="-0.214883 -0.0235 -0.00709287">
-        <inertial pos="0.077559 -0.0084721 -0.050638" quat="0.322031 0.62952 0.62952 0.322031" mass="0.75" diaginertia="0.0026525 0.00255923 9.97263e-05" />
+        <inertial pos="0.077559 -0.0084721 -0.050638" quat="0.322031 0.62952 0.62952 0.322031" mass="0.287903225806" diaginertia="0.00101821774194 0.000982414096774 3.82820312903e-05" />
         <joint name="Left_rear_child1_joint" pos="0 0 0" axis="0 1 0" damping="0.05" range="0 1.35"/>
         <site name="Left_rear_site2" pos="-0.038 0 0.05" size="0.005" rgba="1 1 0 1"/>         
         <geom type="mesh" rgba="1 1 1 1" mesh="Left_rear_child1_link" />
         
         <body name="Left_Wheel_link" pos="0.208983 -0.02455 -0.144368">
-          <inertial pos="0.00015229 -0.0099965 -0.00013677" quat="0.583036 0.400153 0.400171 0.582932" mass="0.9" diaginertia="0.00043712 0.000230405 0.000228895" />
+          <inertial pos="0.00015229 -0.0099965 -0.00013677" quat="0.583036 0.400153 0.400171 0.582932" mass="0.71" diaginertia="0.00119419026482 0.00062945508777 0.0006253298423" />
           <joint name="Left_Wheel_joint" pos="0 0 0" axis="0 1 0" damping="0.01" />
           <site name="Left_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1"/>
           <geom name="Left_wheel_collision" type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Left_Wheel_link" contype="0" conaffinity="1" friction="1 0.005 0.0001" />
@@ -94,23 +94,23 @@
     </body>
     
     <body name="Right_front_link" pos="-0.0193914 0.1817 -0.05">
-      <inertial pos="0.025832 0.0043356 -0.0054908" quat="0.443683 0.548461 0.550587 0.446308" mass="0.7" diaginertia="0.000152213 0.00012511 2.90948e-05" />
+      <inertial pos="0.025832 0.0043356 -0.0054908" quat="0.443683 0.548461 0.550587 0.446308" mass="0.268709677419" diaginertia="5.84301516129e-05 4.80260967742e-05 1.11686490323e-05" />
       <joint name="Right_front_joint" pos="0 0 0" axis="0 -1 0" damping="0.1" range="-1 1" ref="-0.1"/>
       <geom type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="Right_front_link" />
       
       <body name="Right_front_child1_link" pos="0.0978147 0.00055 -0.0207914">
-        <inertial pos="-0.050846 -0.0047941 -0.028159" quat="0.609195 0.359001 0.359001 0.609195" mass="0.25" diaginertia="5.3061e-05 5.23561e-05 1.19993e-06" />
+        <inertial pos="-0.050846 -0.0047941 -0.028159" quat="0.609195 0.359001 0.359001 0.609195" mass="0.0959677419355" diaginertia="2.03685774194e-05 2.00979867742e-05 4.60618290323e-07" />
         <joint name="Right_front_child1_joint" pos="0 0 0" axis="0 1 0" damping="0.02" range="-1.35 0 "/>
         <geom type="mesh" rgba="1 1 1 1" mesh="Right_front_child1_link" />
         
         <body name="Right_front_child2_link" pos="-0.103349 0.002 -0.0572359">
-          <inertial pos="-0.067449 0.006444 0.058262" quat="0.287002 0.646243 0.646243 0.287002" mass="0.45" diaginertia="0.00027735 0.000261944 1.71164e-05" />
+          <inertial pos="-0.067449 0.006444 0.058262" quat="0.287002 0.646243 0.646243 0.287002" mass="0.172741935484" diaginertia="0.000106466612903 0.000100552696774 6.57048903226e-06" />
           <joint name="Right_front_child2_joint" pos="0 0 0" axis="0 -1 0" damping="0.02" range="-0.98 0"/>
           <site name="Right_front_site1" pos="-0.0948 -0.002 0.071" size="0.005" rgba="1 0 0 1"/>
           <geom type="mesh" rgba="0.77647 0.75686 0.73725 1" mesh="Right_front_child2_link" />
           
           <body name="Right_front_child3_link" pos="-0.126832 -0.001 0.121624">
-            <inertial pos="-0.056417 -0.0047872 -0.0038317" quat="0.516662 0.482763 0.482763 0.516662" mass="0.25" diaginertia="4.8247e-05 4.7555e-05 1.17023e-06" />
+            <inertial pos="-0.056417 -0.0047872 -0.0038317" quat="0.516662 0.482763 0.482763 0.516662" mass="0.0959677419355" diaginertia="1.85206225806e-05 1.8254983871e-05 4.49217322581e-07" />
             <joint name="Right_front_joint3_joint" pos="0 0 0" axis="0 -1 0" damping="0.02" />
             <site name="Right_front_site2" pos="-0.115 0 -0.007" size="0.005" rgba="1 0 0 1"/>              
             <geom type="mesh" rgba="1 1 1 1" mesh="Right_front_child3_link" />
@@ -121,19 +121,19 @@
     </body>
     
     <body name="Right_rear_link" pos="-0.0193914 0.1597 -0.05">
-      <inertial pos="-0.088564 0.014548 -0.0059225" quat="0.515415 0.48495 0.486028 0.512784" mass="0.7" diaginertia="0.0015394 0.00142064 0.000124697" />
+      <inertial pos="-0.088564 0.014548 -0.0059225" quat="0.515415 0.48495 0.486028 0.512784" mass="0.268709677419" diaginertia="0.000590930967742 0.000545342451613 4.78675580645e-05" />
       <joint name="Right_rear_joint" pos="0 0 0" axis="0 1 0" damping="0.1" range="-1 1" ref="0.0"/>
       <site name="Right_rear_site1" pos="-0.1 0.0225 -0.008" size="0.005" rgba="1 1 0 1"/>         
       <geom type="mesh" rgba="1 1 1 1" mesh="Right_rear_link" />
       
       <body name="Right_rear_child1_link" pos="-0.214506 0.0235 -0.0145685">
-        <inertial pos="0.079808 0.0083536 -0.058254" quat="0.308464 0.636278 0.636278 0.308464" mass="0.75" diaginertia="0.0026518 0.00255881 9.92948e-05" />
+        <inertial pos="0.079808 0.0083536 -0.058254" quat="0.308464 0.636278 0.636278 0.308464" mass="0.287903225806" diaginertia="0.00101794903226 0.000982252870968 3.81163909677e-05" />
         <joint name="Right_rear_child1_joint" pos="0 0 0" axis="0 -1 0" damping="0.05" range="-1.35 0" />
         <site name="Right_rear_site2" pos="-0.035 0 0.05" size="0.005" rgba="1 1 0 1"/>           
         <geom type="mesh" rgba="1 1 1 1" mesh="Right_rear_child1_link" />
         
         <body name="Right_Wheel_link" pos="0.202605 0.02455 -0.15319">
-          <inertial pos="0.00017762 0.0099965 -0.00010174" quat="0.706853 0.0171001 0.0170535 0.706948" mass="0.9" diaginertia="0.00043712 0.000230404 0.000228896" />
+          <inertial pos="0.00017762 0.0099965 -0.00010174" quat="0.706853 0.0171001 0.0170535 0.706948" mass="0.71" diaginertia="0.00119419026374 0.000629452355249 0.000625332573684" />
           <joint name="Right_Wheel_joint" pos="0 0 0" axis="0 -1 0" damping="0.01"/>
           <site name="Right_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1"/>
           <geom name="Right_wheel_collision" type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Right_Wheel_link" contype="0" conaffinity="1" friction="1 0.005 0.0001" />

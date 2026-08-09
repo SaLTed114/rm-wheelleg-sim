@@ -84,6 +84,33 @@ int main() {
         return 1;
     }
 
+    const PerformanceCaseSpec coupled_spec{
+        "coupled", PerformanceAxis::heading, BC_PI, 10.0,
+        0.2, 0.3, 1.0, 2.3, 0.5};
+    PerformanceScenario coupled(coupled_spec);
+    snapshot = {};
+    coupled.update(snapshot, 2.0);
+    snapshot.state_machine.motion = BC_MOTION_ACTIVE;
+    coupled.update(snapshot, 2.01);
+    coupled.update(snapshot, 2.50);
+    if (coupled.command().forward_velocity != 0.0F) {
+        std::cerr << "coupled forward command started before its lead\n";
+        return 1;
+    }
+    coupled.update(snapshot, 2.51);
+    if (!near(coupled.command().forward_velocity, 2.3F) ||
+        coupled.gimbal().world_yaw_rate != 0.0F) {
+        std::cerr << "coupled forward lead was not applied independently\n";
+        return 1;
+    }
+    coupled.update(snapshot, 3.01);
+    coupled.update(snapshot, 3.02);
+    if (!near(coupled.command().forward_velocity, 2.3F) ||
+        coupled.gimbal().world_yaw_rate <= 0.0F) {
+        std::cerr << "coupled heading command did not follow its lead\n";
+        return 1;
+    }
+
     bool invalid_rejected = false;
     try {
         const PerformanceCaseSpec invalid{

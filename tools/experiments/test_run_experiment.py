@@ -117,7 +117,6 @@ class ExperimentConfigTest(unittest.TestCase):
             r_diagonal = [1, 2, 3, 4]
             leg_angle_difference_weight = 20
             leg_angular_velocity_difference_weight = 8
-            yaw_inertia_source = "assembly"
 
             [[case]]
             name = "heading-test"
@@ -127,7 +126,6 @@ class ExperimentConfigTest(unittest.TestCase):
         """))
         self.assertEqual(config.build.configuration, "Debug")
         self.assertEqual(config.lqr.generate.q_diagonal[-1], 10.0)
-        self.assertEqual(config.lqr.generate.yaw_inertia_source, "assembly")
 
     def test_lqr_weight_change_changes_fingerprint(self) -> None:
         first = load_config(self.write_config("""

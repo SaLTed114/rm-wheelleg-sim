@@ -70,7 +70,9 @@ PerformanceBenchmark::PerformanceBenchmark(
             config.yaw_acceleration_feedforward_scale).
                 control.observer.wheel_radius),
     summary_(output_directory / "summary.csv", {
-        "case", "axis", "target", "command_rate", "target_hold_seconds",
+        "case", "axis", "target", "command_rate",
+        "coupled_forward_velocity", "forward_lead_seconds",
+        "target_hold_seconds",
         "stop_settle_seconds", "standing_seconds", "leg_length_target",
         "forward_velocity_observation", "roll_restrained",
         "yaw_acceleration_feedforward_scale",
@@ -79,6 +81,7 @@ PerformanceBenchmark::PerformanceBenchmark(
         "tracked", "settled", "issue", "issue_phase",
         "wheel_contact_ratio", "other_contact_steps", "max_pitch_deg",
         "max_roll_deg", "max_leg_common_deg", "max_leg_difference_deg",
+        "peak_roll_force_request",
         "peak_roll_restraint_torque", "min_vertical_l", "min_vertical_r",
         "initial_s_error",
         "tracking_mean_error", "tracking_rmse", "settle_mean_ds",
@@ -118,7 +121,8 @@ PerformanceBenchmark::PerformanceBenchmark(
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
         "ref_s", "ref_ds", "ref_psi", "ref_dpsi", "ref_theta_l",
         "ref_dtheta_l", "ref_theta_r", "ref_dtheta_r", "ref_theta_b",
-        "ref_dtheta_b", "roll", "roll_rate", "roll_restraint_torque",
+        "ref_dtheta_b", "roll", "roll_rate", "roll_force_request",
+        "roll_restraint_torque",
         "leg_l_length", "leg_l_angle", "leg_l_length_rate",
         "leg_l_angle_rate",
         "leg_r_length", "leg_r_angle", "leg_r_length_rate",
@@ -200,6 +204,8 @@ void PerformanceBenchmark::write_summary(
         .value(performance_axis_name(result.spec.axis))
         .value(result.spec.target)
         .value(result.spec.command_rate)
+        .value(result.spec.coupled_forward_velocity)
+        .value(result.spec.forward_lead_seconds)
         .value(result.spec.target_hold_seconds)
         .value(result.spec.stop_settle_seconds)
         .value(result.spec.standing_seconds)
@@ -222,6 +228,7 @@ void PerformanceBenchmark::write_summary(
         .value(result.maximum_roll * 180.0 / BC_PI)
         .value(result.maximum_leg_common * 180.0 / BC_PI)
         .value(result.maximum_leg_difference * 180.0 / BC_PI)
+        .value(result.maximum_roll_force_request)
         .value(result.maximum_roll_restraint_torque)
         .value(result.minimum_vertical_projection[BC_L])
         .value(result.minimum_vertical_projection[BC_R])
@@ -319,6 +326,9 @@ bool PerformanceBenchmark::collect(
     const double roll = std::abs(static_cast<double>(snapshot.roll));
     result.maximum_pitch = std::max(result.maximum_pitch, pitch);
     result.maximum_roll = std::max(result.maximum_roll, roll);
+    result.maximum_roll_force_request = std::max(
+        result.maximum_roll_force_request,
+        std::abs(static_cast<double>(snapshot.roll_force_request)));
     result.maximum_roll_restraint_torque = std::max(
         result.maximum_roll_restraint_torque,
         std::abs(roll_restraint_.torque()));
@@ -470,6 +480,7 @@ void PerformanceBenchmark::write_trace(
     }
     trace_.value(snapshot.roll)
         .value(snapshot.roll_rate)
+        .value(snapshot.roll_force_request)
         .value(roll_restraint_.torque());
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const bc_leg_kinematics_t &leg = snapshot.leg[side];

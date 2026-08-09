@@ -62,7 +62,6 @@ class LqrGenerateConfig:
     r_diagonal: tuple[float, ...]
     leg_angle_difference_weight: float
     leg_angular_velocity_difference_weight: float
-    yaw_inertia_source: str
 
 
 @dataclass(frozen=True)
@@ -275,16 +274,12 @@ def load_config(path: Path) -> ExperimentConfig:
         reject_unknown(generate_table, {
             "model_parameters", "q_diagonal", "r_diagonal",
             "leg_angle_difference_weight",
-            "leg_angular_velocity_difference_weight", "yaw_inertia_source",
+            "leg_angular_velocity_difference_weight",
         }, "lqr.generate")
         model_parameters_value = generate_table.get("model_parameters")
         model_parameters = None if model_parameters_value is None else resolve_path(
             config_directory, model_parameters_value,
             "lqr.generate.model_parameters")
-        yaw_source = generate_table.get("yaw_inertia_source", "base-link")
-        if yaw_source not in ("base-link", "assembly"):
-            raise ExperimentError(
-                "lqr.generate.yaw_inertia_source must be base-link or assembly")
         generate = LqrGenerateConfig(
             model_parameters=model_parameters,
             q_diagonal=positive_vector(
@@ -300,7 +295,6 @@ def load_config(path: Path) -> ExperimentConfig:
                 generate_table.get(
                     "leg_angular_velocity_difference_weight"),
                 "lqr.generate.leg_angular_velocity_difference_weight"),
-            yaw_inertia_source=yaw_source,
         )
 
     analysis_table = document.get("analysis", {})
@@ -506,7 +500,6 @@ def prepare_schedule(
         str(generate.leg_angle_difference_weight),
         "--leg-angular-velocity-difference-weight",
         str(generate.leg_angular_velocity_difference_weight),
-        "--yaw-inertia-source", generate.yaw_inertia_source,
     ]
     if generate.model_parameters is not None:
         command.extend([

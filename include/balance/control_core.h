@@ -18,6 +18,7 @@ typedef struct {
     bc_observer_config_t observer;
     bc_pd_controller_t length_controller;
     bc_pd_controller_t angle_controller;
+    bc_pd_controller_t roll_controller;
     bc_lqr_compensation_t lqr_compensation;
     float support_force;
     float wheel_torque_limit;
@@ -28,6 +29,7 @@ typedef struct {
     bc_control_config_t config;
     bc_observer_t observer;
     bc_actuation_t actuation_request;
+    float roll_force_request;
     uint32_t tick_count;
 } bc_control_core_t;
 

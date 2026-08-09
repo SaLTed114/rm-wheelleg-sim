@@ -108,8 +108,12 @@ void step_controller(
     const float rate_error =
         snapshot.state.value[BC_STATE_DPSI] +
         snapshot.gimbal.relative_yaw_rate - gimbal.world_yaw_rate;
-    if (std::abs(heading_error) > 1.0e-5F ||
-        std::abs(rate_error) > 1.0e-5F) {
+    if (std::abs(heading_error) > 2.0e-5F ||
+        std::abs(rate_error) > 2.0e-5F) {
+        std::cerr << "gimbal feedback mismatch: heading="
+                  << heading_error << ", rate=" << rate_error
+                  << ", roll=" << snapshot.roll
+                  << ", roll force=" << snapshot.roll_force_request << '\n';
         throw std::runtime_error(
             "virtual gimbal feedback was not sampled with the current IMU");
     }

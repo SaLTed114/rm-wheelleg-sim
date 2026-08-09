@@ -59,13 +59,13 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
         const double expected_base_com[] = {
-            -0.019917, -0.00040396, 0.021412,
+            -0.019917, -0.00040396, -0.037,
         };
         const double expected_base_inertia[] = {
-            2.8640678, 2.8736324, 3.0472,
+            0.3663415964, 0.367565, 0.413477,
         };
         bool invalid_base_properties =
-            std::abs(plant.model().body_mass[base_body] - 11.0) > 1.0e-9 ||
+            std::abs(plant.model().body_mass[base_body] - 17.65) > 1.0e-9 ||
             plant.model().eq_active0[support_weld] != 0;
         for (int axis = 0; axis < 3; ++axis) {
             invalid_base_properties = invalid_base_properties ||
@@ -76,6 +76,13 @@ int main(int argc, char **argv) {
                     plant.model().body_inertia[3 * base_body + axis] -
                     expected_base_inertia[axis]) > 1.0e-7;
         }
+        for (int element = 0; element < 4; ++element) {
+            const double expected = element == 0 ? 1.0 : 0.0;
+            invalid_base_properties = invalid_base_properties ||
+                std::abs(
+                    plant.model().body_iquat[4 * base_body + element] -
+                    expected) > 1.0e-12;
+        }
         const double expected_imu_position[] = {-0.10, 0.0, -0.03};
         for (int axis = 0; axis < 3; ++axis) {
             invalid_base_properties = invalid_base_properties ||
@@ -85,6 +92,53 @@ int main(int argc, char **argv) {
         }
         if (invalid_base_properties) {
             std::cerr << "base physical properties or support state are incorrect\n";
+            return EXIT_FAILURE;
+        }
+
+        const char *leg_body_names[2][6] = {
+            {
+                "Left_front_link", "Left_front_child1_link",
+                "Left_front_child2_link", "Left_front_child3_link",
+                "Left_rear_link", "Left_rear_child1_link",
+            },
+            {
+                "Right_front_link", "Right_front_child1_link",
+                "Right_front_child2_link", "Right_front_child3_link",
+                "Right_rear_link", "Right_rear_child1_link",
+            },
+        };
+        for (const auto &side : leg_body_names) {
+            double mass = 0.0;
+            for (const char *name : side) {
+                const int body = mj_name2id(
+                    &plant.model(), mjOBJ_BODY, name);
+                mass += plant.model().body_mass[body];
+            }
+            if (std::abs(mass - 1.19) > 1.0e-9) {
+                std::cerr << "incorrect aggregate leg mass: " << mass << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+        const char *wheel_body_names[] = {
+            "Left_Wheel_link", "Right_Wheel_link",
+        };
+        for (const char *name : wheel_body_names) {
+            const int body = mj_name2id(
+                &plant.model(), mjOBJ_BODY, name);
+            if (std::abs(plant.model().body_mass[body] - 0.71) > 1.0e-9 ||
+                std::abs(
+                    plant.model().body_inertia[3 * body] -
+                    0.001194190264) > 1.0e-10) {
+                std::cerr << name << " has incorrect mass or inertia\n";
+                return EXIT_FAILURE;
+            }
+        }
+        double total_mass = 0.0;
+        for (int body = 1; body < plant.model().nbody; ++body) {
+            total_mass += plant.model().body_mass[body];
+        }
+        if (std::abs(total_mass - 21.45) > 1.0e-9) {
+            std::cerr << "incorrect total robot mass: " << total_mass << '\n';
             return EXIT_FAILURE;
         }
 

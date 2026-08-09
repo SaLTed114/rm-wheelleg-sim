@@ -25,7 +25,6 @@ q_diagonal = [90, 60, 40, 15, 240, 4, 240, 4, 300, 60]
 r_diagonal = [3.2, 3.2, 0.7, 0.7]
 leg_angle_difference_weight = 1920
 leg_angular_velocity_difference_weight = 32
-yaw_inertia_source = "base-link"
 
 [analysis]
 forward_linear = true

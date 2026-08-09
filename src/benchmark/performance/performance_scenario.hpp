@@ -33,6 +33,8 @@ struct PerformanceCaseSpec {
     double target_hold_seconds{3.0};
     double stop_settle_seconds{2.0};
     double standing_seconds{2.0};
+    double coupled_forward_velocity{};
+    double forward_lead_seconds{};
 };
 
 [[nodiscard]] const std::array<PerformanceCaseSpec, 12> &

@@ -46,30 +46,18 @@ conda run -n sim python tools/lqr/build_current_model.py
 `tools/experiments/README.md`。`forward_response.py` 由该 runner 调用，要求
 输入关闭 `S` 位置反馈的 performance trace，并围绕运动前稳态比较扰动响应。
 
-需要诊断偏航惯量匹配时，可以把整机 Izz 候选生成到构建目录，避免覆盖正式
-参数和报告：
-
-```bash
-conda run -n sim python tools/lqr/build_current_model.py \
-  --reuse-model-parameters tools/lqr/generated/current_model_schedule.json \
-  --yaw-inertia-source assembly \
-  --output build/lqr-assembly \
-  --report build/lqr-assembly/report.md
-```
-
-随后可用 `BALANCE_LQR_SCHEDULE_DIR` 指向该目录建立独立构建。该选项只用于
-控制器与 plant 的 A/B 诊断，不会改变默认的 `base-link` 正式来源。
-
 ## 参数约定
 
 - 物理左侧映射到 XML `Right_*`，物理右侧映射到 XML `Left_*`，与仿真
   adapter 保持一致。
-- `body_yaw_inertia_actual` 是转换到机体坐标后的 `base_link` Izz。
-- `body_yaw_inertia_model = body_yaw_inertia_actual * scale`，当前选定的
-  `scale` 明确记录为 `1.0`。
-- `--yaw-inertia-source assembly` 会自动把 scale 设置为整机诊断 Izz 与
-  `base_link` Izz 的比值，并在 JSON 和报告中标明来源。
-- 两倍偏航惯量只用于敏感性对照，不作为正式参数。
+- `body_yaw_inertia_actual` 是参数提取器得到的 `base_link` Izz；它不是 LQR
+  方程最终使用的整机惯量。
+- 提取器在 `0.18 m` 默认腿长姿态下，将 base、腿和轮的自身惯量及平行轴项
+  聚合为 `assembly_yaw_inertia_reference`；当前模型的 LQR 固定使用该值。
+- `assembly_yaw_inertia_diagnostic` 仍记录提取器 nominal 姿态下的整机 Izz，
+  用于观察腿长变化，但不作为正式输入。
+- 方程中的 `I_z/(2R_l)` 来自左右差分坐标变换；`I_z` 本身是完整惯量，
+  不提供一倍/两倍或 base-link/assembly 来源开关。
 - 状态顺序为 `[s, ds, psi, dpsi, theta_l, dtheta_l, theta_r, dtheta_r,
   theta_b, dtheta_b]`。
 - 输入顺序为 `[T_wheel_l, T_wheel_r, Tp_leg_l, Tp_leg_r]`。

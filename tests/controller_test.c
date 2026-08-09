@@ -32,6 +32,7 @@ int main() {
         snapshot.state_machine.forward != BC_FORWARD_IDLE ||
         snapshot.state_machine.alignment != BC_CHASSIS_FRONT ||
         snapshot.tick_count != 0U ||
+        snapshot.roll_force_request != 0.0F ||
         !actuation_is_zero(&snapshot.actuation_request) ||
         !actuation_is_zero(&snapshot.actuation)) {
         fputs("reset controller snapshot is incorrect\n", stderr);
@@ -147,7 +148,8 @@ int main() {
         snapshot.state_machine.forward != BC_FORWARD_IDLE ||
         snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
         snapshot.state_reference.value[BC_STATE_DPSI] != 0.0F ||
-        snapshot.tick_count != 5U) {
+        snapshot.tick_count != 5U ||
+        fabsf(snapshot.roll_force_request - (-176.0F)) > 1.0e-5F) {
         fputs("stable legs did not engage balance control\n", stderr);
         return 1;
     }
@@ -263,6 +265,7 @@ int main() {
         snapshot.state_reference.value[BC_STATE_PSI] != 0.0F ||
         snapshot.roll != 0.0F ||
         snapshot.roll_rate != 0.0F ||
+        snapshot.roll_force_request != 0.0F ||
         snapshot.gimbal.relative_yaw != 0.0F ||
         snapshot.gimbal.relative_yaw_rate != 0.0F ||
         snapshot.mapped_forward_velocity != 0.0F ||

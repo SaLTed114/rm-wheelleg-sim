@@ -418,6 +418,7 @@ class ModelParameterExtractor:
         scan_maximum: float = 0.43,
         scan_step: float = 0.001,
         nominal_length: float = 0.34,
+        yaw_inertia_reference_length: float = 0.18,
         sample_count: int = 31,
     ) -> dict[str, object]:
         count = int(round((scan_maximum - scan_minimum) / scan_step)) + 1
@@ -432,6 +433,7 @@ class ModelParameterExtractor:
 
         sample_lengths = np.linspace(safe_minimum, safe_maximum, sample_count)
         sampled_legs = {spec.name: [] for spec in SIDE_SPECS}
+        sampled_assembly_yaw_inertias = []
         maximum_closure_error = 0.0
         maximum_target_error = 0.0
         minimum_joint_margin = float("inf")
@@ -453,6 +455,8 @@ class ModelParameterExtractor:
                 raise RuntimeError(
                     f"resampled closed-chain pose is invalid at L={length:.6f}")
             self._set_pose(solutions)
+            sampled_assembly_yaw_inertias.append(
+                self.rigid_parameters()["assembly_yaw_inertia_diagnostic"])
 
             for spec, solution in zip(SIDE_SPECS, solutions):
                 values = self.equivalent_leg(spec)
@@ -472,6 +476,43 @@ class ModelParameterExtractor:
             raise RuntimeError("could not resolve nominal closed-chain pose")
         self._set_pose(nominal_solutions)
         rigid = self.rigid_parameters()
+
+        reference_solutions = tuple(
+            self.solve_pose(
+                spec,
+                yaw_inertia_reference_length,
+                nominal_solutions[side].joint_position,
+                self.closure_limits[spec.name],
+            )
+            for side, spec in enumerate(SIDE_SPECS)
+        )
+        if any(
+            solution.closure_error > self.closure_limits[spec.name]
+            or solution.target_error > 5.0e-4
+            for spec, solution in zip(SIDE_SPECS, reference_solutions)
+        ):
+            raise RuntimeError(
+                "yaw-inertia reference pose does not close at the requested "
+                "leg length")
+        self._set_pose(reference_solutions)
+        reference_rigid = self.rigid_parameters()
+        rigid["assembly_yaw_inertia_reference_length"] = (
+            yaw_inertia_reference_length)
+        rigid["assembly_yaw_inertia_reference"] = reference_rigid[
+            "assembly_yaw_inertia_diagnostic"]
+        yaw_inertia_samples = [
+            rigid["assembly_yaw_inertia_reference"],
+            *sampled_assembly_yaw_inertias,
+        ]
+        rigid["assembly_yaw_inertia_range_lengths"] = [
+            yaw_inertia_reference_length,
+            safe_maximum,
+        ]
+        rigid["assembly_yaw_inertia_range"] = [
+            float(min(yaw_inertia_samples)),
+            float(max(yaw_inertia_samples)),
+        ]
+        self._set_pose(nominal_solutions)
 
         left_mass = sampled_legs["left"][0]["mass"]
         right_mass = sampled_legs["right"][0]["mass"]

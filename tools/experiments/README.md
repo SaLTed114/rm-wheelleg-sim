@@ -18,7 +18,9 @@ TOML file's directory.
 
 Each file describes one LQR candidate and one or more cases. The example covers
 the supported fields. `lqr.mode = "generate"` accepts the ten state weights,
-four input weights, two differential leg-mode weights, and yaw inertia source.
+four input weights, and two differential leg-mode weights. Yaw inertia is
+always the complete-assembly value extracted at the model's configured
+reference leg length; it is not a selectable experiment parameter.
 When `model_parameters` is present, model extraction is reused while Q/R are
 regenerated. Omit it to extract parameters from the selected MJCF.
 
@@ -32,11 +34,11 @@ schedule_dir = "../lqr/generated"
 ```
 
 `forward_linear = true` compares forward ramp/hold samples with the generated
-fixed-length `A/B/K`. It reads the `drive` state from new traces so `S` is
-ignored while driving and restored after parking. Traces from older builds
-recorded with `position_feedback_enabled = 0` are also accepted. Give the case
-enough `standing_seconds` for the actual plant to settle; the example uses
-eight seconds.
+fixed-length `A/B/K`. It reads the `forward` mode from new traces so `S` is
+ignored in velocity mode and restored in hold mode. Historical traces using
+the old `drive` column or `position_feedback_enabled = 0` are also accepted.
+Give the case enough `standing_seconds` for the actual plant to settle; the
+example uses eight seconds.
 
 Before building a full candidate schedule, `forward_weight_sweep.py` can use
 the same traces and fixed-length model to screen body pitch angle/rate weights:
