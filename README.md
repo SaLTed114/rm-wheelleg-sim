@@ -98,6 +98,20 @@ Linux:
 ctest --test-dir build --output-on-failure
 ```
 
+### Leg-adapter calibration
+
+The MuJoCo adapter joint offsets are generated from closed-chain poses in the
+`0.18–0.21 m` standing range. The `armsim` Conda environment must provide
+MuJoCo, NumPy, and SciPy.
+
+```powershell
+conda run -n armsim python tools/calibration/calibrate_leg_adapter.py --check
+```
+
+Use `--write` after an intentional MJCF or calibration change. It updates the
+tracked JSON record and C++ header only when the standing-range accuracy and
+full-range non-regression gates pass.
+
 ### Performance benchmark
 
 Windows:

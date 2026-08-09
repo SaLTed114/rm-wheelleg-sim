@@ -582,6 +582,15 @@ base-link/assembly 来源开关。
 `build/performance/mass-baseline/`、`mass-coupled/` 和
 `mass-coupled-no-ff/`，不纳入 Git。
 
+站立区 joint offset 标定后，腿角反馈零点发生改变，上述基于旧 adapter 坐标选出的
+`+0.7 deg` 不再是当前工作点：零命令 HOLD 会向后移动并留下约 `0.15 m` 位置
+残差。trim scanner 同步改为与 keyboard/GUI 相同的虚拟云台世界朝向保持语义；
+在 `2.0–3.2 deg` 粗扫，并在 `2.34–2.46 deg` 以 `0.01 deg` 加密后，
+`+2.42 deg` 的三秒评估窗最大位置误差约为 `1.110 mm`、前向位移约为
+`0.013 mm`，平均 `DS` 约 `4.4e-5 m/s`，双轮接触率为 `100%` 且无执行器
+饱和。当前默认 trim 因此更新为 `+2.42 deg`；本地原始结果位于
+`build/trim/post-calibration-gimbal/` 和 `post-calibration-gimbal-fine/`。
+
 ## 正式 Roll PD 首轮结果（2026-08-09）
 
 控制核心现已把独立 roll PD 作为 `POSITION_SUPPORT` 的固有组成。默认参数来自实车 PVI

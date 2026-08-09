@@ -221,6 +221,12 @@ int main(int argc, char **argv) {
             require_id(
                 plant.model(), mjOBJ_SITE, "Left_wheel_axis_site"),
         }};
+        const std::array<int, BC_SIDE_NUM> virtual_hip{{
+            require_id(
+                plant.model(), mjOBJ_SITE, "Right_virtual_hip_site"),
+            require_id(
+                plant.model(), mjOBJ_SITE, "Left_virtual_hip_site"),
+        }};
         const int base_joint = require_id(
             plant.model(), mjOBJ_JOINT, "base_free_joint");
         const int base_qpos = plant.model().jnt_qposadr[base_joint];
@@ -253,6 +259,18 @@ int main(int argc, char **argv) {
                       << ", angular velocity="
                       << runner.snapshot().leg[BC_L].angular_velocity << '/'
                       << runner.snapshot().leg[BC_R].angular_velocity << '\n';
+            std::cerr << "physical site length=";
+            for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                const double *hip = plant.data().site_xpos +
+                    3 * virtual_hip[side];
+                const double *wheel_position = plant.data().site_xpos +
+                    3 * wheel_axis[side];
+                const double dx = wheel_position[0] - hip[0];
+                const double dz = wheel_position[2] - hip[2];
+                if (side != BC_L) std::cerr << '/';
+                std::cerr << std::hypot(dx, dz);
+            }
+            std::cerr << '\n';
             return EXIT_FAILURE;
         }
 
@@ -273,6 +291,7 @@ int main(int argc, char **argv) {
         int other_contact_steps = 0;
         double maximum_final_pitch = 0.0;
         double maximum_final_pitch_rate = 0.0;
+        double maximum_final_leg_length_difference = 0.0;
         bool finite = true;
 
         while (plant.data().time < end_time) {
@@ -295,6 +314,11 @@ int main(int argc, char **argv) {
                 maximum_final_pitch_rate,
                 std::abs(static_cast<double>(
                     state.value[BC_STATE_DTHETA_B])));
+            maximum_final_leg_length_difference = std::max(
+                maximum_final_leg_length_difference,
+                std::abs(static_cast<double>(
+                    runner.snapshot().leg[BC_L].length -
+                    runner.snapshot().leg[BC_R].length)));
             for (float value : state.value) {
                 finite = finite && std::isfinite(value);
             }
@@ -319,6 +343,8 @@ int main(int argc, char **argv) {
                   << " deg, max final pitch rate="
                   << maximum_final_pitch_rate
                   << " rad/s, wheel contact=" << wheel_contact_ratio
+                  << ", max leg length difference="
+                  << 1000.0 * maximum_final_leg_length_difference << " mm"
                   << ", other contact steps=" << other_contact_steps << '\n';
 
         if (other_contact_steps != 0) {
@@ -349,6 +375,7 @@ int main(int argc, char **argv) {
         const bool standing = finite &&
             maximum_final_pitch < 5.0 * BC_PI / 180.0 &&
             maximum_final_pitch_rate < 0.2 &&
+            maximum_final_leg_length_difference <= 0.002 &&
             wheel_contact_ratio >= 0.99 &&
             other_contact_steps == 0;
         if (!standing) {

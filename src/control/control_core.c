@@ -56,7 +56,7 @@ void bc_control_default_config(bc_control_config_t *config) {
         },
         .roll_force_sign = {+1.0F, -1.0F},
         .lqr_compensation = {
-            .leg_angle_trim = 0.7F * BC_PI_F / 180.0F,
+            .leg_angle_trim = 2.42F * BC_PI_F / 180.0F,
             .yaw_acceleration_feedforward_scale = 0.9F,
         },
         .support_force      = 76.204F,

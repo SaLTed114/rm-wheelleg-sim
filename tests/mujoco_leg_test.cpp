@@ -5,18 +5,23 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
 #include "balance/control_core.h"
 #include "balance/leg_kinematics.h"
 #include "balance/math_utils.h"
+#include "generated/mujoco_leg_calibration.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 
 namespace {
 
 struct SideAddresses {
+    std::array<
+        int, balance::sim::calibration::kModelLegJointCount>
+        model_joints{};
     int front_joint;
     int rear_joint;
     int front_actuator;
@@ -55,6 +60,20 @@ std::array<SideAddresses, BC_SIDE_NUM> resolve_addresses(
     const char *position_sensors[] = {
         "Right_leg_position_sensor", "Left_leg_position_sensor",
     };
+    const std::array<std::array<
+        const char *, balance::sim::calibration::kModelLegJointCount>,
+        BC_SIDE_NUM> model_joints{{
+        {{
+            "Right_front_joint", "Right_front_child1_joint",
+            "Right_front_child2_joint", "Right_front_joint3_joint",
+            "Right_rear_joint", "Right_rear_child1_joint",
+        }},
+        {{
+            "Left_front_joint", "Left_front_child1_joint",
+            "Left_front_child2_joint", "Left_front_child3_joint",
+            "Left_rear_joint", "Left_rear_child1_joint",
+        }},
+    }};
     std::array<SideAddresses, BC_SIDE_NUM> addresses{};
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
@@ -64,13 +83,20 @@ std::array<SideAddresses, BC_SIDE_NUM> resolve_addresses(
             throw std::runtime_error(
                 "leg position sensor must have dimension 3");
         }
-        addresses[side] = SideAddresses{
-            require_id(model, mjOBJ_JOINT, front_joints[side]),
-            require_id(model, mjOBJ_JOINT, rear_joints[side]),
-            require_id(model, mjOBJ_ACTUATOR, front_actuators[side]),
-            require_id(model, mjOBJ_ACTUATOR, rear_actuators[side]),
-            model.sensor_adr[sensor],
-        };
+        for (std::size_t joint = 0; joint < model_joints[side].size();
+             ++joint) {
+            addresses[side].model_joints[joint] = require_id(
+                model, mjOBJ_JOINT, model_joints[side][joint]);
+        }
+        addresses[side].front_joint = require_id(
+            model, mjOBJ_JOINT, front_joints[side]);
+        addresses[side].rear_joint = require_id(
+            model, mjOBJ_JOINT, rear_joints[side]);
+        addresses[side].front_actuator = require_id(
+            model, mjOBJ_ACTUATOR, front_actuators[side]);
+        addresses[side].rear_actuator = require_id(
+            model, mjOBJ_ACTUATOR, rear_actuators[side]);
+        addresses[side].position_sensor = model.sensor_adr[sensor];
     }
     return addresses;
 }
@@ -100,6 +126,77 @@ std::array<double, BC_LEG_COORD_NUM> measure_leg(
 
 double angle_error(const double left, const double right) {
     return std::abs(bc_wrap_angle(left - right));
+}
+
+struct ErrorSummary {
+    double length_sum{};
+    double length_squared_sum{};
+    double length_minimum{std::numeric_limits<double>::infinity()};
+    double length_maximum{-std::numeric_limits<double>::infinity()};
+    double length_maximum_absolute{};
+    double angle_sum{};
+    double angle_squared_sum{};
+    double angle_minimum{std::numeric_limits<double>::infinity()};
+    double angle_maximum{-std::numeric_limits<double>::infinity()};
+    double angle_maximum_absolute{};
+    int count{};
+
+    void add(
+        const double calculated_length,
+        const double calculated_angle,
+        const std::array<double, BC_LEG_COORD_NUM> &measured
+    ) {
+        const double length =
+            calculated_length - measured[BC_LEG_LENGTH];
+        const double angle = bc_wrap_angle(
+            calculated_angle - measured[BC_LEG_ANGLE]);
+        length_sum += length;
+        length_squared_sum += length * length;
+        length_minimum = std::min(length_minimum, length);
+        length_maximum = std::max(length_maximum, length);
+        length_maximum_absolute = std::max(
+            length_maximum_absolute, std::abs(length));
+        angle_sum += angle;
+        angle_squared_sum += angle * angle;
+        angle_minimum = std::min(angle_minimum, angle);
+        angle_maximum = std::max(angle_maximum, angle);
+        angle_maximum_absolute = std::max(
+            angle_maximum_absolute, std::abs(angle));
+        ++count;
+    }
+
+    [[nodiscard]] double length_mean() const {
+        return length_sum / count;
+    }
+
+    [[nodiscard]] double length_rms() const {
+        return std::sqrt(length_squared_sum / count);
+    }
+
+    [[nodiscard]] double angle_mean() const {
+        return angle_sum / count;
+    }
+
+    [[nodiscard]] double angle_rms() const {
+        return std::sqrt(angle_squared_sum / count);
+    }
+};
+
+void print_error_summary(
+    const char *scope,
+    const int side,
+    const ErrorSummary &summary
+) {
+    std::cout << scope << ' ' << (side == BC_L ? "left" : "right")
+              << " signed length mean/min/max/rms="
+              << 1000.0 * summary.length_mean() << '/'
+              << 1000.0 * summary.length_minimum << '/'
+              << 1000.0 * summary.length_maximum << '/'
+              << 1000.0 * summary.length_rms() << " mm, angle="
+              << 180.0 * summary.angle_mean() / BC_PI << '/'
+              << 180.0 * summary.angle_minimum / BC_PI << '/'
+              << 180.0 * summary.angle_maximum / BC_PI << '/'
+              << 180.0 * summary.angle_rms() / BC_PI << " deg\n";
 }
 
 void enable_base_support(balance::sim::MujocoPlant &plant) {
@@ -176,6 +273,7 @@ bool validate_kinematics(
     constexpr double kAngleTolerance = 2.0 * BC_PI / 180.0;
     double maximum_length_error = 0.0;
     double maximum_angle_error = 0.0;
+    std::array<ErrorSummary, BC_SIDE_NUM> summaries{};
 
     for (const auto &target : kTargets) {
         plant.reset();
@@ -214,6 +312,8 @@ bool validate_kinematics(
             const auto calculated = calculate_leg(feedback.leg[side]);
             const auto measured = measure_leg(
                 plant.data(), addresses[side]);
+            summaries[side].add(
+                calculated.length, calculated.angle_body, measured);
             maximum_length_error = std::max(
                 maximum_length_error,
                 std::abs(calculated.length - measured[BC_LEG_LENGTH]));
@@ -225,11 +325,77 @@ bool validate_kinematics(
         }
     }
 
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        print_error_summary("kinematics", side, summaries[side]);
+    }
+
     std::cout << "kinematics/site maximum errors: length="
               << 1000.0 * maximum_length_error << " mm, angle="
               << 180.0 * maximum_angle_error / BC_PI << " deg\n";
     return maximum_length_error <= kLengthTolerance &&
         maximum_angle_error <= kAngleTolerance;
+}
+
+bool validate_standing_calibration(
+    balance::sim::MujocoPlant &plant,
+    const balance::sim::MujocoAdapter &adapter,
+    const std::array<SideAddresses, BC_SIDE_NUM> &addresses
+) {
+    constexpr double kLengthRmsTolerance = 0.00125;
+    constexpr double kLengthMaximumTolerance = 0.002;
+    constexpr double kAngleMaximumTolerance = 0.5 * BC_PI / 180.0;
+    constexpr double kSideDifferenceTolerance = 0.001;
+    std::array<ErrorSummary, BC_SIDE_NUM> summaries{};
+    double maximum_side_difference = 0.0;
+
+    for (std::size_t sample = 0;
+         sample < balance::sim::calibration::kStandingSampleCount;
+         ++sample) {
+        plant.reset();
+        for (int side = 0; side < BC_SIDE_NUM; ++side) {
+            for (std::size_t joint = 0;
+                 joint < balance::sim::calibration::kModelLegJointCount;
+                 ++joint) {
+                const int joint_id = addresses[side].model_joints[joint];
+                const int qpos = plant.model().jnt_qposadr[joint_id];
+                const int dof = plant.model().jnt_dofadr[joint_id];
+                plant.data().qpos[qpos] = balance::sim::calibration::
+                    kStandingModelJointPositions[side][sample][joint];
+                plant.data().qvel[dof] = 0.0;
+            }
+        }
+        mj_forward(&plant.model(), &plant.data());
+
+        bc_sensor_feedback_t feedback{};
+        adapter.read(plant.data(), feedback);
+        std::array<double, BC_SIDE_NUM> calculated_lengths{};
+        for (int side = 0; side < BC_SIDE_NUM; ++side) {
+            const auto calculated = calculate_leg(feedback.leg[side]);
+            const auto measured = measure_leg(
+                plant.data(), addresses[side]);
+            calculated_lengths[side] = calculated.length;
+            summaries[side].add(
+                calculated.length, calculated.angle_body, measured);
+        }
+        maximum_side_difference = std::max(
+            maximum_side_difference,
+            std::abs(
+                calculated_lengths[BC_L] - calculated_lengths[BC_R]));
+    }
+
+    bool valid = true;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        print_error_summary("standing calibration", side, summaries[side]);
+        valid = valid &&
+            summaries[side].length_rms() <= kLengthRmsTolerance &&
+            summaries[side].length_maximum_absolute <=
+                kLengthMaximumTolerance &&
+            summaries[side].angle_maximum_absolute <=
+                kAngleMaximumTolerance;
+    }
+    std::cout << "standing calibration maximum side difference="
+              << 1000.0 * maximum_side_difference << " mm\n";
+    return valid && maximum_side_difference <= kSideDifferenceTolerance;
 }
 
 bool validate_leg_control(
@@ -409,6 +575,10 @@ int main(int argc, char **argv) {
         const auto addresses = resolve_addresses(plant.model());
         if (!validate_kinematics(plant, adapter, addresses)) {
             std::cerr << "leg kinematics do not match MuJoCo sites\n";
+            return EXIT_FAILURE;
+        }
+        if (!validate_standing_calibration(plant, adapter, addresses)) {
+            std::cerr << "standing-area leg calibration is outside tolerance\n";
             return EXIT_FAILURE;
         }
         if (!validate_leg_control(plant, adapter)) {

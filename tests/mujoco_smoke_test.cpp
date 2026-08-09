@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "balance/math_utils.h"
+#include "generated/mujoco_leg_calibration.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "performance/performance_scenario.hpp"
@@ -177,15 +178,23 @@ int main(int argc, char **argv) {
         }
         bc_sensor_feedback_t feedback{};
         adapter.read(plant.data(), feedback);
-        const double expected_joint_angles[BC_SIDE_NUM][BC_JOINT_NUM] = {
-            {-2.932150759729568, -0.067812378106530},
-            {-3.030735772282508, -0.032996075602418},
+        const char *mapped_joint_names[BC_SIDE_NUM][BC_JOINT_NUM] = {
+            {"Right_front_joint", "Right_rear_joint"},
+            {"Left_front_joint", "Left_rear_joint"},
         };
         for (int side = 0; side < BC_SIDE_NUM; ++side) {
             for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+                const int model_joint = mj_name2id(
+                    &plant.model(), mjOBJ_JOINT,
+                    mapped_joint_names[side][joint]);
+                const int qpos = plant.model().jnt_qposadr[model_joint];
+                const double expected =
+                    balance::sim::calibration::kJointScales[side][joint] *
+                        plant.data().qpos[qpos] +
+                    balance::sim::calibration::kJointOffsets[side][joint];
                 const double error = std::abs(
                     feedback.leg[side].joint[joint].angle -
-                    expected_joint_angles[side][joint]);
+                    expected);
                 if (error > 1.0e-6) {
                     std::cerr << "incorrect joint feedback mapping at "
                               << side << ", " << joint << '\n';

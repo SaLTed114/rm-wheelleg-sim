@@ -16,7 +16,7 @@ int main() {
     bc_control_default_config(&config);
     if (fabsf(
             config.lqr_compensation.leg_angle_trim -
-            0.7F * BC_PI_F / 180.0F) > 1.0e-7F ||
+            2.42F * BC_PI_F / 180.0F) > 1.0e-7F ||
         config.lqr_compensation.yaw_acceleration_feedforward_scale != 0.9F ||
         config.roll_controller.kp != 800.0F ||
         config.roll_controller.kd != 60.0F ||

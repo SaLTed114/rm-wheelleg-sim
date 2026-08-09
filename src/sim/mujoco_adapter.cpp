@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "generated/mujoco_leg_calibration.hpp"
+
 namespace balance::sim {
 namespace {
 
@@ -19,13 +21,17 @@ struct ChannelSpec {
 constexpr std::array<std::array<ChannelSpec, BC_JOINT_NUM>, BC_SIDE_NUM>
     kJointSpecs{{
         {{{"Right_front_joint", "Right_front_joint_actuator",
-           -1.0, -3.032150759729568},
+           calibration::kJointScales[BC_L][BC_FRONT],
+           calibration::kJointOffsets[BC_L][BC_FRONT]},
           {"Right_rear_joint", "Right_rear_joint_actuator",
-           +1.0, -0.067812378106530}}},
+           calibration::kJointScales[BC_L][BC_REAR],
+           calibration::kJointOffsets[BC_L][BC_REAR]}}},
         {{{"Left_front_joint", "Left_front_joint_actuator",
-           +1.0, -3.030735772282508},
+           calibration::kJointScales[BC_R][BC_FRONT],
+           calibration::kJointOffsets[BC_R][BC_FRONT]},
           {"Left_rear_joint", "Left_rear_joint_actuator",
-           -1.0, -0.032996075602418}}},
+           calibration::kJointScales[BC_R][BC_REAR],
+           calibration::kJointOffsets[BC_R][BC_REAR]}}},
     }};
 
 constexpr std::array<ChannelSpec, BC_SIDE_NUM> kWheelSpecs{{

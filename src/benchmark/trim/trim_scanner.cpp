@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "balance/math_utils.h"
+#include "input/virtual_gimbal.hpp"
 
 namespace balance::benchmark {
 namespace {
@@ -55,11 +56,29 @@ TrimResult TrimScanner::run(const double offset_deg) {
 
     sim::SimulationRunner runner(plant_, adapter_, controller_config);
     runner.reset();
+    bc_operator_command_t command{};
+    sim::VirtualGimbal virtual_gimbal;
+    bool gimbal_initialized = false;
+    const auto step_runner = [&]() {
+        if (runner.snapshot().state_machine.motion == BC_MOTION_ACTIVE) {
+            if (!gimbal_initialized) {
+                virtual_gimbal.reset(
+                    runner.snapshot().state.value[BC_STATE_PSI]);
+                gimbal_initialized = true;
+            }
+        } else {
+            virtual_gimbal.reset(
+                runner.snapshot().state.value[BC_STATE_PSI]);
+            gimbal_initialized = false;
+        }
+        const sim::VirtualGimbalState &gimbal = virtual_gimbal.state();
+        runner.step_with_gimbal_heading(
+            command, gimbal.world_yaw, gimbal.world_yaw_rate);
+    };
 
     TrimResult result{};
     result.offset_deg = offset_deg;
-    bc_operator_command_t command{};
-    while (plant_.data().time < kDisabledSeconds) runner.step(command);
+    while (plant_.data().time < kDisabledSeconds) step_runner();
 
     const double engagement_deadline =
         plant_.data().time + kEngagementTimeoutSeconds;
@@ -69,7 +88,7 @@ TrimResult TrimScanner::run(const double offset_deg) {
                BC_MOTION_ACTIVE) {
         command.balance_restart = static_cast<uint8_t>(
             runner.snapshot().state_machine.system == BC_SYSTEM_OFF);
-        runner.step(command);
+        step_runner();
     }
     command.balance_restart = 0U;
     result.engaged = runner.snapshot().state_machine.motion ==
@@ -90,7 +109,7 @@ TrimResult TrimScanner::run(const double offset_deg) {
     std::size_t sample_index = 0U;
 
     while (plant_.data().time < balance_end) {
-        runner.step(command);
+        step_runner();
         const SimulationSample sample = sampler_.read(
             plant_.data(), runner.snapshot());
         if (sample_index % config_.trace_stride == 0U) {

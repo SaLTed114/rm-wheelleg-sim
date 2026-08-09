@@ -219,7 +219,7 @@ void bc_motion_default_config(bc_motion_config_t *config) {
     *config = (bc_motion_config_t){
         .leg_length                 = 0.18F,
         .leg_angle_body             = -0.5F * BC_PI_F,
-        .length_tolerance           = 0.025F,
+        .length_tolerance           = 0.035F,
         .length_velocity_tolerance  = 0.03F,
         .angle_tolerance            = 8.0F * BC_PI_F / 180.0F,
         .angular_velocity_tolerance = 0.15F,
