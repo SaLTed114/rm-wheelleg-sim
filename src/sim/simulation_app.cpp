@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 
 #include "common/common_diagnostics.hpp"
 #include "common/simulation_sample.hpp"
 #include "input/interactive_scenario.hpp"
+#include "interactive_trace.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "mujoco_viewer.hpp"
@@ -35,6 +38,13 @@ public:
               InteractiveMode::keyboard : InteractiveMode::demo) {
         if (options_.performance_case != nullptr) {
             performance_.emplace(*options_.performance_case);
+        }
+        if (options_.trace_path) {
+            trace_ = std::make_unique<InteractiveTraceWriter>(
+                *options_.trace_path);
+            std::cout << "interactive trace: "
+                      << std::filesystem::absolute(*options_.trace_path)
+                      << '\n';
         }
         reset();
     }
@@ -103,6 +113,8 @@ private:
     }
 
     void reset() {
+        if (trace_) trace_->flush();
+        ++reset_index_;
         runner_.reset();
         if (performance_) performance_->reset(plant_.data().time);
         interactive_.reset(runner_.snapshot());
@@ -128,6 +140,13 @@ private:
             frame.command,
             frame.gimbal.world_yaw,
             frame.gimbal.world_yaw_rate);
+        if (trace_) {
+            const auto sample = sampler_.read(
+                plant_.data(), runner_.snapshot());
+            trace_->write(
+                reset_index_, phase_, keyboard, frame, sample,
+                sampler_.read_imu_motion(plant_.data()), runner_.feedback());
+        }
         return true;
     }
 
@@ -192,12 +211,14 @@ private:
     benchmark::SimulationSampler sampler_;
     InteractiveScenario interactive_;
     std::optional<benchmark::PerformanceScenario> performance_;
+    std::unique_ptr<InteractiveTraceWriter> trace_;
     VirtualGimbalState displayed_gimbal_{};
     std::string phase_{"off"};
     std::string case_issue_{"none"};
     bool paused_{};
     bool case_finished_{};
     bool case_balance_engaged_{};
+    std::uint32_t reset_index_{};
 };
 
 } // namespace

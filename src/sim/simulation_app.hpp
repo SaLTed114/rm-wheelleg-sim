@@ -12,6 +12,7 @@ namespace balance::sim {
 
 struct SimulationAppOptions {
     std::filesystem::path model_path;
+    std::optional<std::filesystem::path> trace_path;
     const benchmark::PerformanceCaseSpec *performance_case{};
     std::optional<float> leg_length;
     std::optional<float> yaw_acceleration_feedforward_scale;

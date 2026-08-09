@@ -137,6 +137,7 @@ if(BALANCE_BUILD_GUI)
 
   add_executable(rm_balance_sim
     ${BALANCE_IMGUI_SOURCES}
+    src/sim/interactive_trace.cpp
     src/sim/main.cpp
     src/sim/simulation_app.cpp
     src/sim/simulation_ui.cpp

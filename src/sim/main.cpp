@@ -12,6 +12,7 @@ namespace {
 void print_usage() {
     std::cerr
         << "usage: rm_balance_sim <model.xml> [--keyboard] "
+           "[--trace <csv-path>] "
            "[--case <case-name>] "
            "[--leg-length <metres>] "
            "[--yaw-acceleration-feedforward <scale>]\n"
@@ -52,6 +53,9 @@ bool parse_arguments(
                 std::cerr << "unknown performance case: " << value << '\n';
                 return false;
             }
+        } else if (option == "--trace" && !options.trace_path &&
+                   !value.empty()) {
+            options.trace_path = std::filesystem::path(value);
         } else if (option == "--leg-length" && !options.leg_length) {
             std::size_t consumed = 0U;
             try {
@@ -84,7 +88,8 @@ bool parse_arguments(
         }
         index += 2;
     }
-    return !(options.keyboard_drive && options.performance_case != nullptr);
+    return !(options.keyboard_drive && options.performance_case != nullptr) &&
+        !(options.trace_path && options.performance_case != nullptr);
 }
 
 } // namespace
