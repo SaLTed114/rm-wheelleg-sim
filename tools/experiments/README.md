@@ -7,7 +7,7 @@ Python 3.11 and the numerical dependencies used by the LQR generator:
 
 ```bash
 conda run -n sim python tools/experiments/run_experiment.py \
-  tools/experiments/forward_ab_example.toml
+  tools/experiments/lqr_schedule_generation_example.toml
 ```
 
 Use `--dry-run` to validate and print the fully resolved configuration without
@@ -40,20 +40,41 @@ the old `drive` column or `position_feedback_enabled = 0` are also accepted.
 Give the case enough `standing_seconds` for the actual plant to settle; the
 example uses eight seconds.
 
+`formal_lqr_validation.toml` is the reproducible `+/-3 m/s`, `5 m/s^2`
+longitudinal acceptance case for the formal schedule:
+
+```bash
+conda run -n sim python tools/experiments/run_experiment.py \
+  tools/experiments/formal_lqr_validation.toml
+```
+
 Before building a full candidate schedule, `forward_weight_sweep.py` can use
-the same traces and fixed-length model to screen body pitch angle/rate weights:
+the same traces and fixed-length model to screen forward-state and actuator
+weights. Omitted weight groups retain the values stored in the schedule:
 
 ```bash
 conda run -n sim python tools/lqr/forward_weight_sweep.py \
   --schedule tools/lqr/generated/current_model_schedule.json \
   --output build/experiments/forward-weight-sweep \
   --mujoco-trace path/to/case-a/trace.csv path/to/case-b/trace.csv \
-  --theta-weights 150 300 600 1200 \
-  --dtheta-weights 30 60 120 240
+  --ds-weights 60 90 120 180 \
+  --wheel-weights 3.2 2.4 1.6 \
+  --pitch-limit-deg 2.5 --t90-limit 1.0
 ```
 
-The sweep is only an ideal linear prefilter. Shortlisted weights still require
-a generated schedule and MuJoCo cases through the experiment runner.
+The ranking also records common-leg motion, reverse displacement, velocity
+overshoot, and predicted wheel/leg torque. The sweep is only an ideal linear
+prefilter: its A/B/K response is useful for choosing directions and candidate
+spacing, not for accepting a candidate or requiring the nonlinear plant to
+match throughout a transient. Shortlisted weights must be accepted using the
+actual MuJoCo response from a generated schedule and experiment cases.
+
+Historical Q140 and Q_DS/R-only boundary-search results are summarized in
+`docs/notes/performance-baseline.md`; their one-off candidate configurations
+are intentionally not kept as active experiment presets. New candidates should
+be expressed explicitly in a TOML derived from
+`lqr_schedule_generation_example.toml`, while formal regression always uses
+`formal_lqr_validation.toml`.
 
 ## Build and output
 

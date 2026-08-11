@@ -27,6 +27,9 @@ void print_usage() {
          balance::benchmark::forward_acceleration_cases()) {
         std::cerr << "  " << spec.name << '\n';
     }
+    for (const auto &spec : balance::benchmark::motion_cases()) {
+        std::cerr << "  " << spec.name << '\n';
+    }
 }
 
 bool parse_arguments(

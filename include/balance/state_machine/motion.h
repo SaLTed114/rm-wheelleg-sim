@@ -2,6 +2,7 @@
 #define BALANCE_STATE_MACHINE_MOTION_H
 
 #include "balance/reference/forward.h"
+#include "balance/reference/ramp.h"
 #include "balance/reference/yaw.h"
 #include "balance/state_machine/condition_hold.h"
 #include "balance/state_machine/forward_mode.h"
@@ -25,7 +26,9 @@ typedef enum {
 } bc_chassis_alignment_t;
 
 typedef struct {
-    float leg_length;
+    float startup_leg_length;
+    float leg_length; /* ACTIVE working target. */
+    bc_reference_ramp_config_t leg_length_ramp;
     float leg_angle_body;
     float length_tolerance;
     float length_velocity_tolerance;
@@ -42,6 +45,7 @@ typedef struct {
 typedef struct {
     bc_motion_config_t config;
     bc_motion_state_t state;
+    bc_reference_ramp_t leg_length_reference;
     bc_state_vector_t state_reference;
     bc_chassis_alignment_t alignment;
     float mapped_forward_velocity;

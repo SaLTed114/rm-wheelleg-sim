@@ -1,5 +1,5 @@
 version = 1
-name = "forward-baseline"
+name = "lqr-schedule-generation-example"
 
 [paths]
 model = "../../models/MJCF/COD-2026RoboMaster-Balance.xml"
@@ -21,8 +21,8 @@ mode = "generate"
 
 [lqr.generate]
 model_parameters = "../lqr/generated/current_model_schedule.json"
-q_diagonal = [90, 60, 40, 15, 240, 4, 240, 4, 300, 60]
-r_diagonal = [3.2, 3.2, 0.7, 0.7]
+q_diagonal = [90, 260, 40, 15, 60, 1, 60, 1, 900, 120]
+r_diagonal = [1.6, 1.6, 0.7, 0.7]
 leg_angle_difference_weight = 1920
 leg_angular_velocity_difference_weight = 32
 

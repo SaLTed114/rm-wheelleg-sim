@@ -44,7 +44,7 @@ def load_model(
     document = json.loads(schedule_path.read_text(encoding="ascii"))
     controller = document["controller"]
     timestep = float(controller["timestep"])
-    physical = make_physical_parameters(document["model"], 1.0)
+    physical = make_physical_parameters(document["model"])
     leg = make_leg_provider(document["model"])(leg_length)
 
     functions = build_state_matrix_functions(physical)

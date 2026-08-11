@@ -14,7 +14,8 @@ static void bc_motion_set_leg_control(
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         command->leg[side].length_strategy = length_strategy;
         command->leg[side].angle_strategy = angle_strategy;
-        command->leg[side].target.length = motion->config.leg_length;
+        command->leg[side].target.length =
+            motion->leg_length_reference.value;
         command->leg[side].target.angle_body =
             motion->config.leg_angle_body;
     }
@@ -37,7 +38,8 @@ static uint8_t bc_motion_legs_are_stable(
 ) {
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const uint8_t stable =
-            fabsf(leg[side].length - motion->config.leg_length) <=
+            fabsf(
+                leg[side].length - motion->config.startup_leg_length) <=
                 motion->config.length_tolerance &&
             fabsf(leg[side].length_velocity) <=
                 motion->config.length_velocity_tolerance &&
@@ -193,6 +195,11 @@ static void bc_motion_action(
         break;
 
     case BC_MOTION_ACTIVE:
+        bc_reference_ramp_update(
+            &motion->leg_length_reference,
+            &motion->config.leg_length_ramp,
+            motion->config.leg_length,
+            input->timestep_seconds);
         bc_motion_set_balance_control(motion, output);
         bc_motion_map_normal_command(motion, input);
         bc_motion_update_forward(
@@ -219,7 +226,12 @@ void bc_motion_default_config(bc_motion_config_t *config) {
     bc_forward_reference_default_config(&forward_reference);
     bc_yaw_reference_default_config(&yaw_reference);
     *config = (bc_motion_config_t){
+        .startup_leg_length         = 0.18F,
         .leg_length                 = 0.18F,
+        .leg_length_ramp            = {
+            .value_limit = 0.39F,
+            .rate_limit = 0.10F,
+        },
         .leg_angle_body             = -0.5F * BC_PI_F,
         .length_tolerance           = 0.035F,
         .length_velocity_tolerance  = 0.03F,
@@ -254,6 +266,9 @@ void bc_motion_reset(bc_motion_t *motion) {
         &motion->state_reference, 0,
         sizeof(motion->state_reference));
     motion->alignment = BC_CHASSIS_FRONT;
+    bc_reference_ramp_reset(&motion->leg_length_reference);
+    motion->leg_length_reference.value =
+        motion->config.startup_leg_length;
     motion->mapped_forward_velocity = 0.0F;
     motion->heading_error = 0.0F;
     bc_forward_mode_reset(&motion->forward);

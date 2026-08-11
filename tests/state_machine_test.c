@@ -39,7 +39,10 @@ int main() {
     };
 
     bc_motion_default_config(&config);
-    if (config.leg_length != 0.18F ||
+    if (config.startup_leg_length != 0.18F ||
+        config.leg_length != 0.18F ||
+        config.leg_length_ramp.value_limit != 0.39F ||
+        config.leg_length_ramp.rate_limit != 0.10F ||
         config.engage_duration != 0.1F ||
         config.forward_reference.velocity_ramp.rate_limit != 5.0F ||
         fabsf(config.yaw_reference.rate_limit - 1.5F * BC_PI_F) >
@@ -48,6 +51,7 @@ int main() {
         fputs("default motion config is incorrect\n", stderr);
         return 1;
     }
+    config.leg_length = 0.38F;
     bc_system_init(&system, &config);
 
     operator_command.balance_restart = 1U;
@@ -81,21 +85,25 @@ int main() {
         !control_uses_strategies(
             &command,
             BC_LEG_LENGTH_POSITION, BC_LEG_ANGLE_POSITION,
-            BC_WHEEL_DISABLED)) {
+            BC_WHEEL_DISABLED) ||
+        command.leg[BC_L].target.length !=
+            config.startup_leg_length ||
+        command.leg[BC_R].target.length !=
+            config.startup_leg_length) {
         fputs("balance restart did not start leg positioning\n", stderr);
         return 1;
     }
     operator_command.balance_restart = 0U;
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        leg[side].length = config.leg_length;
+        leg[side].length = config.startup_leg_length;
         leg[side].angle_body = config.leg_angle_body;
     }
 
     bc_system_update(&system, &input, &command);
     leg[BC_L].length = 0.0F;
     bc_system_update(&system, &input, &command);
-    leg[BC_L].length = config.leg_length;
+    leg[BC_L].length = config.startup_leg_length;
 
     state.value[BC_STATE_S] = 1.0F;
     state.value[BC_STATE_PSI] = -0.5F;
@@ -114,7 +122,11 @@ int main() {
         !control_uses_strategies(
             &command,
             BC_LEG_LENGTH_POSITION_SUPPORT, BC_LEG_ANGLE_LQR,
-            BC_WHEEL_LQR)) {
+            BC_WHEEL_LQR) ||
+        command.leg[BC_L].target.length !=
+            config.startup_leg_length ||
+        command.leg[BC_R].target.length !=
+            config.startup_leg_length) {
         fputs("stable legs did not engage balance control\n", stderr);
         return 1;
     }
@@ -142,6 +154,8 @@ int main() {
     bc_system_update(&system, &input, &command);
     if (system.motion.state != BC_MOTION_ACTIVE ||
         system.motion.forward.state != BC_FORWARD_VELOCITY ||
+        fabsf(command.leg[BC_L].target.length - 0.19F) > 1.0e-6F ||
+        fabsf(command.leg[BC_R].target.length - 0.19F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_S] - 1.05F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.5F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_PSI] + 0.30F) > 1.0e-6F ||
@@ -249,10 +263,16 @@ int main() {
         system.motion.forward_reference.velocity_ramp.value != 0.0F ||
         system.motion.yaw_reference.acceleration_reference != 0.0F ||
         system.motion.engage_hold.elapsed_seconds != 0.0F ||
+        system.motion.leg_length_reference.value !=
+            config.startup_leg_length ||
         !control_uses_strategies(
             &command,
             BC_LEG_LENGTH_POSITION, BC_LEG_ANGLE_POSITION,
-            BC_WHEEL_DISABLED)) {
+            BC_WHEEL_DISABLED) ||
+        command.leg[BC_L].target.length !=
+            config.startup_leg_length ||
+        command.leg[BC_R].target.length !=
+            config.startup_leg_length) {
         fputs("balance restart did not return to leg positioning\n", stderr);
         return 1;
     }

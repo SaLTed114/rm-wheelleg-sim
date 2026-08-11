@@ -185,6 +185,17 @@ class ExperimentConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(ExperimentError, "unknown build keys"):
             load_config(self.write_config(contents))
 
+    def test_repository_formal_lqr_validation(self) -> None:
+        config_path = (
+            Path(__file__).resolve().parent /
+            "formal_lqr_validation.toml")
+        config = load_config(config_path)
+        self.assertEqual(config.controller.trace_stride, 1)
+        self.assertTrue(config.analysis.forward_linear)
+        self.assertEqual(
+            [(case.target, case.command_rate) for case in config.cases],
+            [(3.0, 5.0), (-3.0, 5.0)])
+
 
 if __name__ == "__main__":
     unittest.main()

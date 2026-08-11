@@ -1,0 +1,42 @@
+version = 1
+name = "formal-lqr-validation"
+
+[paths]
+model = "../../models/MJCF/COD-2026RoboMaster-Balance.xml"
+output_root = "../../build/experiments/results"
+
+[build]
+root = "../../build/experiments"
+configuration = "Release"
+cmake_args = []
+
+[controller]
+leg_length = 0.18
+forward_observation = "wheel-odometry"
+roll_restrained = false
+trace_stride = 1
+
+[lqr]
+mode = "existing"
+schedule_dir = "../lqr/generated"
+
+[analysis]
+forward_linear = true
+
+[[case]]
+name = "forward_pos_3_a5"
+axis = "forward"
+target = 3.0
+command_rate = 5.0
+standing_seconds = 8.0
+target_hold_seconds = 3.0
+stop_settle_seconds = 3.0
+
+[[case]]
+name = "forward_neg_3_a5"
+axis = "forward"
+target = -3.0
+command_rate = 5.0
+standing_seconds = 8.0
+target_hold_seconds = 3.0
+stop_settle_seconds = 3.0

@@ -15,6 +15,20 @@ constexpr double kEvaluationSeconds = 1.0;
 constexpr double kForwardRateLimit = 5.0;
 constexpr double kDefaultGimbalAcceleration = 10.0;
 
+// This fixed geometry closes after two mirrored 270-degree turns. The entry
+// speed makes the 0.35 m curvature transitions use exactly 10 rad/s^2.
+constexpr double kFigureEightCurvature = 0.5 * BC_PI;
+constexpr double kFigureEightTransitionLength = 0.35;
+constexpr double kFigureEightCircleLength = 2.65;
+constexpr double kFigureEightStraightLength = 0.9401112857459557;
+constexpr double kFigureEightEntryVelocity = 1.4927053303604616;
+constexpr double kFigureEightEntryYawRate = 2.3447360499173757;
+constexpr double kFigureEightMaximumVelocity = 3.0;
+constexpr double kFigureEightCircleDecelerationDistance =
+    (kFigureEightMaximumVelocity * kFigureEightMaximumVelocity -
+     kFigureEightEntryVelocity * kFigureEightEntryVelocity) /
+    (2.0 * kForwardRateLimit);
+
 constexpr std::array<PerformanceCaseSpec, 12> kCases{{
     {"forward_pos_1", PerformanceAxis::forward, 1.0, 5.0},
     {"forward_neg_1", PerformanceAxis::forward, -1.0, 5.0},
@@ -43,6 +57,14 @@ constexpr std::array<PerformanceCaseSpec, 10> kForwardAccelerationCases{{
     {"forward_neg_2_a5", PerformanceAxis::forward, -2.0, 5.0},
 }};
 
+constexpr std::array<PerformanceCaseSpec, 1> kMotionCases{{
+    {
+        "figure_eight_cross", PerformanceAxis::combined, 0.0,
+        kDefaultGimbalAcceleration, 0.0, 2.0, 2.0, 0.0, 0.0,
+        PerformanceCaseKind::cross_figure_eight,
+    },
+}};
+
 } // namespace
 
 const std::array<PerformanceCaseSpec, 12> &
@@ -53,6 +75,10 @@ performance_cases() noexcept {
 const std::array<PerformanceCaseSpec, 10> &
 forward_acceleration_cases() noexcept {
     return kForwardAccelerationCases;
+}
+
+const std::array<PerformanceCaseSpec, 1> &motion_cases() noexcept {
+    return kMotionCases;
 }
 
 const PerformanceCaseSpec *find_performance_case(
@@ -75,11 +101,23 @@ const PerformanceCaseSpec *find_performance_case(
         return &*acceleration_found;
     }
 
+    const auto motion_found = std::find_if(
+        kMotionCases.begin(), kMotionCases.end(),
+        [name](const PerformanceCaseSpec &spec) {
+            return spec.name == name;
+        });
+    if (motion_found != kMotionCases.end()) return &*motion_found;
+
     return nullptr;
 }
 
 const char *performance_axis_name(const PerformanceAxis axis) noexcept {
-    return axis == PerformanceAxis::forward ? "forward" : "heading";
+    switch (axis) {
+    case PerformanceAxis::forward: return "forward";
+    case PerformanceAxis::heading: return "heading";
+    case PerformanceAxis::combined: return "combined";
+    }
+    return "unknown";
 }
 
 const char *performance_phase_name(const PerformancePhase phase) noexcept {
@@ -89,6 +127,7 @@ const char *performance_phase_name(const PerformancePhase phase) noexcept {
     case PerformancePhase::standing: return "standing";
     case PerformancePhase::target_ramp: return "target_ramp";
     case PerformancePhase::target_hold: return "target_hold";
+    case PerformancePhase::trajectory: return "trajectory";
     case PerformancePhase::stop_ramp: return "stop_ramp";
     case PerformancePhase::stop_settle: return "stop_settle";
     case PerformancePhase::complete: return "complete";
@@ -107,7 +146,11 @@ PerformanceScenario::PerformanceScenario(
             spec.axis == PerformanceAxis::heading ?
                 spec.command_rate : kDefaultGimbalAcceleration),
     }) {
-    if (!std::isfinite(spec_.target) ||
+    const bool axis_response =
+        spec_.kind == PerformanceCaseKind::axis_response;
+    if ((axis_response && spec_.axis == PerformanceAxis::combined) ||
+        (!axis_response && spec_.axis != PerformanceAxis::combined) ||
+        !std::isfinite(spec_.target) ||
         !std::isfinite(spec_.command_rate) ||
         spec_.command_rate <= 0.0 ||
         !std::isfinite(spec_.target_hold_seconds) ||
@@ -121,12 +164,12 @@ PerformanceScenario::PerformanceScenario(
         !std::isfinite(spec_.forward_lead_seconds) ||
         spec_.forward_lead_seconds < 0.0 ||
         spec_.forward_lead_seconds > spec_.standing_seconds ||
-        (spec_.axis != PerformanceAxis::heading &&
+        (axis_response && spec_.axis != PerformanceAxis::heading &&
          (spec_.coupled_forward_velocity != 0.0 ||
           spec_.forward_lead_seconds != 0.0)) ||
         (spec_.coupled_forward_velocity == 0.0 &&
          spec_.forward_lead_seconds != 0.0) ||
-        (spec_.axis == PerformanceAxis::heading &&
+        (axis_response && spec_.axis == PerformanceAxis::heading &&
          std::abs(spec_.target) > 2.0 * BC_PI)) {
         throw std::invalid_argument(
             "performance case values and durations must be valid");
@@ -139,6 +182,8 @@ void PerformanceScenario::reset(const double simulation_time) noexcept {
     command_ = {};
     virtual_gimbal_.reset();
     gimbal_initialized_ = false;
+    figure_eight_phase_ = FigureEightPhase::lead_in;
+    figure_eight_phase_distance_ = 0.0;
     phase_start_time_ = simulation_time;
     simulation_time_ = simulation_time;
     previous_update_time_ = simulation_time;
@@ -149,6 +194,33 @@ void PerformanceScenario::enter(
 ) noexcept {
     phase_ = phase;
     phase_start_time_ = simulation_time;
+}
+
+void PerformanceScenario::enter_figure_eight(
+    const FigureEightPhase phase
+) noexcept {
+    figure_eight_phase_ = phase;
+    figure_eight_phase_distance_ = 0.0;
+}
+
+const char *PerformanceScenario::phase_name() const noexcept {
+    if (phase_ != PerformancePhase::trajectory) {
+        return performance_phase_name(phase_);
+    }
+    switch (figure_eight_phase_) {
+    case FigureEightPhase::lead_in: return "figure_eight_lead_in";
+    case FigureEightPhase::straight_one:
+        return "figure_eight_straight_one";
+    case FigureEightPhase::left_entry: return "figure_eight_left_entry";
+    case FigureEightPhase::left_arc: return "figure_eight_left_arc";
+    case FigureEightPhase::left_exit: return "figure_eight_left_exit";
+    case FigureEightPhase::straight_two:
+        return "figure_eight_straight_two";
+    case FigureEightPhase::right_entry: return "figure_eight_right_entry";
+    case FigureEightPhase::right_arc: return "figure_eight_right_arc";
+    case FigureEightPhase::right_exit: return "figure_eight_right_exit";
+    }
+    return "figure_eight_unknown";
 }
 
 double PerformanceScenario::phase_elapsed() const noexcept {
@@ -191,7 +263,12 @@ void PerformanceScenario::update(
 
     case PerformancePhase::standing:
         if (phase_elapsed() >= spec_.standing_seconds) {
-            enter(PerformancePhase::target_ramp, simulation_time);
+            if (spec_.kind == PerformanceCaseKind::cross_figure_eight) {
+                enter_figure_eight(FigureEightPhase::lead_in);
+                enter(PerformancePhase::trajectory, simulation_time);
+            } else {
+                enter(PerformancePhase::target_ramp, simulation_time);
+            }
         }
         break;
 
@@ -209,9 +286,19 @@ void PerformanceScenario::update(
         }
         break;
 
+    case PerformancePhase::trajectory:
+        advance_figure_eight(snapshot, timestep_seconds);
+        break;
+
     case PerformancePhase::stop_ramp: {
-        if (phase_elapsed() >=
-            std::abs(spec_.target) / spec_.command_rate) {
+        const bool stopped_figure_eight =
+            spec_.kind == PerformanceCaseKind::cross_figure_eight &&
+            std::abs(snapshot.state_reference.value[BC_STATE_DS]) <=
+                1.0e-4F;
+        const bool stopped_axis_response =
+            spec_.kind == PerformanceCaseKind::axis_response &&
+            phase_elapsed() >= std::abs(spec_.target) / spec_.command_rate;
+        if (stopped_figure_eight || stopped_axis_response) {
             enter(PerformancePhase::stop_settle, simulation_time);
         }
         break;
@@ -237,6 +324,10 @@ void PerformanceScenario::update(
     }
     float gimbal_forward_velocity = 0.0F;
     float target_gimbal_yaw_rate = 0.0F;
+    if (phase_ == PerformancePhase::trajectory) {
+        update_figure_eight_command(
+            snapshot, gimbal_forward_velocity, target_gimbal_yaw_rate);
+    }
     const bool coupled_forward_active =
         spec_.axis == PerformanceAxis::heading &&
         spec_.coupled_forward_velocity != 0.0 &&
@@ -290,11 +381,129 @@ void PerformanceScenario::update(
 bool PerformanceScenario::monitored() const noexcept {
     return phase_ == PerformancePhase::target_ramp ||
         phase_ == PerformancePhase::target_hold ||
+        phase_ == PerformancePhase::trajectory ||
         phase_ == PerformancePhase::stop_ramp ||
         phase_ == PerformancePhase::stop_settle;
 }
 
+void PerformanceScenario::advance_figure_eight(
+    const bc_controller_snapshot_t &snapshot,
+    const float timestep_seconds
+) noexcept {
+    const double velocity = std::max(
+        0.0, static_cast<double>(
+            snapshot.state_reference.value[BC_STATE_DS]));
+
+    if (figure_eight_phase_ == FigureEightPhase::lead_in) {
+        if (velocity >= kFigureEightEntryVelocity - 1.0e-4) {
+            enter_figure_eight(FigureEightPhase::straight_one);
+        }
+        return;
+    }
+
+    figure_eight_phase_distance_ +=
+        velocity * static_cast<double>(timestep_seconds);
+    const auto reached = [this](const double distance) {
+        return figure_eight_phase_distance_ >= distance;
+    };
+
+    switch (figure_eight_phase_) {
+    case FigureEightPhase::lead_in:
+        break;
+    case FigureEightPhase::straight_one:
+        if (reached(kFigureEightStraightLength)) {
+            enter_figure_eight(FigureEightPhase::left_entry);
+        }
+        break;
+    case FigureEightPhase::left_entry:
+        if (reached(kFigureEightTransitionLength)) {
+            enter_figure_eight(FigureEightPhase::left_arc);
+        }
+        break;
+    case FigureEightPhase::left_arc:
+        if (reached(kFigureEightCircleLength)) {
+            enter_figure_eight(FigureEightPhase::left_exit);
+        }
+        break;
+    case FigureEightPhase::left_exit:
+        if (reached(kFigureEightTransitionLength)) {
+            enter_figure_eight(FigureEightPhase::straight_two);
+        }
+        break;
+    case FigureEightPhase::straight_two:
+        if (reached(kFigureEightStraightLength)) {
+            enter_figure_eight(FigureEightPhase::right_entry);
+        }
+        break;
+    case FigureEightPhase::right_entry:
+        if (reached(kFigureEightTransitionLength)) {
+            enter_figure_eight(FigureEightPhase::right_arc);
+        }
+        break;
+    case FigureEightPhase::right_arc:
+        if (reached(kFigureEightCircleLength)) {
+            enter_figure_eight(FigureEightPhase::right_exit);
+        }
+        break;
+    case FigureEightPhase::right_exit:
+        if (reached(kFigureEightTransitionLength)) {
+            enter(PerformancePhase::stop_ramp, simulation_time_);
+        }
+        break;
+    }
+}
+
+void PerformanceScenario::update_figure_eight_command(
+    const bc_controller_snapshot_t &snapshot,
+    float &forward_velocity, float &target_yaw_rate
+) const noexcept {
+    forward_velocity = static_cast<float>(kFigureEightEntryVelocity);
+    const float planned_velocity = std::max(
+        0.0F, snapshot.state_reference.value[BC_STATE_DS]);
+
+    switch (figure_eight_phase_) {
+    case FigureEightPhase::lead_in:
+    case FigureEightPhase::straight_one:
+    case FigureEightPhase::straight_two:
+        target_yaw_rate = 0.0F;
+        break;
+    case FigureEightPhase::left_entry:
+        target_yaw_rate = static_cast<float>(kFigureEightEntryYawRate);
+        break;
+    case FigureEightPhase::left_arc:
+        forward_velocity = static_cast<float>(
+            figure_eight_phase_distance_ <
+                    kFigureEightCircleLength -
+                        kFigureEightCircleDecelerationDistance ?
+                kFigureEightMaximumVelocity : kFigureEightEntryVelocity);
+        target_yaw_rate = static_cast<float>(
+            kFigureEightCurvature * planned_velocity);
+        break;
+    case FigureEightPhase::left_exit:
+        target_yaw_rate = 0.0F;
+        break;
+    case FigureEightPhase::right_entry:
+        target_yaw_rate = static_cast<float>(-kFigureEightEntryYawRate);
+        break;
+    case FigureEightPhase::right_arc:
+        forward_velocity = static_cast<float>(
+            figure_eight_phase_distance_ <
+                    kFigureEightCircleLength -
+                        kFigureEightCircleDecelerationDistance ?
+                kFigureEightMaximumVelocity : kFigureEightEntryVelocity);
+        target_yaw_rate = static_cast<float>(
+            -kFigureEightCurvature * planned_velocity);
+        break;
+    case FigureEightPhase::right_exit:
+        target_yaw_rate = 0.0F;
+        break;
+    }
+}
+
 bool PerformanceScenario::tracking_evaluation() const noexcept {
+    if (spec_.kind == PerformanceCaseKind::cross_figure_eight) {
+        return phase_ == PerformancePhase::trajectory;
+    }
     return phase_ == PerformancePhase::target_hold &&
         phase_elapsed() >= std::max(
             0.0, spec_.target_hold_seconds - kEvaluationSeconds);

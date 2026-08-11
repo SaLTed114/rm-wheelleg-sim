@@ -31,8 +31,8 @@ from verify_lqr import verify_legacy
 
 DEFAULT_MODEL = Path("models/MJCF/COD-2026RoboMaster-Balance.xml")
 DEFAULT_OUTPUT = Path("tools/lqr/generated")
-Q_DIAGONAL = (90, 60, 40, 15, 240, 4, 240, 4, 300, 60)
-R_DIAGONAL = (3.2, 3.2, 0.7, 0.7)
+Q_DIAGONAL = (90, 260, 40, 15, 60, 1, 60, 1, 900, 120)
+R_DIAGONAL = (1.6, 1.6, 0.7, 0.7)
 LEG_ANGLE_DIFFERENCE_WEIGHT = 1920.0
 LEG_ANGULAR_VELOCITY_DIFFERENCE_WEIGHT = 32.0
 CONTROLLER_LENGTH_MINIMUM = 0.16
@@ -468,9 +468,10 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 - float Horner 求值最大误差：
   `{current['maximum_float_horner_error']:.6e}`。
 
-当前 Q/R 由 MuJoCo 正反向加速与原地旋转扫描选定，重点覆盖 `0.16 m` 与
-`0.18 m` 腿长；旧实车权重仅保留为生成器 golden test。调度按照 1 ms
-仿真控制周期生成，不能直接用于现有 3 ms 实车控制循环。
+当前 Q/R 由 MuJoCo 正反向加速、原地旋转和跨腿长覆盖选定，`0.18 m` 是
+主工作点，`0.24 m` 和降额的 `0.38 m` 用于覆盖验证；旧实车权重仅保留为
+生成器 golden test。调度按照 1 ms 仿真控制周期生成，不能直接用于现有
+3 ms 实车控制循环。
 """
     path.write_text(text, encoding="utf-8")
 

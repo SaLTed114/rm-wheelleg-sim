@@ -1,6 +1,8 @@
 #include "performance/performance_scenario.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 
@@ -128,6 +130,60 @@ int main() {
     }
     if (!invalid_rejected) {
         std::cerr << "out-of-range heading target was accepted\n";
+        return 1;
+    }
+
+    const PerformanceCaseSpec &figure_eight_spec =
+        balance::benchmark::motion_cases().front();
+    if (balance::benchmark::find_performance_case(
+            figure_eight_spec.name) != &figure_eight_spec) {
+        std::cerr << "figure-eight case was not registered\n";
+        return 1;
+    }
+
+    PerformanceScenario figure_eight(figure_eight_spec);
+    snapshot = {};
+    constexpr float timestep = 0.001F;
+    float previous_forward_command = 0.0F;
+    float maximum_forward_command = 0.0F;
+    float maximum_yaw_rate = 0.0F;
+    float minimum_yaw_rate = 0.0F;
+    bool saw_left_arc = false;
+    bool saw_right_arc = false;
+    for (int step = 0; step < 15000 && !figure_eight.finished(); ++step) {
+        const double time = static_cast<double>(step) * timestep;
+        if (time >= 2.001) snapshot.state_machine.motion = BC_MOTION_ACTIVE;
+
+        const float velocity_step = 5.0F * timestep;
+        const float velocity_error = previous_forward_command -
+            snapshot.state_reference.value[BC_STATE_DS];
+        snapshot.state_reference.value[BC_STATE_DS] += std::clamp(
+            velocity_error, -velocity_step, velocity_step);
+        snapshot.state_reference.value[BC_STATE_S] +=
+            snapshot.state_reference.value[BC_STATE_DS] * timestep;
+
+        figure_eight.update(snapshot, time);
+        previous_forward_command =
+            figure_eight.command().forward_velocity;
+        maximum_forward_command = std::max(
+            maximum_forward_command, previous_forward_command);
+        maximum_yaw_rate = std::max(
+            maximum_yaw_rate, figure_eight.gimbal().world_yaw_rate);
+        minimum_yaw_rate = std::min(
+            minimum_yaw_rate, figure_eight.gimbal().world_yaw_rate);
+        saw_left_arc = saw_left_arc ||
+            std::strcmp(
+                figure_eight.phase_name(), "figure_eight_left_arc") == 0;
+        saw_right_arc = saw_right_arc ||
+            std::strcmp(
+                figure_eight.phase_name(), "figure_eight_right_arc") == 0;
+    }
+    if (!figure_eight.finished() || !saw_left_arc || !saw_right_arc ||
+        !near(maximum_forward_command, 3.0F) ||
+        maximum_yaw_rate < 1.49F * BC_PI_F ||
+        minimum_yaw_rate > -1.49F * BC_PI_F ||
+        std::abs(figure_eight.gimbal().world_yaw) > 0.02F) {
+        std::cerr << "figure-eight command trajectory is incomplete\n";
         return 1;
     }
     return 0;

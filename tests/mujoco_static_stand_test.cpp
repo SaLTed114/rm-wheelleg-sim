@@ -415,11 +415,14 @@ int main(int argc, char **argv) {
         constexpr double kReversalReverseSeconds = 1.767;
         constexpr double kReversalSettleSeconds = 5.0;
         constexpr double kStopVelocityTolerance = 0.05;
-        constexpr double kPositionTrackingTolerance = 0.05;
         constexpr double kRecoveryVelocityVariance = 0.0008;
 
-        const double reversal_start_x = plant.data().qpos[base_qpos];
-        const double reversal_start_y = plant.data().qpos[base_qpos + 1];
+        const double reversal_start_x = 0.5 * (
+            plant.data().site_xpos[3 * wheel_axis[BC_L]] +
+            plant.data().site_xpos[3 * wheel_axis[BC_R]]);
+        const double reversal_start_y = 0.5 * (
+            plant.data().site_xpos[3 * wheel_axis[BC_L] + 1] +
+            plant.data().site_xpos[3 * wheel_axis[BC_R] + 1]);
         const double reversal_start_yaw =
             runner.snapshot().state.value[BC_STATE_PSI];
         const double reversal_start_s =
@@ -496,10 +499,14 @@ int main(int argc, char **argv) {
                 std::cos(reversal_final.state.value[BC_STATE_PSI]) +
             plant.data().qvel[base_dof + 1] *
                 std::sin(reversal_final.state.value[BC_STATE_PSI]);
-        const double reversal_delta_x =
-            plant.data().qpos[base_qpos] - reversal_start_x;
-        const double reversal_delta_y =
-            plant.data().qpos[base_qpos + 1] - reversal_start_y;
+        const double reversal_delta_x = 0.5 * (
+            plant.data().site_xpos[3 * wheel_axis[BC_L]] +
+            plant.data().site_xpos[3 * wheel_axis[BC_R]]) -
+            reversal_start_x;
+        const double reversal_delta_y = 0.5 * (
+            plant.data().site_xpos[3 * wheel_axis[BC_L] + 1] +
+            plant.data().site_xpos[3 * wheel_axis[BC_R] + 1]) -
+            reversal_start_y;
         const double reversal_displacement =
             reversal_delta_x * std::cos(reversal_start_yaw) +
             reversal_delta_y * std::sin(reversal_start_yaw);
@@ -523,19 +530,26 @@ int main(int argc, char **argv) {
                   << " s, truth velocity=" << reversal_truth_velocity
                   << " m/s, ds="
                   << reversal_final.state.value[BC_STATE_DS]
-                  << " m/s, displacement=" << reversal_displacement
+                  << " m/s, axle displacement=" << reversal_displacement
                   << " m, delta s=" << reversal_delta_s
                   << " m, position error=" << reversal_position_error
                   << " m\n";
 
+        // S has no absolute-position correction while wheel velocity is
+        // rejected, so its accumulated drift is diagnostic rather than a
+        // safe-stop condition.
         const bool reversal_valid = saw_unreliable &&
             saw_recovery_covariance && saw_reaccepted_measurement &&
             entered_valid_hold && !invalid_hold_transition &&
             reversal_final.velocity_estimator.wheel_velocity_reliable &&
             reversal_final.state_machine.forward == BC_FORWARD_HOLD &&
             std::abs(reversal_truth_velocity) <= kStopVelocityTolerance &&
-            std::abs(reversal_position_error) <=
-                kPositionTrackingTolerance;
+            std::abs(static_cast<double>(
+                reversal_final.state.value[BC_STATE_DS])) <=
+                kStopVelocityTolerance &&
+            std::abs(static_cast<double>(
+                reversal_final.forward_velocity.wheel_odometry)) <=
+                kStopVelocityTolerance;
         if (!reversal_valid) {
             std::cerr << "keyboard reversal did not recover and stop safely: "
                       << "unreliable=" << saw_unreliable

@@ -56,6 +56,12 @@ struct PerformanceResult {
     bool initial_position_error_captured{};
     double maximum_heading_error{};
     double stop_peak_yaw_rate{};
+    bool path_start_captured{};
+    double path_start_x{};
+    double path_start_y{};
+    double path_end_x{};
+    double path_end_y{};
+    double path_closure_error{};
     SampleStatistics tracking_error;
     SampleStatistics heading_error;
     SampleStatistics settle_forward;

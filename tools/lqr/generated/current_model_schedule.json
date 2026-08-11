@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "model": {
-    "model_path": "models\\MJCF\\COD-2026RoboMaster-Balance.xml",
+    "model_path": "models/MJCF/COD-2026RoboMaster-Balance.xml",
     "safe_length_range": [
       0.186,
       0.39
@@ -11,9 +11,9 @@
       "maximum": 0.43,
       "step": 0.001,
       "nominal_length": 0.34,
-      "maximum_closure_error": 0.001950000000000035,
-      "maximum_target_error": 2.3341642610252508e-11,
-      "minimum_joint_margin": 0.020447586086427494,
+      "maximum_closure_error": 0.0019500000000000073,
+      "maximum_target_error": 2.6604954585821444e-11,
+      "minimum_joint_margin": 0.020447586086466574,
       "closure_limits": {
         "left": 0.0005499999999999945,
         "right": 0.0024500000000000073
@@ -27,22 +27,22 @@
       "body_com_forward_offset": -0.0005256000000000011,
       "wheel_mass": 0.71,
       "wheel_mass_spread": 0.0,
-      "wheel_inertia": 0.001194219999999648,
-      "wheel_inertia_spread": 2.52510685971874e-15,
-      "wheel_radius": 0.05800000339922101,
-      "wheel_radius_spread": 5.60975738084224e-10,
+      "wheel_inertia": 0.0011942199999996482,
+      "wheel_inertia_spread": 2.5240226575462543e-15,
+      "wheel_radius": 0.058000003399221026,
+      "wheel_radius_spread": 5.609757589009057e-10,
       "half_track": 0.20775,
       "total_mass_diagnostic": 21.449999999998,
       "assembly_yaw_inertia_diagnostic": 0.5766164891585087,
       "assembly_yaw_inertia_reference_length": 0.18,
-      "assembly_yaw_inertia_reference": 0.5880290535917361,
+      "assembly_yaw_inertia_reference": 0.5880290535917163,
       "assembly_yaw_inertia_range_lengths": [
         0.18,
         0.39
       ],
       "assembly_yaw_inertia_range": [
-        0.5717017735823743,
-        0.5880290535917361
+        0.5717017735824025,
+        0.5880290535917163
       ]
     },
     "leg_mass": 1.189999999999,
@@ -51,268 +51,268 @@
       "left": [
         {
           "mass": 1.189999999999,
-          "com_distance": 0.035755250777892406,
-          "com_perpendicular_offset": 0.06585043388981801,
-          "inertia": 0.015022421618126856,
-          "inertia_about_hip": 0.01654376278837165,
+          "com_distance": 0.03575525077788003,
+          "com_perpendicular_offset": 0.06585043388981987,
+          "inertia": 0.015022421618128584,
+          "inertia_about_hip": 0.016543762788372322,
           "length": 0.186
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.038690157916459356,
-          "com_perpendicular_offset": 0.06544467243032123,
-          "inertia": 0.015036981665594735,
-          "inertia_about_hip": 0.01681832636591791,
+          "com_distance": 0.03869015791645939,
+          "com_perpendicular_offset": 0.0654446724303212,
+          "inertia": 0.015036981665594737,
+          "inertia_about_hip": 0.016818326365917912,
           "length": 0.1928
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.04157512891739951,
-          "com_perpendicular_offset": 0.06500590353552986,
-          "inertia": 0.015047440867462906,
-          "inertia_about_hip": 0.01710434556741426,
+          "com_distance": 0.04157512891739952,
+          "com_perpendicular_offset": 0.06500590353552983,
+          "inertia": 0.015047440867462899,
+          "inertia_about_hip": 0.017104345567414254,
           "length": 0.1996
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.04441527336112051,
-          "com_perpendicular_offset": 0.06453521461111558,
-          "inertia": 0.015054314605912129,
+          "com_distance": 0.044415273361117856,
+          "com_perpendicular_offset": 0.06453521461112549,
+          "inertia": 0.01505431460591241,
           "inertia_about_hip": 0.0174018472501244,
           "length": 0.2064
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.047215047060503175,
-          "com_perpendicular_offset": 0.06403342351650711,
-          "inertia": 0.01505804015636345,
-          "inertia_about_hip": 0.0177108603523826,
+          "com_distance": 0.04721504706036954,
+          "com_perpendicular_offset": 0.06403342351653148,
+          "inertia": 0.015058040156363448,
+          "inertia_about_hip": 0.01771086035236758,
           "length": 0.2132
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.04997835442810442,
-          "com_perpendicular_offset": 0.06350111798655904,
-          "inertia": 0.015058991152219089,
-          "inertia_about_hip": 0.01803141588671265,
+          "com_distance": 0.049978354428104624,
+          "com_perpendicular_offset": 0.06350111798655915,
+          "inertia": 0.015058991152219094,
+          "inertia_about_hip": 0.018031415886712678,
           "length": 0.22
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.05270863243907049,
-          "com_perpendicular_offset": 0.06293868611458324,
-          "inertia": 0.015057489056143973,
-          "inertia_about_hip": 0.018363546977121666,
+          "com_distance": 0.05270863243904286,
+          "com_perpendicular_offset": 0.0629386861145802,
+          "inertia": 0.0150574890561465,
+          "inertia_about_hip": 0.018363546977120726,
           "length": 0.2268
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.05540891979913543,
-          "com_perpendicular_offset": 0.06234633977058213,
-          "inertia": 0.015053812335776578,
-          "inertia_about_hip": 0.018707288923808865,
+          "com_distance": 0.05540891979913545,
+          "com_perpendicular_offset": 0.062346339770582127,
+          "inertia": 0.015053812335776583,
+          "inertia_about_hip": 0.018707288923808872,
           "length": 0.2336
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.0580819144216832,
-          "com_perpendicular_offset": 0.061724132365033046,
-          "inertia": 0.015048203857777002,
+          "com_distance": 0.05808191442168326,
+          "com_perpendicular_offset": 0.061724132365033026,
+          "inertia": 0.015048203857776993,
           "inertia_about_hip": 0.019062679309410028,
           "length": 0.2404
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.060730021353831744,
-          "com_perpendicular_offset": 0.06107197200256553,
-          "inertia": 0.01504087689237268,
-          "inertia_about_hip": 0.019429758129796856,
+          "com_distance": 0.06073002135384257,
+          "com_perpendicular_offset": 0.061071972002565554,
+          "inertia": 0.01504087689237146,
+          "inertia_about_hip": 0.0194297581297972,
           "length": 0.2472
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.06335539308019607,
-          "com_perpendicular_offset": 0.06038963077585435,
-          "inertia": 0.015032020026013612,
-          "inertia_about_hip": 0.019808567966501524,
+          "com_distance": 0.06335539308019603,
+          "com_perpendicular_offset": 0.060389630775854276,
+          "inertia": 0.015032020026013605,
+          "inertia_about_hip": 0.01980856796650151,
           "length": 0.254
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.06595996355273988,
-          "com_perpendicular_offset": 0.05967675075586527,
-          "inertia": 0.015021801211540637,
-          "inertia_about_hip": 0.020199154193872026,
+          "com_distance": 0.06595996355274461,
+          "com_perpendicular_offset": 0.05967675075586735,
+          "inertia": 0.015021801211540547,
+          "inertia_about_hip": 0.02019915419387268,
           "length": 0.26080000000000003
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.06854547711369943,
-          "com_perpendicular_offset": 0.05893284705773529,
-          "inertia": 0.01501037113321264,
-          "inertia_about_hip": 0.020601565228174128,
+          "com_distance": 0.06854547711369938,
+          "com_perpendicular_offset": 0.0589328470577353,
+          "inertia": 0.015010371133212644,
+          "inertia_about_hip": 0.02060156522817412,
           "length": 0.2676
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.07111351323362156,
-          "com_perpendicular_offset": 0.058157308223907876,
-          "inertia": 0.01499786602587332,
-          "inertia_about_hip": 0.02101585282553814,
+          "com_distance": 0.07111351323362157,
+          "com_perpendicular_offset": 0.05815730822390789,
+          "inertia": 0.014997866025873323,
+          "inertia_about_hip": 0.021015852825538146,
           "length": 0.2744
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.07366550778181202,
-          "com_perpendicular_offset": 0.05734939405092191,
-          "inertia": 0.01498441005826997,
-          "inertia_about_hip": 0.02144207243199967,
+          "com_distance": 0.0736655077818149,
+          "com_perpendicular_offset": 0.05734939405092403,
+          "inertia": 0.014984410058268765,
+          "inertia_about_hip": 0.02144207243199897,
           "length": 0.2812
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.07620277147185135,
-          "com_perpendicular_offset": 0.05650823087272844,
-          "inertia": 0.014970117367876875,
-          "inertia_about_hip": 0.0218802836000606,
+          "com_distance": 0.07620277147185137,
+          "com_perpendicular_offset": 0.0565082308727284,
+          "inertia": 0.014970117367876866,
+          "inertia_about_hip": 0.021880283600060592,
           "length": 0.28800000000000003
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.07872650595965076,
-          "com_perpendicular_offset": 0.0556328042128711,
-          "inertia": 0.014955093818649446,
-          "inertia_about_hip": 0.022330550479975012,
+          "com_distance": 0.0787265059596533,
+          "com_perpendicular_offset": 0.05563280421287272,
+          "inertia": 0.01495509381865038,
+          "inertia_about_hip": 0.02233055047997642,
           "length": 0.2948
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.08123781804487457,
-          "com_perpendicular_offset": 0.054721948603943395,
-          "inertia": 0.014939438539106826,
-          "inertia_about_hip": 0.022792942405123882,
+          "com_distance": 0.08123781804488546,
+          "com_perpendicular_offset": 0.05472194860395405,
+          "inertia": 0.014939438539109109,
+          "inertia_about_hip": 0.02279294240512827,
           "length": 0.3016
         },
         {
           "mass": 1.189999999999,
           "com_distance": 0.0837377322928881,
-          "com_perpendicular_offset": 0.05377433425302132,
+          "com_perpendicular_offset": 0.053774334253021326,
           "inertia": 0.014923245290846592,
           "inertia_about_hip": 0.0232675345842105,
           "length": 0.3084
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.08622720251422067,
-          "com_perpendicular_offset": 0.05278845009065713,
-          "inertia": 0.014906603705435959,
-          "inertia_about_hip": 0.023754408945008347,
+          "com_distance": 0.08622720251422057,
+          "com_perpendicular_offset": 0.05278845009065103,
+          "inertia": 0.014906603705435381,
+          "inertia_about_hip": 0.02375440894500775,
           "length": 0.31520000000000004
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.08870712221575829,
-          "com_perpendicular_offset": 0.05176258255676797,
-          "inertia": 0.014889600431739668,
-          "inertia_about_hip": 0.024253655134575558,
+          "com_distance": 0.08870712221575837,
+          "com_perpendicular_offset": 0.05176258255676799,
+          "inertia": 0.014889600431739666,
+          "inertia_about_hip": 0.024253655134575572,
           "length": 0.322
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09117833447721456,
-          "com_perpendicular_offset": 0.050694789270426484,
-          "inertia": 0.01487232022191636,
-          "inertia_about_hip": 0.024765371748774235,
+          "com_distance": 0.09117833447722035,
+          "com_perpendicular_offset": 0.050694789270423916,
+          "inertia": 0.014872320221914407,
+          "inertia_about_hip": 0.024765371748773538,
           "length": 0.3288
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09364164146604458,
-          "com_perpendicular_offset": 0.04958286642057742,
-          "inertia": 0.014854846990104885,
-          "inertia_about_hip": 0.02528966783967785,
+          "com_distance": 0.09364164146605809,
+          "com_perpendicular_offset": 0.04958286642057026,
+          "inertia": 0.014854846990106092,
+          "inertia_about_hip": 0.025289667839682072,
           "length": 0.3356
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09609781388765844,
-          "com_perpendicular_offset": 0.04842430834246215,
-          "inertia": 0.014837264876993082,
+          "com_distance": 0.09609781388765846,
+          "com_perpendicular_offset": 0.048424308342462155,
+          "inertia": 0.014837264876993075,
           "inertia_about_hip": 0.025826664779428424,
           "length": 0.34240000000000004
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09854760083564572,
-          "com_perpendicular_offset": 0.0472162572321089,
-          "inertia": 0.014819659348715597,
-          "inertia_about_hip": 0.02637649860895538,
+          "com_distance": 0.09854760083561312,
+          "com_perpendicular_offset": 0.047216257232116116,
+          "inertia": 0.014819659348718563,
+          "inertia_about_hip": 0.0263764986089507,
           "length": 0.3492
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.1009917404044967,
-          "com_perpendicular_offset": 0.04595544018064988,
-          "inertia": 0.014802118373991405,
-          "inertia_about_hip": 0.026939323013597014,
+          "com_distance": 0.10099174040449692,
+          "com_perpendicular_offset": 0.04595544018064969,
+          "inertia": 0.014802118373991376,
+          "inertia_about_hip": 0.026939323013597038,
           "length": 0.356
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.10343097175472635,
-          "com_perpendicular_offset": 0.0446380898048637,
-          "inertia": 0.014784733715221094,
-          "inertia_about_hip": 0.027515313157781527,
+          "com_distance": 0.10343097175459474,
+          "com_perpendicular_offset": 0.04463808980492958,
+          "inertia": 0.014784733715222648,
+          "inertia_about_hip": 0.027515313157750684,
           "length": 0.3628
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.10586604961163397,
-          "com_perpendicular_offset": 0.04325984321217578,
-          "inertia": 0.014767602382241701,
-          "inertia_about_hip": 0.028104670730074298,
+          "com_distance": 0.10586604961166146,
+          "com_perpendicular_offset": 0.04325984321217436,
+          "inertia": 0.014767602382238936,
+          "inertia_about_hip": 0.02810467073007846,
           "length": 0.36960000000000004
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.10829776241079168,
-          "com_perpendicular_offset": 0.04181561212840523,
-          "inertia": 0.014750828308764603,
-          "inertia_about_hip": 0.028707630667142173,
+          "com_distance": 0.10829776241079174,
+          "com_perpendicular_offset": 0.0418156121284052,
+          "inertia": 0.01475082830876459,
+          "inertia_about_hip": 0.028707630667142176,
           "length": 0.3764
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.1107269564167739,
-          "com_perpendicular_offset": 0.04029941411721906,
-          "inertia": 0.01473452430091548,
-          "inertia_about_hip": 0.029324470364916574,
+          "com_distance": 0.11072695641677388,
+          "com_perpendicular_offset": 0.04029941411721907,
+          "inertia": 0.014734524300915477,
+          "inertia_about_hip": 0.029324470364916567,
           "length": 0.3832
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.11315456910617064,
-          "com_perpendicular_offset": 0.03870415061322162,
-          "inertia": 0.014718814331442913,
-          "inertia_about_hip": 0.029955522577857854,
+          "com_distance": 0.11315456910602324,
+          "com_perpendicular_offset": 0.038704150613321914,
+          "inertia": 0.014718814331442993,
+          "inertia_about_hip": 0.02995552257781824,
           "length": 0.39
         }
       ],
       "right": [
         {
           "mass": 1.189999999999,
-          "com_distance": 0.03334095015921818,
-          "com_perpendicular_offset": 0.06490350301166704,
-          "inertia": 0.015522433088609842,
-          "inertia_about_hip": 0.0168452596480569,
+          "com_distance": 0.03334095015921754,
+          "com_perpendicular_offset": 0.06490350301166702,
+          "inertia": 0.015522433088609865,
+          "inertia_about_hip": 0.016845259648056873,
           "length": 0.186
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.03633974209520018,
-          "com_perpendicular_offset": 0.06449935889231133,
-          "inertia": 0.015519509831032225,
-          "inertia_about_hip": 0.017090996289130245,
+          "com_distance": 0.03633974209521332,
+          "com_perpendicular_offset": 0.06449935889229325,
+          "inertia": 0.015519509831028948,
+          "inertia_about_hip": 0.017090996289128104,
           "length": 0.1928
         },
         {
@@ -325,226 +325,226 @@
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.042176806467499675,
-          "com_perpendicular_offset": 0.06359895673783915,
-          "inertia": 0.015497655216678063,
-          "inertia_about_hip": 0.017614525991194622,
+          "com_distance": 0.042176806474022305,
+          "com_perpendicular_offset": 0.06359895673674817,
+          "inertia": 0.015497655216642429,
+          "inertia_about_hip": 0.017614525991813734,
           "length": 0.2064
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.04502601926767489,
-          "com_perpendicular_offset": 0.06310412468616314,
-          "inertia": 0.015479841341644113,
-          "inertia_about_hip": 0.017892378810842793,
+          "com_distance": 0.04502601926802355,
+          "com_perpendicular_offset": 0.06310412468620255,
+          "inertia": 0.015479841341626974,
+          "inertia_about_hip": 0.017892378810863016,
           "length": 0.2132
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.04783515354679005,
-          "com_perpendicular_offset": 0.06258017752288357,
-          "inertia": 0.015458040916904291,
-          "inertia_about_hip": 0.01818100119556753,
+          "com_distance": 0.047835153546790146,
+          "com_perpendicular_offset": 0.06258017752288353,
+          "inertia": 0.015458040916904265,
+          "inertia_about_hip": 0.018181001195567516,
           "length": 0.22
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.05060810415675023,
-          "com_perpendicular_offset": 0.06202739086823089,
-          "inertia": 0.015432625193710019,
-          "inertia_about_hip": 0.01848042963925263,
+          "com_distance": 0.05060810415677135,
+          "com_perpendicular_offset": 0.06202739086822823,
+          "inertia": 0.01543262519370681,
+          "inertia_about_hip": 0.018480429639251963,
           "length": 0.2268
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.05334830445774221,
-          "com_perpendicular_offset": 0.06144589611800413,
-          "inertia": 0.015403913848468105,
-          "inertia_about_hip": 0.018790703338799248,
+          "com_distance": 0.05334830445177735,
+          "com_perpendicular_offset": 0.061445896119308424,
+          "inertia": 0.015403913848534345,
+          "inertia_about_hip": 0.018790703338108138,
           "length": 0.2336
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.056058794868712,
-          "com_perpendicular_offset": 0.06083569196411193,
-          "inertia": 0.015372184003802882,
-          "inertia_about_hip": 0.019111864297537213,
+          "com_distance": 0.05605879486870445,
+          "com_perpendicular_offset": 0.06083569196410727,
+          "inertia": 0.015372184003802216,
+          "inertia_about_hip": 0.01911186429753554,
           "length": 0.2404
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.05874227982972612,
+          "com_distance": 0.05874227982972607,
           "com_perpendicular_offset": 0.06019665300617111,
-          "inertia": 0.015337677498549734,
-          "inertia_about_hip": 0.019443957471662963,
+          "inertia": 0.015337677498549728,
+          "inertia_about_hip": 0.01944395747166295,
           "length": 0.2472
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.06140117534453887,
-          "com_perpendicular_offset": 0.059528535791792334,
-          "inertia": 0.015300606795990854,
-          "inertia_about_hip": 0.019787030953079147,
+          "com_distance": 0.061401175344538955,
+          "com_perpendicular_offset": 0.059528535791792306,
+          "inertia": 0.015300606795990851,
+          "inertia_about_hip": 0.019787030953079154,
           "length": 0.254
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.06403764916926911,
-          "com_perpendicular_offset": 0.05883098252251425,
+          "com_distance": 0.06403764916926236,
+          "com_perpendicular_offset": 0.0588309825225152,
           "inertia": 0.015261159811010044,
-          "inertia_about_hip": 0.02014113621924635,
+          "inertia_about_hip": 0.02014113621924532,
           "length": 0.26080000000000003
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.06665365467896676,
-          "com_perpendicular_offset": 0.05810352264107916,
-          "inertia": 0.015219503893202885,
-          "inertia_about_hip": 0.02050632841485335,
+          "com_distance": 0.06665365467900358,
+          "com_perpendicular_offset": 0.058103522641062236,
+          "inertia": 0.015219503893196379,
+          "inertia_about_hip": 0.020506328414852684,
           "length": 0.2676
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.06925095980839151,
-          "com_perpendicular_offset": 0.05734557236252994,
-          "inertia": 0.015175789133155662,
-          "inertia_about_hip": 0.02088266670006718,
+          "com_distance": 0.06925095980840436,
+          "com_perpendicular_offset": 0.05734557236254824,
+          "inertia": 0.015175789133156332,
+          "inertia_about_hip": 0.02088266670006997,
           "length": 0.2744
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.07183117205584032,
-          "com_perpendicular_offset": 0.05655643222437952,
-          "inertia": 0.015130151122145476,
-          "inertia_about_hip": 0.02127021468405004,
+          "com_distance": 0.0718311720558493,
+          "com_perpendicular_offset": 0.05655643222438118,
+          "inertia": 0.015130151122144523,
+          "inertia_about_hip": 0.021270214684050624,
           "length": 0.2812
         },
         {
           "mass": 1.189999999999,
           "com_distance": 0.07439575986371924,
-          "com_perpendicular_offset": 0.05573528261029465,
-          "inertia": 0.015082713291285813,
-          "inertia_about_hip": 0.021669040903263492,
+          "com_perpendicular_offset": 0.055735282610294604,
+          "inertia": 0.015082713291285809,
+          "inertia_about_hip": 0.02166904090326349,
           "length": 0.28800000000000003
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.0769460716045053,
-          "com_perpendicular_offset": 0.05488117716386313,
-          "inertia": 0.015033588888769864,
-          "inertia_about_hip": 0.022079219431849074,
+          "com_distance": 0.07694607160973145,
+          "com_perpendicular_offset": 0.05488117716189374,
+          "inertia": 0.01503358888868004,
+          "inertia_about_hip": 0.022079219432716325,
           "length": 0.2948
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.07948335222135375,
-          "com_perpendicular_offset": 0.053993033925292276,
-          "inertia": 0.014982882684563062,
-          "inertia_about_hip": 0.022500830588165842,
+          "com_distance": 0.07948335222132401,
+          "com_perpendicular_offset": 0.053993033925277996,
+          "inertia": 0.014982882684563575,
+          "inertia_about_hip": 0.02250083058816073,
           "length": 0.3016
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.08200875818148336,
-          "com_perpendicular_offset": 0.053069623938757436,
-          "inertia": 0.014930692448438265,
-          "inertia_about_hip": 0.022933961786409666,
+          "com_distance": 0.08200875818148332,
+          "com_perpendicular_offset": 0.05306962393875743,
+          "inertia": 0.014930692448438266,
+          "inertia_about_hip": 0.02293396178640966,
           "length": 0.3084
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.08452337119489187,
-          "com_perpendicular_offset": 0.05210955701010551,
-          "inertia": 0.01487711024287858,
-          "inertia_about_hip": 0.023378708573869315,
+          "com_distance": 0.08452337119489357,
+          "com_perpendicular_offset": 0.05210955701010541,
+          "inertia": 0.01487711024287867,
+          "inertia_about_hip": 0.023378708573869745,
           "length": 0.31520000000000004
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.08702821092494185,
-          "com_perpendicular_offset": 0.051111264133314266,
-          "inertia": 0.014822223577088248,
-          "inertia_about_hip": 0.023835175878268115,
+          "com_distance": 0.08702821092494184,
+          "com_perpendicular_offset": 0.05111126413331432,
+          "inertia": 0.014822223577088234,
+          "inertia_about_hip": 0.023835175878268097,
           "length": 0.322
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.08952424722070357,
-          "com_perpendicular_offset": 0.05007297604454271,
-          "inertia": 0.014766116443079146,
-          "inertia_about_hip": 0.024303479543187175,
+          "com_distance": 0.08952424722646324,
+          "com_perpendicular_offset": 0.050072976042094576,
+          "inertia": 0.014766116442949388,
+          "inertia_about_hip": 0.024303479544284617,
           "length": 0.3288
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09201241227318302,
-          "com_perpendicular_offset": 0.04899269712023116,
-          "inertia": 0.01470887026085525,
-          "inertia_about_hip": 0.024783748235519723,
+          "com_distance": 0.09201241227318407,
+          "com_perpendicular_offset": 0.04899269712023594,
+          "inertia": 0.014708870260852972,
+          "inertia_about_hip": 0.024783748235517676,
           "length": 0.3356
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09449361300382061,
+          "com_distance": 0.0944936130038206,
           "com_perpendicular_offset": 0.04786817374483108,
-          "inertia": 0.01465056475762986,
-          "inertia_about_hip": 0.025276125806854753,
+          "inertia": 0.01465056475762987,
+          "inertia_about_hip": 0.02527612580685476,
           "length": 0.34240000000000004
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09696874458341546,
-          "com_perpendicular_offset": 0.0466968559365967,
-          "inertia": 0.01459127878147539,
-          "inertia_about_hip": 0.02578077431850555,
+          "com_distance": 0.09696874458342022,
+          "com_perpendicular_offset": 0.0466968559365781,
+          "inertia": 0.014591278781474449,
+          "inertia_about_hip": 0.025780774318505707,
           "length": 0.3492
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.09943870554492779,
-          "com_perpendicular_offset": 0.045475850842186874,
-          "inertia": 0.01453109107228233,
-          "inertia_about_hip": 0.026297877903208956,
+          "com_distance": 0.09943870554492815,
+          "com_perpendicular_offset": 0.04547585084218659,
+          "inertia": 0.014531091072282303,
+          "inertia_about_hip": 0.026297877903209015,
           "length": 0.356
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.10190441568235391,
-          "com_perpendicular_offset": 0.04420186651013159,
-          "inertia": 0.014470080977324737,
-          "inertia_about_hip": 0.026827647800633105,
+          "com_distance": 0.1019044156823603,
+          "com_perpendicular_offset": 0.04420186651013503,
+          "inertia": 0.014470080977323302,
+          "inertia_about_hip": 0.026827647800633223,
           "length": 0.3628
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.10436683846133094,
-          "com_perpendicular_offset": 0.04287114406470294,
-          "inertia": 0.014408329087805889,
-          "inertia_about_hip": 0.027370329082587116,
+          "com_distance": 0.10436683846132591,
+          "com_perpendicular_offset": 0.04287114406469636,
+          "inertia": 0.014408329087807188,
+          "inertia_about_hip": 0.02737032908258717,
           "length": 0.36960000000000004
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.10682701006341722,
-          "com_perpendicular_offset": 0.041479376746847554,
-          "inertia": 0.014345917762232702,
-          "inertia_about_hip": 0.02792620975633773,
+          "com_distance": 0.10682701006341716,
+          "com_perpendicular_offset": 0.04147937674684754,
+          "inertia": 0.014345917762232707,
+          "inertia_about_hip": 0.02792620975633772,
           "length": 0.3764
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.10928607920823664,
-          "com_perpendicular_offset": 0.04002161535917509,
-          "inertia": 0.01428293141207412,
-          "inertia_about_hip": 0.028495633471425856,
+          "com_distance": 0.10928607920823662,
+          "com_perpendicular_offset": 0.04002161535917502,
+          "inertia": 0.014282931412074134,
+          "inertia_about_hip": 0.028495633471425863,
           "length": 0.3832
         },
         {
           "mass": 1.189999999999,
-          "com_distance": 0.11174536379531134,
-          "com_perpendicular_offset": 0.03849216283054529,
-          "inertia": 0.01421945638622567,
-          "inertia_about_hip": 0.029079017718611495,
+          "com_distance": 0.11174536379531073,
+          "com_perpendicular_offset": 0.038492162830545,
+          "inertia": 0.014219456386225767,
+          "inertia_about_hip": 0.02907901771861143,
           "length": 0.39
         }
       ]
@@ -552,31 +552,31 @@
     "fit_diagnostics": {
       "left": {
         "com_affine_coefficients": [
-          0.37661298309648034,
-          -0.03285256661218412
+          0.37661298309638436,
+          -0.03285256661216967
         ],
-        "com_maximum_error": 0.001442197465868808,
+        "com_maximum_error": 0.001442197465877794,
         "inertia_quadratic_coefficients": [
-          -0.009378541820267752,
-          0.0036540418165730594,
-          0.014697379369101751
+          -0.009378541820244902,
+          0.003654041816558025,
+          0.014697379369104289
         ],
-        "inertia_maximum_error": 3.0149496043499827e-05,
-        "maximum_com_perpendicular_offset": 0.06585043388981801
+        "inertia_maximum_error": 3.0149496042304602e-05,
+        "maximum_com_perpendicular_offset": 0.06585043388981987
       },
       "right": {
         "com_affine_coefficients": [
-          0.38115884449304616,
-          -0.03600320542317907
+          0.3811588444933406,
+          -0.036003205422878416
         ],
-        "com_maximum_error": 0.0015513894933093311,
+        "com_maximum_error": 0.0015513894936653866,
         "inertia_quadratic_coefficients": [
-          -0.020115180225540548,
-          0.004921221657308943,
-          0.01533604749460524
+          -0.020115180224316638,
+          0.004921221656562191,
+          0.015336047494707069
         ],
-        "inertia_maximum_error": 3.305685917206168e-05,
-        "maximum_com_perpendicular_offset": 0.06490350301166704
+        "inertia_maximum_error": 3.3056859177312686e-05,
+        "maximum_com_perpendicular_offset": 0.06490350301166702
       }
     }
   },
@@ -602,27 +602,27 @@
     "timestep": 0.001,
     "q_diagonal": [
       90,
-      60,
+      260,
       40,
       15,
-      240,
-      4,
-      240,
-      4,
-      300,
-      60
+      60,
+      1,
+      60,
+      1,
+      900,
+      120
     ],
     "q_matrix_diagonal": [
       90.0,
-      60.0,
+      260.0,
       40.0,
       15.0,
-      1080.0,
-      18.0,
-      1080.0,
-      18.0,
-      300.0,
-      60.0
+      990.0,
+      16.5,
+      990.0,
+      16.5,
+      900.0,
+      120.0
     ],
     "q_matrix": [
       [
@@ -639,7 +639,7 @@
       ],
       [
         0.0,
-        60.0,
+        260.0,
         0.0,
         0.0,
         0.0,
@@ -678,33 +678,9 @@
         0.0,
         0.0,
         0.0,
-        1080.0,
+        990.0,
         0.0,
-        -840.0,
-        0.0,
-        0.0,
-        0.0
-      ],
-      [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        18.0,
-        0.0,
-        -14.0,
-        0.0,
-        0.0
-      ],
-      [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -840.0,
-        0.0,
-        1080.0,
+        -930.0,
         0.0,
         0.0,
         0.0
@@ -715,9 +691,21 @@
         0.0,
         0.0,
         0.0,
-        -14.0,
+        16.5,
         0.0,
-        18.0,
+        -15.5,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -930.0,
+        0.0,
+        990.0,
+        0.0,
         0.0,
         0.0
       ],
@@ -727,10 +715,10 @@
         0.0,
         0.0,
         0.0,
+        -15.5,
         0.0,
+        16.5,
         0.0,
-        0.0,
-        300.0,
         0.0
       ],
       [
@@ -742,23 +730,35 @@
         0.0,
         0.0,
         0.0,
+        900.0,
+        0.0
+      ],
+      [
         0.0,
-        60.0
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
       ]
     ],
     "leg_angle_cost": {
-      "common": 240,
+      "common": 60,
       "difference": 1920.0,
-      "coupling": -840.0
+      "coupling": -930.0
     },
     "leg_angular_velocity_cost": {
-      "common": 4,
+      "common": 1,
       "difference": 32.0,
-      "coupling": -14.0
+      "coupling": -15.5
     },
     "r_diagonal": [
-      3.2,
-      3.2,
+      1.6,
+      1.6,
       0.7,
       0.7
     ],
@@ -776,16 +776,16 @@
       0.186
     ],
     "physical_parameters": {
-      "wheel_radius": 0.05800000339922101,
+      "wheel_radius": 0.058000003399221026,
       "half_track": 0.20775,
       "body_com_height": 0.013000000000000005,
       "wheel_mass": 0.71,
       "leg_mass": 1.189999999999,
       "body_mass": 17.65,
       "gravity": 9.81,
-      "wheel_inertia": 0.001194219999999648,
+      "wheel_inertia": 0.0011942199999996482,
       "body_pitch_inertia": 0.367565,
-      "body_yaw_inertia": 0.5880290535917361
+      "body_yaw_inertia": 0.5880290535917163
     }
   },
   "schedule": {
@@ -795,250 +795,250 @@
     "coefficients": [
       [
         [
-          -0.031718116253614426,
-          0.0945076048374176,
-          -0.19106525182724,
-          -3.3755414485931396
+          -0.03215622529387474,
+          0.08545789122581482,
+          -0.16234244406223297,
+          -4.69228982925415
         ],
         [
-          -0.02256087027490139,
-          0.07743923366069794,
-          -0.29615217447280884,
-          -4.649737358093262
+          -0.05405207350850105,
+          0.1643417924642563,
+          -0.5733588933944702,
+          -9.87899398803711
         ],
         [
-          0.006166037172079086,
-          -0.05058005079627037,
-          0.48488691449165344,
-          -0.694118857383728
+          0.012975501827895641,
+          -0.06723854690790176,
+          0.6168360114097595,
+          -0.602774977684021
         ],
         [
-          0.0013380140298977494,
-          -0.022434765473008156,
-          0.37531134486198425,
-          -0.4513242542743683
+          0.004656598437577486,
+          -0.02990761399269104,
+          0.4849398136138916,
+          -0.3541005849838257
         ],
         [
-          -0.16214022040367126,
-          0.5125502943992615,
-          -3.7597758769989014,
-          -22.423864364624023
+          -0.1686837077140808,
+          0.6863329410552979,
+          -6.549530029296875,
+          -33.298091888427734
         ],
         [
-          -0.014257160015404224,
-          0.02196481078863144,
-          -0.62787926197052,
-          -2.7443957328796387
+          -0.009377329610288143,
+          0.010113799013197422,
+          -1.303853154182434,
+          -4.530311584472656
         ],
         [
-          0.01092466525733471,
-          -0.0023278335575014353,
-          0.5037670135498047,
-          1.8029719591140747
+          0.026491181924939156,
+          0.10712763667106628,
+          -1.1278181076049805,
+          0.7631029486656189
         ],
         [
-          0.014634102582931519,
-          -0.04058822989463806,
-          -0.27931100130081177,
-          -0.006859913934022188
+          0.024862442165613174,
+          -0.06380979716777802,
+          -0.8685674667358398,
+          -0.6335044503211975
         ],
         [
-          0.07272699475288391,
-          -0.30949151515960693,
-          1.035865068435669,
-          -3.0958359241485596
+          0.1563284546136856,
+          -0.5874738097190857,
+          1.8878977298736572,
+          -5.913819313049316
         ],
         [
-          0.03105081245303154,
-          -0.13373705744743347,
-          0.4491235911846161,
-          -1.3324847221374512
+          0.05860865116119385,
+          -0.21964125335216522,
+          0.707122266292572,
+          -2.2391469478607178
         ]
       ],
       [
         [
-          -0.03082677349448204,
-          0.08835446834564209,
-          -0.18066754937171936,
-          -3.3760502338409424
+          -0.029116395860910416,
+          0.07406749576330185,
+          -0.15029694139957428,
+          -4.692983150482178
         ],
         [
-          -0.021395444869995117,
-          0.06929479539394379,
-          -0.2818535566329956,
-          -4.65022611618042
+          -0.048365939408540726,
+          0.14139071106910706,
+          -0.5478910207748413,
+          -9.880194664001465
         ],
         [
-          -0.005284885875880718,
-          0.04973283037543297,
-          -0.4855300784111023,
-          0.6919102668762207
+          -0.011846006847918034,
+          0.0664600357413292,
+          -0.6167978048324585,
+          0.5995371341705322
         ],
         [
-          -0.0006653678719885647,
-          0.021748915314674377,
-          -0.37566497921943665,
-          0.44952696561813354
+          -0.0037980997003614902,
+          0.02931727096438408,
+          -0.4847109317779541,
+          0.3514408469200134
         ],
         [
-          0.0070090447552502155,
-          -0.018710598349571228,
-          0.5480571389198303,
-          1.8110984563827515
+          0.028207918629050255,
+          0.06837204843759537,
+          -1.0784971714019775,
+          0.7714453935623169
         ],
         [
-          0.014084117487072945,
-          -0.04247086122632027,
-          -0.2733304798603058,
-          -0.005792219657450914
+          0.02473585680127144,
+          -0.06880424171686172,
+          -0.861329197883606,
+          -0.6320706009864807
         ],
         [
-          -0.1588420867919922,
-          0.5098592042922974,
-          -3.7565009593963623,
-          -22.431453704833984
+          -0.17077824473381042,
+          0.6838085651397705,
+          -6.526611804962158,
+          -33.307472229003906
         ],
         [
-          -0.014332125894725323,
-          0.022120898589491844,
-          -0.6252592206001282,
-          -2.7451512813568115
+          -0.010593708604574203,
+          0.010004403069615364,
+          -1.2972569465637207,
+          -4.531641960144043
         ],
         [
-          0.07376812398433685,
-          -0.3105308711528778,
-          1.035517930984497,
-          -3.0956530570983887
+          0.15835289657115936,
+          -0.5901809930801392,
+          1.8882800340652466,
+          -5.914026260375977
         ],
         [
-          0.03147781640291214,
-          -0.13409848511219025,
-          0.44886285066604614,
-          -1.332411766052246
+          0.059428777545690536,
+          -0.22083067893981934,
+          0.7074236273765564,
+          -2.239208936691284
         ]
       ],
       [
         [
-          -0.03724689781665802,
-          0.22558662295341492,
-          -0.8719484210014343,
-          2.4570083618164062
+          -0.059964023530483246,
+          0.23128913342952728,
+          -0.7449491620063782,
+          2.032902240753174
         ],
         [
-          -0.06373412162065506,
-          0.3053090274333954,
-          -1.087865948677063,
-          3.1688005924224854
+          -0.11340010911226273,
+          0.43376094102859497,
+          -1.4191298484802246,
+          4.130853176116943
         ],
         [
-          -0.0370643213391304,
-          0.1550155133008957,
-          -0.29761049151420593,
-          -5.102066516876221
+          -0.02716420590877533,
+          0.11193986982107162,
+          -0.15632109344005585,
+          -5.230389595031738
         ],
         [
-          -0.020965775474905968,
-          0.11932402849197388,
-          -0.3601209223270416,
-          -3.7967658042907715
+          -0.015167588368058205,
+          0.09227405488491058,
+          -0.26010584831237793,
+          -3.8502485752105713
         ],
         [
-          -0.004768132697790861,
-          0.17983998358249664,
-          -0.34114769101142883,
-          25.530662536621094
+          0.007368131540715694,
+          -0.06434989720582962,
+          0.5262997150421143,
+          22.03782844543457
         ],
         [
-          -0.006316596642136574,
-          0.07502375543117523,
-          -0.15522193908691406,
-          2.4325804710388184
+          -0.003130995901301503,
+          0.03378382325172424,
+          -0.004054301418364048,
+          2.1377310752868652
         ],
         [
-          -0.02012418769299984,
-          0.276340126991272,
-          -2.032681465148926,
-          -14.220823287963867
+          0.06614658981561661,
+          0.06036128103733063,
+          -1.687264323234558,
+          -11.209221839904785
         ],
         [
-          0.005173403769731522,
-          -0.05429187789559364,
-          0.025952555239200592,
-          -0.7633334994316101
+          0.016851194202899933,
+          -0.08244886994361877,
+          0.07837285846471786,
+          -0.3373931348323822
         ],
         [
-          -0.18137376010417938,
-          0.47162026166915894,
-          -0.873033344745636,
-          -14.281785011291504
+          -0.20593416690826416,
+          0.5115569829940796,
+          -0.9407124519348145,
+          -24.42133903503418
         ],
         [
-          -0.07796086370944977,
-          0.20297729969024658,
-          -0.37524089217185974,
-          -6.319196701049805
+          -0.07781674712896347,
+          0.193565234541893,
+          -0.3575110137462616,
+          -8.983671188354492
         ]
       ],
       [
         [
-          -0.03852369636297226,
-          0.2332775592803955,
-          -0.882291316986084,
-          2.4496960639953613
+          -0.06158945709466934,
+          0.23737271130084991,
+          -0.749798059463501,
+          2.024921417236328
         ],
         [
-          -0.06545086205005646,
-          0.31587445735931396,
-          -1.103203535079956,
-          3.159278631210327
+          -0.11658265441656113,
+          0.4465446174144745,
+          -1.4306766986846924,
+          4.114833354949951
         ],
         [
-          0.03652519732713699,
-          -0.15504921972751617,
-          0.298886239528656,
-          5.102648735046387
+          0.026786411181092262,
+          -0.11195654422044754,
+          0.15676304697990417,
+          5.231079578399658
         ],
         [
-          0.02048606425523758,
-          -0.11920977383852005,
-          0.3609471023082733,
-          3.7973508834838867
+          0.014829779043793678,
+          -0.09219490736722946,
+          0.2603030204772949,
+          3.8509085178375244
         ],
         [
-          -0.023621637374162674,
-          0.31119853258132935,
-          -2.0924689769744873,
-          -14.236774444580078
+          0.0591779425740242,
+          0.09222076088190079,
+          -1.7263987064361572,
+          -11.228750228881836
         ],
         [
-          0.005184556823223829,
-          -0.05027886480093002,
-          0.015922192484140396,
-          -0.7665011286735535
+          0.016479892656207085,
+          -0.07856921851634979,
+          0.07083319127559662,
+          -0.3414458930492401
         ],
         [
-          -0.002401533769443631,
-          0.17472265660762787,
-          -0.3457454741001129,
-          25.521387100219727
+          0.012276793830096722,
+          -0.06512115895748138,
+          0.5097893476486206,
+          22.02667999267578
         ],
         [
-          -0.005315893329679966,
-          0.07409744709730148,
-          -0.15951846539974213,
-          2.430525779724121
+          -0.0018239853670820594,
+          0.03375505283474922,
+          -0.009902817197144032,
+          2.1351583003997803
         ],
         [
-          -0.1801242083311081,
-          0.4691675007343292,
-          -0.8692993521690369,
-          -14.286648750305176
+          -0.20431330800056458,
+          0.5089999437332153,
+          -0.9368807673454285,
+          -24.426925659179688
         ],
         [
-          -0.07736562192440033,
-          0.20177653431892395,
-          -0.3735050559043884,
-          -6.3212480545043945
+          -0.07726515084505081,
+          0.19273246824741364,
+          -0.3561513125896454,
+          -8.985844612121582
         ]
       ]
     ],
@@ -1050,7 +1050,7 @@
         -0.0864035040140152
       ],
       [
-        8.938493010646198e-06,
+        8.938492101151496e-06,
         -1.4802705663896631e-05,
         2.4400795155088417e-05,
         0.08631860464811325
@@ -1071,20 +1071,20 @@
   },
   "validation": {
     "legacy": {
-      "maximum_coefficient_difference": 4.962483757253722e-10,
-      "maximum_fit_error": 0.024836971963239307,
-      "maximum_raw_eigenvalue": 0.9950967306397711,
-      "maximum_are_residual": 2.951416888663516e-12
+      "maximum_coefficient_difference": 4.974873846208538e-10,
+      "maximum_fit_error": 0.024836971963576815,
+      "maximum_raw_eigenvalue": 0.9950967306397708,
+      "maximum_are_residual": 2.0264900868482982e-12
     },
     "current": {
       "minimum_controllability_rank": 10,
-      "maximum_raw_eigenvalue": 0.9985123183298014,
-      "maximum_fitted_eigenvalue": 0.9985141324932973,
-      "maximum_are_residual": 1.293368190324884e-12,
-      "maximum_fit_error": 0.01262971807008384,
-      "maximum_float_horner_error": 1.1379375450815132e-06,
-      "maximum_yaw_feedforward_inverse_residual": 0.00014073528246050238,
-      "maximum_yaw_feedforward_fit_error": 1.974477190919144e-05
+      "maximum_raw_eigenvalue": 0.9994105522178259,
+      "maximum_fitted_eigenvalue": 0.9994105720661819,
+      "maximum_are_residual": 3.060940390042788e-12,
+      "maximum_fit_error": 0.016261063126108866,
+      "maximum_float_horner_error": 2.454082490999099e-06,
+      "maximum_yaw_feedforward_inverse_residual": 0.0001407352824676078,
+      "maximum_yaw_feedforward_fit_error": 1.974477195598734e-05
     }
   }
 }

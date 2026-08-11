@@ -133,3 +133,16 @@ Linux:
 ```
 
 The benchmark writes `summary.csv` and `trace.csv` into the selected output directory under the ignored build tree.
+
+The fixed cross figure-eight motion case is kept out of the default axis suite.
+Run it explicitly with:
+
+```bash
+./build/rm_balance_performance \
+  models/MJCF/COD-2026RoboMaster-Balance.xml \
+  build/performance/figure-eight \
+  --case figure_eight_cross --trace-stride 1
+```
+
+The same case can be replayed in the GUI with
+`./build/rm_balance_sim <model.xml> --case figure_eight_cross`.

@@ -11,10 +11,11 @@ namespace {
 
 constexpr double kTimestepSeconds = 0.001;
 constexpr double kMinimumLegLength = 0.13;
-constexpr double kMaximumLegLength = 0.20;
+constexpr double kMaximumLegLength = 0.39;
 constexpr double kForwardBaseTolerance = 0.10;
 constexpr double kYawBaseTolerance = 0.20;
 constexpr double kRelativeTrackingTolerance = 0.10;
+constexpr double kCombinedForwardTrackingTolerance = 0.30;
 
 bc_controller_config_t controller_config(
     const std::optional<double> leg_length,
@@ -87,7 +88,7 @@ PerformanceBenchmark::PerformanceBenchmark(
         "tracking_mean_error", "tracking_rmse", "settle_mean_ds",
         "settle_rmse_ds", "settle_mean_dpsi", "settle_rmse_dpsi",
         "max_heading_error", "heading_error_rmse",
-        "stop_peak_abs_dpsi",
+        "stop_peak_abs_dpsi", "path_closure_error",
         "peak_raw_wheel_l", "peak_raw_wheel_r",
         "peak_raw_joint_l_front", "peak_raw_joint_l_rear",
         "peak_raw_joint_r_front", "peak_raw_joint_r_rear",
@@ -243,7 +244,8 @@ void PerformanceBenchmark::write_summary(
         .value(result.settle_yaw.rms())
         .value(result.maximum_heading_error)
         .value(result.heading_error.rms())
-        .value(result.stop_peak_yaw_rate);
+        .value(result.stop_peak_yaw_rate)
+        .value(result.path_closure_error);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         summary_.value(result.common.peak_wheel_torque(side));
     }
@@ -374,10 +376,27 @@ bool PerformanceBenchmark::collect(
     }
 
     if (evaluate_tracking) {
-        const int index = result.spec.axis == PerformanceAxis::forward ?
-            BC_STATE_DS : BC_STATE_DPSI;
-        result.tracking_error.add(
-            snapshot.state.value[index] - result.spec.target);
+        if (result.spec.axis == PerformanceAxis::combined) {
+            result.tracking_error.add(
+                snapshot.state.value[BC_STATE_DS] -
+                snapshot.state_reference.value[BC_STATE_DS]);
+            if (!result.path_start_captured &&
+                std::string_view(phase) == "figure_eight_straight_one") {
+                result.path_start_x = sample.base.x;
+                result.path_start_y = sample.base.y;
+                result.path_start_captured = true;
+            }
+            if (result.path_start_captured) {
+                result.path_end_x = sample.base.x;
+                result.path_end_y = sample.base.y;
+            }
+        } else {
+            const int index =
+                result.spec.axis == PerformanceAxis::forward ?
+                    BC_STATE_DS : BC_STATE_DPSI;
+            result.tracking_error.add(
+                snapshot.state.value[index] - result.spec.target);
+        }
     }
     if (evaluate_settle) {
         result.settle_forward.add(snapshot.state.value[BC_STATE_DS]);
@@ -396,6 +415,8 @@ void PerformanceBenchmark::finish_result(
     PerformanceResult &result
 ) const {
     const double tracking_tolerance =
+        result.spec.axis == PerformanceAxis::combined ?
+            kCombinedForwardTrackingTolerance :
         result.spec.axis == PerformanceAxis::forward ?
             std::max(
                 kForwardBaseTolerance,
@@ -414,6 +435,11 @@ void PerformanceBenchmark::finish_result(
         result.settle_forward.rms() <= kForwardBaseTolerance &&
         std::abs(result.settle_yaw.mean()) <= kYawBaseTolerance &&
         result.settle_yaw.rms() <= kYawBaseTolerance;
+    if (result.path_start_captured) {
+        result.path_closure_error = std::hypot(
+            result.path_end_x - result.path_start_x,
+            result.path_end_y - result.path_start_y);
+    }
 }
 
 void PerformanceBenchmark::write_trace(

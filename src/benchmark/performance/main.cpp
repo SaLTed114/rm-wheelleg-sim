@@ -53,6 +53,8 @@ void print_result(const PerformanceResult &result) {
               << result.tracking_error.rms()
               << " heading=" << std::setw(10)
               << result.heading_error.rms()
+              << " closure=" << std::setw(10)
+              << result.path_closure_error
               << " stop_yaw_peak=" << std::setw(10)
               << result.stop_peak_yaw_rate
               << " pitch=" << std::setw(8)
