@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "balance/math_utils.h"
+#include "performance_metrics.hpp"
 
 namespace balance::benchmark {
 namespace {
@@ -15,10 +16,13 @@ constexpr double kMaximumLegLength = 0.39;
 constexpr double kForwardBaseTolerance = 0.10;
 constexpr double kYawBaseTolerance = 0.20;
 constexpr double kRelativeTrackingTolerance = 0.10;
-constexpr double kCombinedForwardTrackingTolerance = 0.30;
+constexpr double kFormalForwardT90Limit = 0.8;
+constexpr double kFormalPitchLimit = 6.0 * BC_PI / 180.0;
+constexpr double kFigureEightClosureTolerance = 0.15;
 
 bc_controller_config_t controller_config(
     const std::optional<double> leg_length,
+    const std::optional<double> forward_acceleration_rate,
     const std::optional<double> yaw_acceleration_feedforward_scale
 ) {
     bc_controller_config_t config{};
@@ -29,6 +33,15 @@ bc_controller_config_t controller_config(
                 "leg length must be finite and positive");
         }
         config.motion.leg_length = static_cast<float>(*leg_length);
+    }
+    if (forward_acceleration_rate) {
+        if (!std::isfinite(*forward_acceleration_rate) ||
+            *forward_acceleration_rate <= 0.0) {
+            throw std::invalid_argument(
+                "forward acceleration rate must be finite and positive");
+        }
+        config.motion.forward_reference.velocity_ramp.rate_limit =
+            static_cast<float>(*forward_acceleration_rate);
     }
     if (yaw_acceleration_feedforward_scale) {
         if (!std::isfinite(*yaw_acceleration_feedforward_scale) ||
@@ -46,12 +59,21 @@ double effective_yaw_acceleration_feedforward_scale(
     const std::optional<double> override
 ) {
     const bc_controller_config_t config =
-        controller_config(std::nullopt, override);
+        controller_config(std::nullopt, std::nullopt, override);
     return config.control.lqr_compensation.
         yaw_acceleration_feedforward_scale;
 }
 
 } // namespace
+
+bc_controller_config_t performance_controller_config(
+    const PerformanceBenchmarkConfig &config
+) {
+    return controller_config(
+        config.leg_length,
+        config.forward_acceleration_rate,
+        config.yaw_acceleration_feedforward_scale);
+}
 
 PerformanceBenchmark::PerformanceBenchmark(
     const std::filesystem::path &model_path,
@@ -59,36 +81,42 @@ PerformanceBenchmark::PerformanceBenchmark(
     const PerformanceBenchmarkConfig &config
 ) : plant_(model_path, kTimestepSeconds),
     adapter_(plant_.model()),
-    runner_(plant_, adapter_, controller_config(
-        config.leg_length,
-        config.yaw_acceleration_feedforward_scale)),
+    runner_(plant_, adapter_, performance_controller_config(config)),
     sampler_(plant_.model()),
     roll_restraint_(plant_.model(), config.roll_restrained),
     forward_velocity_(
         config.forward_velocity_observation,
-        controller_config(
-            config.leg_length,
-            config.yaw_acceleration_feedforward_scale).
+        performance_controller_config(config).
                 control.observer.wheel_radius),
     summary_(output_directory / "summary.csv", {
-        "case", "axis", "target", "command_rate",
+        "case", "kind", "forward_target", "yaw_target",
+        "forward_rate", "yaw_rate",
         "coupled_forward_velocity", "forward_lead_seconds",
         "target_hold_seconds",
         "stop_settle_seconds", "standing_seconds", "leg_length_target",
         "forward_velocity_observation", "roll_restrained",
         "yaw_acceleration_feedforward_scale",
-        "completed", "balance_engaged",
-        "leg_length_valid", "finite",
-        "tracked", "settled", "issue", "issue_phase",
-        "wheel_contact_ratio", "other_contact_steps", "max_pitch_deg",
+        "completed", "balance_engaged", "leg_length_valid", "finite",
+        "valid", "response_pass", "stop_pass", "contact_free",
+        "unsaturated", "entry_ready", "entry_timed_out",
+        "entry_wait_seconds", "issue", "issue_phase",
+        "t10", "t50", "t90", "t10_t90_acceleration", "overshoot",
+        "wheel_contact_ratio", "wheel_contact_ratio_l",
+        "wheel_contact_ratio_r", "minimum_normal_force_l",
+        "minimum_normal_force_r", "other_contact_steps", "max_pitch_deg",
         "max_roll_deg", "max_leg_common_deg", "max_leg_difference_deg",
         "peak_roll_force_request",
         "peak_roll_restraint_torque", "min_vertical_l", "min_vertical_r",
-        "initial_s_error",
-        "tracking_mean_error", "tracking_rmse", "settle_mean_ds",
+        "initial_s_error", "forward_mean_error", "forward_rmse",
+        "yaw_mean_error", "yaw_rmse", "actual_forward_mean",
+        "actual_yaw_mean", "lateral_acceleration_mean",
+        "path_closure_error",
+        "hold_wheel_contact_ratio", "hold_wheel_contact_ratio_l",
+        "hold_wheel_contact_ratio_r", "hold_minimum_normal_force_l",
+        "hold_minimum_normal_force_r", "settle_mean_ds",
         "settle_rmse_ds", "settle_mean_dpsi", "settle_rmse_dpsi",
         "max_heading_error", "heading_error_rmse",
-        "stop_peak_abs_dpsi", "path_closure_error",
+        "stop_peak_abs_dpsi",
         "peak_raw_wheel_l", "peak_raw_wheel_r",
         "peak_raw_joint_l_front", "peak_raw_joint_l_rear",
         "peak_raw_joint_r_front", "peak_raw_joint_r_rear",
@@ -97,9 +125,10 @@ PerformanceBenchmark::PerformanceBenchmark(
         "joint_saturation_r_front", "joint_saturation_r_rear",
     }),
     trace_(output_directory / "trace.csv", {
-        "case", "phase", "simulation_time", "command_rate",
+        "case", "phase", "simulation_time", "forward_rate", "yaw_rate",
         "leg_length_target", "forward_velocity_observation",
-        "base_x", "base_y", "base_z", "base_forward_velocity",
+        "base_x", "base_y", "base_z", "axle_x", "axle_y",
+        "base_forward_velocity",
         "base_vertical_velocity", "imu_specific_force_x",
         "imu_specific_force_y", "imu_specific_force_z",
         "imu_linear_acceleration_x", "imu_linear_acceleration_y",
@@ -146,9 +175,7 @@ PerformanceBenchmark::PerformanceBenchmark(
         throw std::invalid_argument("trace stride must be positive");
     }
     const bc_controller_config_t controller =
-        controller_config(
-            config.leg_length,
-            config.yaw_acceleration_feedforward_scale);
+        performance_controller_config(config);
     leg_length_target_ = controller.motion.leg_length;
 }
 
@@ -173,7 +200,18 @@ PerformanceResult PerformanceBenchmark::run(
         result.balance_engaged = result.balance_engaged ||
             runner_.snapshot().state_machine.motion ==
                 BC_MOTION_ACTIVE;
-        scenario.update(runner_.snapshot(), plant_.data().time);
+        const GroundContactState contact =
+            sampler_.read_contacts(plant_.data());
+        scenario.update(
+            runner_.snapshot(), plant_.data().time,
+            contact.wheel[BC_L] && contact.wheel[BC_R]);
+        result.entry_ready = scenario.entry_ready();
+        result.entry_timed_out = scenario.entry_timed_out();
+        result.entry_wait_seconds = scenario.entry_wait_seconds();
+        if (result.entry_timed_out && result.issue == "none") {
+            result.issue = "entry_not_ready";
+            result.issue_phase = "entry_wait";
+        }
         if (scenario.finished()) break;
 
         PerformanceResult *monitored =
@@ -183,7 +221,8 @@ PerformanceResult PerformanceBenchmark::run(
                 scenario.gimbal(), monitored,
                 scenario.tracking_evaluation(),
                 scenario.settle_evaluation(),
-                scenario.phase() == PerformancePhase::stop_ramp ||
+                scenario.phase() == PerformancePhase::yaw_stop_ramp ||
+                    scenario.phase() == PerformancePhase::forward_stop_ramp ||
                     scenario.phase() == PerformancePhase::stop_settle)) {
             finish_result(result);
             return result;
@@ -204,9 +243,11 @@ void PerformanceBenchmark::write_summary(
 ) {
     summary_.begin_row();
     summary_.value(result.spec.name)
-        .value(performance_axis_name(result.spec.axis))
-        .value(result.spec.target)
-        .value(result.spec.command_rate)
+        .value(performance_case_kind_name(result.spec.kind))
+        .value(result.spec.forward_target)
+        .value(result.spec.yaw_target)
+        .value(result.spec.forward_rate)
+        .value(result.spec.yaw_rate)
         .value(result.spec.coupled_forward_velocity)
         .value(result.spec.forward_lead_seconds)
         .value(result.spec.target_hold_seconds)
@@ -221,11 +262,26 @@ void PerformanceBenchmark::write_summary(
         .value(result.balance_engaged)
         .value(result.leg_length_valid)
         .value(result.common.finite())
-        .value(result.tracked)
-        .value(result.settled)
+        .value(result.valid)
+        .value(result.response_pass)
+        .value(result.stop_pass)
+        .value(result.contact_free)
+        .value(result.unsaturated)
+        .value(result.entry_ready)
+        .value(result.entry_timed_out)
+        .value(result.entry_wait_seconds)
         .value(result.issue)
         .value(result.issue_phase)
+        .value(result.t10)
+        .value(result.t50)
+        .value(result.t90)
+        .value(result.t10_t90_acceleration)
+        .value(result.overshoot)
         .value(result.common.wheel_contact_ratio())
+        .value(result.common.wheel_contact_ratio(BC_L))
+        .value(result.common.wheel_contact_ratio(BC_R))
+        .value(result.common.minimum_wheel_normal_force(BC_L))
+        .value(result.common.minimum_wheel_normal_force(BC_R))
         .value(result.common.other_contact_count())
         .value(result.maximum_pitch * 180.0 / BC_PI)
         .value(result.maximum_roll * 180.0 / BC_PI)
@@ -236,16 +292,26 @@ void PerformanceBenchmark::write_summary(
         .value(result.minimum_vertical_projection[BC_L])
         .value(result.minimum_vertical_projection[BC_R])
         .value(result.initial_position_error)
-        .value(result.tracking_error.mean())
-        .value(result.tracking_error.rms())
+        .value(result.forward_error.mean())
+        .value(result.forward_error.rms())
+        .value(result.yaw_error.mean())
+        .value(result.yaw_error.rms())
+        .value(result.actual_forward.mean())
+        .value(result.actual_yaw.mean())
+        .value(result.lateral_acceleration.mean())
+        .value(result.path_closure_error)
+        .value(result.hold.wheel_contact_ratio())
+        .value(result.hold.wheel_contact_ratio(BC_L))
+        .value(result.hold.wheel_contact_ratio(BC_R))
+        .value(result.hold.minimum_wheel_normal_force(BC_L))
+        .value(result.hold.minimum_wheel_normal_force(BC_R))
         .value(result.settle_forward.mean())
         .value(result.settle_forward.rms())
         .value(result.settle_yaw.mean())
         .value(result.settle_yaw.rms())
         .value(result.maximum_heading_error)
         .value(result.heading_error.rms())
-        .value(result.stop_peak_yaw_rate)
-        .value(result.path_closure_error);
+        .value(result.stop_peak_yaw_rate);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         summary_.value(result.common.peak_wheel_torque(side));
     }
@@ -324,6 +390,7 @@ bool PerformanceBenchmark::collect(
 ) const {
     const bc_controller_snapshot_t &snapshot = sample.controller;
     result.common.observe(sample);
+    if (evaluate_tracking) result.hold.observe(sample);
 
     const double pitch = std::abs(static_cast<double>(
         snapshot.state.value[BC_STATE_THETA_B]));
@@ -346,6 +413,8 @@ bool PerformanceBenchmark::collect(
             std::abs(static_cast<double>(
                 snapshot.state.value[BC_STATE_DPSI])));
     }
+
+    collect_response_timing(result, sample, stopping);
 
     if (!result.initial_position_error_captured) {
         result.initial_position_error =
@@ -376,26 +445,30 @@ bool PerformanceBenchmark::collect(
     }
 
     if (evaluate_tracking) {
-        if (result.spec.axis == PerformanceAxis::combined) {
-            result.tracking_error.add(
-                snapshot.state.value[BC_STATE_DS] -
-                snapshot.state_reference.value[BC_STATE_DS]);
-            if (!result.path_start_captured &&
-                std::string_view(phase) == "figure_eight_straight_one") {
-                result.path_start_x = sample.base.x;
-                result.path_start_y = sample.base.y;
+        const double actual_forward = snapshot.state.value[BC_STATE_DS];
+        const double actual_yaw = snapshot.state.value[BC_STATE_DPSI];
+        const bool trajectory =
+            result.spec.kind == PerformanceCaseKind::figure_eight;
+        const double forward_target = trajectory ?
+            snapshot.state_reference.value[BC_STATE_DS] :
+            result.spec.forward_target;
+        const double yaw_target = trajectory ?
+            snapshot.state_reference.value[BC_STATE_DPSI] :
+            result.spec.yaw_target;
+        result.forward_error.add(
+            actual_forward - forward_target);
+        result.yaw_error.add(actual_yaw - yaw_target);
+        result.actual_forward.add(actual_forward);
+        result.actual_yaw.add(actual_yaw);
+        result.lateral_acceleration.add(actual_forward * actual_yaw);
+        if (trajectory) {
+            if (!result.path_start_captured) {
+                result.path_start_x = sample.axle.x;
+                result.path_start_y = sample.axle.y;
                 result.path_start_captured = true;
             }
-            if (result.path_start_captured) {
-                result.path_end_x = sample.base.x;
-                result.path_end_y = sample.base.y;
-            }
-        } else {
-            const int index =
-                result.spec.axis == PerformanceAxis::forward ?
-                    BC_STATE_DS : BC_STATE_DPSI;
-            result.tracking_error.add(
-                snapshot.state.value[index] - result.spec.target);
+            result.path_end_x = sample.axle.x;
+            result.path_end_y = sample.axle.y;
         }
     }
     if (evaluate_settle) {
@@ -408,38 +481,101 @@ bool PerformanceBenchmark::collect(
         result.issue = issue;
         result.issue_phase = phase;
     }
-    return issue != "non_finite_telemetry";
+    if (issue == "attitude_termination") {
+        result.attitude_terminated = true;
+    }
+    return issue != "non_finite_telemetry" &&
+        issue != "attitude_termination";
+}
+
+void PerformanceBenchmark::collect_response_timing(
+    PerformanceResult &result,
+    const SimulationSample &sample,
+    const bool stopping
+) const {
+    if (result.spec.kind != PerformanceCaseKind::forward_response ||
+        stopping) {
+        return;
+    }
+    const double target = result.spec.forward_target;
+    const double actual = sample.controller.state.value[BC_STATE_DS];
+    if (!result.response_started) {
+        result.response_started = true;
+        result.response_start_time = sample.time;
+        result.response_initial_forward = actual;
+    }
+    const double elapsed = sample.time - result.response_start_time;
+    const double progress = normalized_response_progress(
+        actual, result.response_initial_forward, target);
+    result.maximum_forward_progress = std::max(
+        result.maximum_forward_progress, progress);
+    capture_response_crossing(progress, 0.1, elapsed, result.t10);
+    capture_response_crossing(progress, 0.5, elapsed, result.t50);
+    capture_response_crossing(progress, 0.9, elapsed, result.t90);
 }
 
 void PerformanceBenchmark::finish_result(
     PerformanceResult &result
 ) const {
-    const double tracking_tolerance =
-        result.spec.axis == PerformanceAxis::combined ?
-            kCombinedForwardTrackingTolerance :
-        result.spec.axis == PerformanceAxis::forward ?
-            std::max(
-                kForwardBaseTolerance,
-                kRelativeTrackingTolerance * std::abs(result.spec.target)) :
-            std::max(
-                kYawBaseTolerance,
-                kRelativeTrackingTolerance * std::abs(result.spec.target));
-
-    result.tracked = result.completed && result.balance_engaged &&
-        result.tracking_error.count() != 0U &&
-        std::abs(result.tracking_error.mean()) <= tracking_tolerance &&
-        result.tracking_error.rms() <= tracking_tolerance;
-    result.settled = result.completed && result.balance_engaged &&
-        result.settle_forward.count() != 0U &&
-        std::abs(result.settle_forward.mean()) <= kForwardBaseTolerance &&
-        result.settle_forward.rms() <= kForwardBaseTolerance &&
-        std::abs(result.settle_yaw.mean()) <= kYawBaseTolerance &&
-        result.settle_yaw.rms() <= kYawBaseTolerance;
     if (result.path_start_captured) {
         result.path_closure_error = std::hypot(
             result.path_end_x - result.path_start_x,
             result.path_end_y - result.path_start_y);
     }
+    const double forward_tolerance = std::max(
+        kForwardBaseTolerance,
+        kRelativeTrackingTolerance * std::abs(result.spec.forward_target));
+    const double yaw_tolerance = std::max(
+        kYawBaseTolerance,
+        kRelativeTrackingTolerance * std::abs(result.spec.yaw_target));
+    result.valid = result.completed && result.balance_engaged &&
+        result.leg_length_valid && result.common.finite() &&
+        !result.attitude_terminated && !result.entry_timed_out;
+
+    const bool forward_required =
+        result.spec.kind != PerformanceCaseKind::heading_response;
+    const bool yaw_required =
+        result.spec.kind != PerformanceCaseKind::forward_response;
+    const bool forward_response = !forward_required ||
+        (result.forward_error.count() != 0U &&
+         std::abs(result.forward_error.mean()) <= forward_tolerance &&
+         result.forward_error.rms() <= forward_tolerance);
+    const bool yaw_response = !yaw_required ||
+        (result.yaw_error.count() != 0U &&
+         std::abs(result.yaw_error.mean()) <= yaw_tolerance &&
+         result.yaw_error.rms() <= yaw_tolerance);
+    result.response_pass = result.valid && forward_response && yaw_response;
+    if (result.spec.kind == PerformanceCaseKind::figure_eight) {
+        result.response_pass = result.response_pass &&
+            result.path_start_captured &&
+            result.path_closure_error <= kFigureEightClosureTolerance;
+    }
+
+    if (result.spec.formal_acceptance &&
+        result.spec.kind == PerformanceCaseKind::forward_response) {
+        result.response_pass = result.response_pass &&
+            std::isfinite(result.t90) &&
+            result.t90 < kFormalForwardT90Limit &&
+            result.maximum_pitch <= kFormalPitchLimit;
+    }
+    result.stop_pass = result.completed && result.balance_engaged &&
+        result.settle_forward.count() != 0U &&
+        std::abs(result.settle_forward.mean()) <= kForwardBaseTolerance &&
+        result.settle_forward.rms() <= kForwardBaseTolerance &&
+        std::abs(result.settle_yaw.mean()) <= kYawBaseTolerance &&
+        result.settle_yaw.rms() <= kYawBaseTolerance;
+
+    result.contact_free = result.common.other_contact_count() == 0U &&
+        result.common.wheel_contact_ratio() >= 1.0 - 1.0e-12;
+    result.unsaturated =
+        result.common.any_wheel_saturation_ratio() == 0.0 &&
+        result.common.any_joint_saturation_ratio() == 0.0;
+    result.overshoot = response_overshoot(
+        result.maximum_forward_progress,
+        result.response_initial_forward, result.spec.forward_target);
+    result.t10_t90_acceleration = t10_t90_acceleration(
+        result.t10, result.t90,
+        result.response_initial_forward, result.spec.forward_target);
 }
 
 void PerformanceBenchmark::write_trace(
@@ -456,12 +592,15 @@ void PerformanceBenchmark::write_trace(
     trace_.value(spec.name)
         .value(phase)
         .value(sample.time)
-        .value(spec.command_rate)
+        .value(spec.forward_rate)
+        .value(spec.yaw_rate)
         .value(leg_length_target_)
         .value(forward_observation_name(forward_velocity_.observation()))
         .value(sample.base.x)
         .value(sample.base.y)
         .value(sample.base.z)
+        .value(sample.axle.x)
+        .value(sample.axle.y)
         .value(sample.base.forward_velocity)
         .value(sample.base.vertical_velocity)
         .value(runner_.feedback().imu.specific_force_x)

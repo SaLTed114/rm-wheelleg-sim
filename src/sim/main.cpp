@@ -20,14 +20,12 @@ void print_usage() {
            "Shift boosts forward speed, "
            "Space pause, R reset, Esc quit\n"
         << "available performance cases:\n";
-    for (const auto &spec : balance::benchmark::performance_cases()) {
+    for (const auto &spec :
+         balance::benchmark::formal_performance_cases()) {
         std::cerr << "  " << spec.name << '\n';
     }
     for (const auto &spec :
-         balance::benchmark::forward_acceleration_cases()) {
-        std::cerr << "  " << spec.name << '\n';
-    }
-    for (const auto &spec : balance::benchmark::motion_cases()) {
+         balance::benchmark::trajectory_performance_cases()) {
         std::cerr << "  " << spec.name << '\n';
     }
 }

@@ -8,7 +8,9 @@ import csv
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
+import html
 import json
+import math
 from pathlib import Path
 import platform
 import re
@@ -30,6 +32,7 @@ FORWARD_OBSERVATIONS = {
     "wheel-odometry", "base-truth", "contact-gated",
 }
 SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
+MAXIMUM_YAW_RATE = 2.0 * math.pi
 
 
 @dataclass(frozen=True)
@@ -79,12 +82,26 @@ class AnalysisConfig:
 @dataclass(frozen=True)
 class CaseConfig:
     name: str
-    axis: str
-    target: float
-    command_rate: float
+    kind: str
+    forward_target: float
+    yaw_target: float
+    forward_rate: float
+    yaw_rate: float
     target_hold_seconds: float
     stop_settle_seconds: float
     standing_seconds: float
+
+    @property
+    def axis(self) -> str:
+        return self.kind
+
+    @property
+    def target(self) -> float:
+        return self.yaw_target if self.kind == "heading" else self.forward_target
+
+    @property
+    def command_rate(self) -> float:
+        return self.yaw_rate if self.kind == "heading" else self.forward_rate
 
 
 @dataclass(frozen=True)
@@ -149,6 +166,19 @@ def positive_vector(value: Any, length: int, label: str) -> tuple[float, ...]:
     return result
 
 
+def nonempty_finite_vector(value: Any, label: str) -> tuple[float, ...]:
+    if not isinstance(value, list) or not value:
+        raise ExperimentError(f"{label} must be a non-empty array")
+    return tuple(finite_float(item, f"{label}[{index}]")
+                 for index, item in enumerate(value))
+
+
+def number_token(value: float) -> str:
+    sign = "neg" if value < 0.0 else "pos"
+    magnitude = format(abs(value), ".6g").replace(".", "p")
+    return f"{sign}{magnitude}"
+
+
 def boolean_value(table: dict[str, Any], name: str, default: bool) -> bool:
     value = table.get(name, default)
     if not isinstance(value, bool):
@@ -166,7 +196,7 @@ def load_config(path: Path) -> ExperimentConfig:
 
     reject_unknown(document, {
         "version", "name", "paths", "build", "controller", "lqr",
-        "analysis", "case",
+        "analysis", "case", "turn_sweep",
     }, "top-level")
     if document.get("version") != 1:
         raise ExperimentError("version must be 1")
@@ -305,16 +335,27 @@ def load_config(path: Path) -> ExperimentConfig:
         forward_linear=boolean_value(
             analysis_table, "forward_linear", False))
 
-    case_values = document.get("case")
-    if not isinstance(case_values, list) or not case_values:
-        raise ExperimentError("at least one [[case]] is required")
+    case_values = document.get("case", [])
+    if not isinstance(case_values, list):
+        raise ExperimentError("case must be an array of tables")
     cases: list[CaseConfig] = []
     names: set[str] = set()
+
+    def add_case(case: CaseConfig) -> None:
+        if SAFE_NAME.fullmatch(case.name) is None:
+            raise ExperimentError(
+                f"case name contains unsupported characters: {case.name}")
+        if case.name in names:
+            raise ExperimentError(f"duplicate case name: {case.name}")
+        names.add(case.name)
+        cases.append(case)
+
     for index, case_table in enumerate(case_values):
         if not isinstance(case_table, dict):
             raise ExperimentError(f"case[{index}] must be a TOML table")
         reject_unknown(case_table, {
-            "name", "axis", "target", "command_rate",
+            "name", "axis", "kind", "target", "command_rate",
+            "forward_target", "yaw_target", "forward_rate", "yaw_rate",
             "target_hold_seconds", "stop_settle_seconds",
             "standing_seconds",
         }, f"case[{index}]")
@@ -324,23 +365,52 @@ def load_config(path: Path) -> ExperimentConfig:
         ):
             raise ExperimentError(
                 f"case[{index}].name contains unsupported characters")
-        if case_name in names:
-            raise ExperimentError(f"duplicate case name: {case_name}")
-        names.add(case_name)
-        axis = case_table.get("axis")
-        if axis not in ("forward", "heading"):
+        if "axis" in case_table and "kind" in case_table:
             raise ExperimentError(
-                f"case[{index}].axis must be forward or heading")
-        target = finite_float(case_table.get("target"), f"case[{index}].target")
-        if target == 0.0:
-            raise ExperimentError(f"case[{index}].target must be non-zero")
-        cases.append(CaseConfig(
-            name=case_name,
-            axis=axis,
-            target=target,
-            command_rate=positive_float(
+                f"case[{index}] cannot contain both axis and kind")
+        kind = case_table.get("kind", case_table.get("axis"))
+        if kind not in ("forward", "heading", "turn"):
+            raise ExperimentError(
+                f"case[{index}].kind must be forward, heading, or turn")
+        if kind == "turn":
+            forward_value = positive_float(
+                case_table.get("forward_target"),
+                f"case[{index}].forward_target")
+            yaw_value = finite_float(
+                case_table.get("yaw_target"),
+                f"case[{index}].yaw_target")
+            if yaw_value == 0.0:
+                raise ExperimentError(
+                    f"case[{index}].yaw_target must be non-zero")
+            if abs(yaw_value) > MAXIMUM_YAW_RATE:
+                raise ExperimentError(
+                    f"case[{index}].yaw_target exceeds 2*pi rad/s")
+            forward_rate_value = positive_float(
+                case_table.get("forward_rate"),
+                f"case[{index}].forward_rate")
+            yaw_rate_value = positive_float(
+                case_table.get("yaw_rate"),
+                f"case[{index}].yaw_rate")
+        else:
+            target = finite_float(
+                case_table.get("target"), f"case[{index}].target")
+            if target == 0.0:
+                raise ExperimentError(
+                    f"case[{index}].target must be non-zero")
+            rate = positive_float(
                 case_table.get("command_rate"),
-                f"case[{index}].command_rate"),
+                f"case[{index}].command_rate")
+            forward_value = target if kind == "forward" else 0.0
+            yaw_value = target if kind == "heading" else 0.0
+            forward_rate_value = rate if kind == "forward" else 5.0
+            yaw_rate_value = rate if kind == "heading" else 10.0
+        add_case(CaseConfig(
+            name=case_name,
+            kind=kind,
+            forward_target=forward_value,
+            yaw_target=yaw_value,
+            forward_rate=forward_rate_value,
+            yaw_rate=yaw_rate_value,
             target_hold_seconds=positive_float(
                 case_table.get("target_hold_seconds", 3.0),
                 f"case[{index}].target_hold_seconds"),
@@ -352,8 +422,75 @@ def load_config(path: Path) -> ExperimentConfig:
                 f"case[{index}].standing_seconds"),
         ))
 
+    sweep_values = document.get("turn_sweep", [])
+    if not isinstance(sweep_values, list):
+        raise ExperimentError("turn_sweep must be an array of tables")
+    for index, sweep_table in enumerate(sweep_values):
+        if not isinstance(sweep_table, dict):
+            raise ExperimentError(
+                f"turn_sweep[{index}] must be a TOML table")
+        reject_unknown(sweep_table, {
+            "name", "forward_velocities", "yaw_rates", "forward_rate",
+            "yaw_rate", "target_hold_seconds", "stop_settle_seconds",
+            "standing_seconds",
+        }, f"turn_sweep[{index}]")
+        sweep_name = sweep_table.get("name")
+        if not isinstance(sweep_name, str) or (
+            SAFE_NAME.fullmatch(sweep_name) is None
+        ):
+            raise ExperimentError(
+                f"turn_sweep[{index}].name contains unsupported characters")
+        velocities = nonempty_finite_vector(
+            sweep_table.get("forward_velocities"),
+            f"turn_sweep[{index}].forward_velocities")
+        if any(value <= 0.0 for value in velocities):
+            raise ExperimentError(
+                f"turn_sweep[{index}].forward_velocities must be positive")
+        yaw_values = nonempty_finite_vector(
+            sweep_table.get("yaw_rates"),
+            f"turn_sweep[{index}].yaw_rates")
+        if any(value == 0.0 for value in yaw_values):
+            raise ExperimentError(
+                f"turn_sweep[{index}].yaw_rates must be non-zero")
+        if any(abs(value) > MAXIMUM_YAW_RATE for value in yaw_values):
+            raise ExperimentError(
+                f"turn_sweep[{index}].yaw_rates exceed 2*pi rad/s")
+        sweep_forward_rate = positive_float(
+            sweep_table.get("forward_rate", 5.0),
+            f"turn_sweep[{index}].forward_rate")
+        sweep_yaw_rate = positive_float(
+            sweep_table.get("yaw_rate", 10.0),
+            f"turn_sweep[{index}].yaw_rate")
+        hold_seconds = positive_float(
+            sweep_table.get("target_hold_seconds", 2.0),
+            f"turn_sweep[{index}].target_hold_seconds")
+        settle_seconds = positive_float(
+            sweep_table.get("stop_settle_seconds", 2.0),
+            f"turn_sweep[{index}].stop_settle_seconds")
+        standing_seconds = positive_float(
+            sweep_table.get("standing_seconds", 2.0),
+            f"turn_sweep[{index}].standing_seconds")
+        for velocity in velocities:
+            for turn_rate in yaw_values:
+                add_case(CaseConfig(
+                    name=(f"{sweep_name}-v{number_token(velocity)}-"
+                          f"w{number_token(turn_rate)}"),
+                    kind="turn",
+                    forward_target=velocity,
+                    yaw_target=turn_rate,
+                    forward_rate=sweep_forward_rate,
+                    yaw_rate=sweep_yaw_rate,
+                    target_hold_seconds=hold_seconds,
+                    stop_settle_seconds=settle_seconds,
+                    standing_seconds=standing_seconds,
+                ))
+
+    if not cases:
+        raise ExperimentError(
+            "at least one [[case]] or [[turn_sweep]] is required")
+
     if analysis.forward_linear and not any(
-        item.axis == "forward" for item in cases
+        item.kind == "forward" for item in cases
     ):
         raise ExperimentError(
             "forward linear analysis requires at least one forward case")
@@ -592,15 +729,25 @@ def case_command(
     command = [
         str(executable), str(config.paths.model), str(output),
         "--name", case.name,
-        "--axis", case.axis,
-        "--target", str(case.target),
-        "--command-rate", str(case.command_rate),
+        "--kind", case.kind,
         "--standing-seconds", str(case.standing_seconds),
         "--target-hold-seconds", str(case.target_hold_seconds),
         "--stop-settle-seconds", str(case.stop_settle_seconds),
         "--leg-length", str(config.controller.leg_length),
         "--trace-stride", str(config.controller.trace_stride),
     ]
+    if case.kind == "turn":
+        command.extend([
+            "--forward-target", str(case.forward_target),
+            "--yaw-target", str(case.yaw_target),
+            "--forward-rate", str(case.forward_rate),
+            "--yaw-rate", str(case.yaw_rate),
+        ])
+    else:
+        command.extend([
+            "--target", str(case.target),
+            "--command-rate", str(case.command_rate),
+        ])
     if config.controller.roll_restrained:
         command.extend(["--roll-restraint", "on"])
     command.extend([
@@ -633,6 +780,110 @@ def combine_case_summaries(case_directories: list[Path], output: Path) -> None:
         writer = csv.DictWriter(destination, fieldnames=header)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def write_turn_envelope_report(summary: Path, output: Path) -> None:
+    with summary.open(newline="", encoding="ascii") as source:
+        rows = [row for row in csv.DictReader(source)
+                if row.get("kind") == "turn"]
+    if not rows:
+        return
+
+    def numeric(row: dict[str, str], key: str) -> float:
+        try:
+            value = float(row.get(key, "nan"))
+        except ValueError:
+            return float("nan")
+        return value
+
+    def truth(row: dict[str, str], key: str) -> bool:
+        return row.get(key, "0") in ("1", "true", "True")
+
+    width, height = 1080, 650
+    plot_top, plot_height = 75.0, 470.0
+    left_x, plot_width = 75.0, 410.0
+    right_x = 610.0
+    maximum_velocity = max(numeric(row, "forward_target") for row in rows)
+    maximum_yaw = max(abs(numeric(row, "yaw_target")) for row in rows)
+    maximum_acceleration = max(
+        1.0, *(abs(numeric(row, "lateral_acceleration_mean"))
+               for row in rows
+               if math.isfinite(numeric(row, "lateral_acceleration_mean"))))
+
+    def sx(value: float, origin: float) -> float:
+        return origin + plot_width * value / maximum_velocity
+
+    def sy(value: float, maximum: float) -> float:
+        return plot_top + plot_height * (maximum - value) / (2.0 * maximum)
+
+    items = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
+        f'height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#f4f0e8"/>',
+        '<style>text{font-family:Verdana,sans-serif;fill:#24231f}'
+        '.axis{stroke:#57544d;stroke-width:1}.grid{stroke:#d2ccc0;stroke-width:1}'
+        '.label{font-size:13px}.title{font-size:20px;font-weight:bold}'
+        '.small{font-size:11px}</style>',
+        '<text x="75" y="35" class="title">Steady-turn envelope</text>',
+        '<text x="75" y="58" class="label">green: response feasible; '
+        'red: response miss; black: invalid; orange ring: contact event; '
+        'blue ring: saturation</text>',
+    ]
+    for origin, title, y_label in (
+        (left_x, "Commanded v / yaw rate", "yaw target (rad/s)"),
+        (right_x, "Measured lateral acceleration", "actual v * yaw (m/s^2)"),
+    ):
+        items.extend([
+            f'<rect x="{origin}" y="{plot_top}" width="{plot_width}" '
+            f'height="{plot_height}" fill="#fffdf8" stroke="#57544d"/>',
+            f'<line x1="{origin}" y1="{sy(0.0, maximum_yaw if origin == left_x else maximum_acceleration)}" '
+            f'x2="{origin + plot_width}" y2="{sy(0.0, maximum_yaw if origin == left_x else maximum_acceleration)}" class="grid"/>',
+            f'<text x="{origin}" y="{plot_top - 10}" class="label">{title}</text>',
+            f'<text x="{origin + plot_width / 2 - 55}" y="{plot_top + plot_height + 38}" class="label">forward target (m/s)</text>',
+            f'<text x="{origin - 65}" y="{plot_top + plot_height / 2}" class="small" transform="rotate(-90 {origin - 65} {plot_top + plot_height / 2})">{y_label}</text>',
+        ])
+
+    for row in rows:
+        velocity = numeric(row, "forward_target")
+        yaw = numeric(row, "yaw_target")
+        acceleration = numeric(row, "lateral_acceleration_mean")
+        if not math.isfinite(velocity) or not math.isfinite(yaw):
+            continue
+        valid = truth(row, "valid")
+        response = truth(row, "response_pass")
+        fill = "#238636" if response else "#c83e34"
+        if not valid:
+            fill = "#24231f"
+        stroke = "#d97706" if not truth(row, "contact_free") else "#fffdf8"
+        stroke_width = 3 if not truth(row, "contact_free") else 1
+        if not truth(row, "unsaturated"):
+            stroke = "#2563eb"
+            stroke_width = 3
+        tooltip = html.escape(
+            f"{row.get('case', '')}: target=({velocity:.3g}, {yaw:.3g}), "
+            f"actual=({numeric(row, 'actual_forward_mean'):.3g}, "
+            f"{numeric(row, 'actual_yaw_mean'):.3g}), "
+            f"ay={acceleration:.3g}, issue={row.get('issue', 'none')}")
+        for origin, ordinate, limit in (
+            (left_x, yaw, maximum_yaw),
+            (right_x, acceleration, maximum_acceleration),
+        ):
+            if not math.isfinite(ordinate):
+                continue
+            items.append(
+                f'<circle cx="{sx(velocity, origin):.2f}" '
+                f'cy="{sy(ordinate, limit):.2f}" r="7" fill="{fill}" '
+                f'stroke="{stroke}" stroke-width="{stroke_width}">'
+                f'<title>{tooltip}</title></circle>')
+
+    for origin in (left_x, right_x):
+        for value in sorted({numeric(row, "forward_target") for row in rows}):
+            items.append(
+                f'<text x="{sx(value, origin) - 8:.2f}" y="{plot_top + plot_height + 18}" '
+                f'class="small">{value:g}</text>')
+    items.append('</svg>')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("\n".join(items) + "\n", encoding="ascii")
 
 
 def git_metadata() -> dict[str, Any]:
@@ -705,11 +956,15 @@ def execute(config: ExperimentConfig, dry_run: bool) -> Path | None:
             command, REPOSITORY_ROOT,
             run_directory / "logs" / f"case-{case.name}.log", commands)
         case_directories.append(output)
-        if case.axis == "forward":
+        if case.kind == "forward":
             forward_traces.append(output / "trace.csv")
 
-    combine_case_summaries(
-        case_directories, run_directory / "summary.csv")
+    combined_summary = run_directory / "summary.csv"
+    combine_case_summaries(case_directories, combined_summary)
+    if any(case.kind == "turn" for case in config.cases):
+        write_turn_envelope_report(
+            combined_summary,
+            run_directory / "analysis" / "turn-envelope.svg")
     if config.analysis.forward_linear:
         analysis_output = run_directory / "analysis" / "forward-linear"
         command = [

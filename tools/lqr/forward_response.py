@@ -27,7 +27,7 @@ DEFAULT_SCHEDULE = Path("tools/lqr/generated/current_model_schedule.json")
 TRIM_AVERAGE_SECONDS = 1.0
 PITCH_ERROR_THRESHOLD = np.radians(1.0)
 MOTION_PHASES = ("target_ramp", "target_hold")
-STOP_PHASES = ("stop_ramp", "stop_settle")
+STOP_PHASES = ("yaw_stop_ramp", "forward_stop_ramp", "stop_settle")
 COMPARISON_PHASES = MOTION_PHASES + STOP_PHASES
 
 S_INDEX = STATE_NAMES.index("s")

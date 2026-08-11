@@ -22,12 +22,16 @@ namespace balance::benchmark {
 
 struct PerformanceBenchmarkConfig {
     std::optional<double> leg_length;
+    std::optional<double> forward_acceleration_rate;
     std::size_t trace_stride{10U};
     ForwardVelocityObservation forward_velocity_observation{
         ForwardVelocityObservation::wheel_odometry};
     bool roll_restrained{};
     std::optional<double> yaw_acceleration_feedforward_scale;
 };
+
+[[nodiscard]] bc_controller_config_t performance_controller_config(
+    const PerformanceBenchmarkConfig &config);
 
 struct PerformanceResult {
     PerformanceCaseSpec spec;
@@ -38,10 +42,23 @@ struct PerformanceResult {
     bool completed{};
     bool balance_engaged{};
     bool leg_length_valid{true};
-    bool tracked{};
-    bool settled{};
+    bool valid{};
+    bool response_pass{};
+    bool stop_pass{};
+    bool contact_free{};
+    bool unsaturated{};
+    bool entry_ready{};
+    bool entry_timed_out{};
+    bool attitude_terminated{};
     std::string issue{"none"};
     std::string issue_phase{"none"};
+    double entry_wait_seconds{};
+    double t10{std::numeric_limits<double>::quiet_NaN()};
+    double t50{std::numeric_limits<double>::quiet_NaN()};
+    double t90{std::numeric_limits<double>::quiet_NaN()};
+    double t10_t90_acceleration{
+        std::numeric_limits<double>::quiet_NaN()};
+    double overshoot{};
     double maximum_pitch{};
     double maximum_roll{};
     double maximum_leg_common{};
@@ -62,11 +79,20 @@ struct PerformanceResult {
     double path_end_x{};
     double path_end_y{};
     double path_closure_error{};
-    SampleStatistics tracking_error;
+    bool response_started{};
+    double response_start_time{};
+    double response_initial_forward{};
+    double maximum_forward_progress{};
+    SampleStatistics forward_error;
+    SampleStatistics yaw_error;
+    SampleStatistics actual_forward;
+    SampleStatistics actual_yaw;
+    SampleStatistics lateral_acceleration;
     SampleStatistics heading_error;
     SampleStatistics settle_forward;
     SampleStatistics settle_yaw;
     CommonDiagnostics common;
+    CommonDiagnostics hold;
 };
 
 class PerformanceBenchmark {
@@ -90,6 +116,10 @@ private:
         PerformanceResult &result, const char *phase,
         const SimulationSample &sample,
         bool evaluate_tracking, bool evaluate_settle,
+        bool stopping) const;
+    void collect_response_timing(
+        PerformanceResult &result,
+        const SimulationSample &sample,
         bool stopping) const;
     void step_runner(
         const bc_operator_command_t &command,

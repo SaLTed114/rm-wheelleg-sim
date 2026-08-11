@@ -18,15 +18,16 @@ int main(int argc, char **argv) {
     }
 
     try {
-        const auto &cases = balance::benchmark::performance_cases();
+        const auto &cases =
+            balance::benchmark::formal_performance_cases();
         const auto *heading_case =
             balance::benchmark::find_performance_case(
                 "heading_pos_1p5pi");
-        if (cases.size() != 12U || heading_case == nullptr ||
-            heading_case->axis !=
-                balance::benchmark::PerformanceAxis::heading ||
-            std::abs(heading_case->target - 1.5 * BC_PI) > 1.0e-12 ||
-            std::abs(heading_case->command_rate - 10.0) > 1.0e-12 ||
+        if (cases.size() != 4U || heading_case == nullptr ||
+            heading_case->kind !=
+                balance::benchmark::PerformanceCaseKind::heading_response ||
+            std::abs(heading_case->yaw_target - 1.5 * BC_PI) > 1.0e-12 ||
+            std::abs(heading_case->yaw_rate - 10.0) > 1.0e-12 ||
             balance::benchmark::find_performance_case(
                 "yaw_pos_4pi") != nullptr) {
             std::cerr << "heading performance cases are incorrect\n";

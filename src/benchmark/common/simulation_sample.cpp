@@ -46,8 +46,20 @@ SimulationSample SimulationSampler::read(
         data.time,
         controller,
         read_base(data),
+        read_axle_position(data),
         read_wheel_motion(data),
         read_contacts(data),
+    };
+}
+
+AxlePositionState SimulationSampler::read_axle_position(
+    const mjData &data
+) const {
+    const mjtNum *left = data.site_xpos + 3 * wheel_axis_[BC_L];
+    const mjtNum *right = data.site_xpos + 3 * wheel_axis_[BC_R];
+    return AxlePositionState{
+        0.5 * (left[0] + right[0]),
+        0.5 * (left[1] + right[1]),
     };
 }
 

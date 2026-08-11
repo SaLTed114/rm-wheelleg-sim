@@ -7,9 +7,12 @@ import unittest
 
 from run_experiment import (
     ExperimentError,
+    case_command,
     load_config,
     lqr_fingerprint,
+    write_turn_envelope_report,
 )
+from plot_trajectory import load_paths, write_svg
 
 
 class ExperimentConfigTest(unittest.TestCase):
@@ -90,8 +93,63 @@ class ExperimentConfigTest(unittest.TestCase):
     def test_legacy_yaw_axis_is_rejected(self) -> None:
         contents = self.existing_config().replace(
             'axis = "forward"', 'axis = "yaw"')
-        with self.assertRaisesRegex(ExperimentError, "forward or heading"):
+        with self.assertRaisesRegex(ExperimentError, "forward, heading, or turn"):
             load_config(self.write_config(contents))
+
+    def test_turn_sweep_expands_cartesian_product(self) -> None:
+        contents = self.existing_config().split("[[case]]", 1)[0] + """
+            [[turn_sweep]]
+            name = "coarse-turn"
+            forward_velocities = [1, 1.5, 2, 2.5, 3]
+            yaw_rates = [-4.71238898038469, -3.14159265358979,
+                         -1.5707963267949, 1.5707963267949,
+                         3.14159265358979, 4.71238898038469]
+            forward_rate = 5
+            yaw_rate = 10
+            standing_seconds = 8
+            target_hold_seconds = 2
+            stop_settle_seconds = 3
+        """
+        config = load_config(self.write_config(contents))
+        self.assertEqual(len(config.cases), 30)
+        self.assertTrue(all(case.kind == "turn" for case in config.cases))
+        self.assertEqual(config.cases[0].forward_target, 1.0)
+        self.assertEqual(config.cases[-1].yaw_target, 4.71238898038469)
+        command = case_command(
+            self.root / "benchmark", config, config.cases[0],
+            self.root / "output")
+        self.assertIn("--forward-target", command)
+        self.assertIn("--yaw-target", command)
+        self.assertNotIn("--axis", command)
+
+    def test_turn_report_is_dependency_free_svg(self) -> None:
+        summary = self.root / "summary.csv"
+        summary.write_text(
+            "case,kind,forward_target,yaw_target,valid,response_pass,"
+            "contact_free,unsaturated,actual_forward_mean,actual_yaw_mean,"
+            "lateral_acceleration_mean,issue\n"
+            "turn,turn,2,3.14,1,1,0,1,1.9,3.0,5.7,none\n",
+            encoding="ascii")
+        output = self.root / "turn.svg"
+        write_turn_envelope_report(summary, output)
+        document = output.read_text(encoding="ascii")
+        self.assertIn("Steady-turn envelope", document)
+        self.assertIn("contact event", document)
+
+    def test_trajectory_report_compares_reference_and_actual(self) -> None:
+        trace = self.root / "trace.csv"
+        trace.write_text(
+            "phase,simulation_time,axle_x,axle_y,psi,ref_ds,ref_dpsi\n"
+            "figure_eight_straight_one,0.0,1.0,2.0,0.0,1.0,0.0\n"
+            "figure_eight_straight_one,0.1,1.1,2.0,0.0,1.0,0.0\n",
+            encoding="ascii")
+        planned, actual = load_paths(trace)
+        self.assertAlmostEqual(planned[-1][0], 0.1)
+        self.assertAlmostEqual(actual[-1][0], 0.1)
+        output = self.root / "trajectory.svg"
+        write_svg(output, planned, actual)
+        self.assertIn(
+            "actual axle path", output.read_text(encoding="ascii"))
 
     def test_generate_config_reads_full_lqr_candidate(self) -> None:
         config = load_config(self.write_config("""

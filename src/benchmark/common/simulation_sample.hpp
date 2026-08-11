@@ -29,6 +29,11 @@ struct WheelMotionState {
     std::array<double, BC_SIDE_NUM> forward_velocity{};
 };
 
+struct AxlePositionState {
+    double x{};
+    double y{};
+};
+
 struct ImuMotionState {
     double velocity_x{};
     double velocity_y{};
@@ -38,6 +43,7 @@ struct SimulationSample {
     double time;
     const bc_controller_snapshot_t &controller;
     BaseState base;
+    AxlePositionState axle;
     WheelMotionState wheel;
     GroundContactState contact;
 };
@@ -47,6 +53,8 @@ public:
     explicit SimulationSampler(const mjModel &model);
 
     [[nodiscard]] BaseState read_base(
+        const mjData &data) const;
+    [[nodiscard]] AxlePositionState read_axle_position(
         const mjData &data) const;
     [[nodiscard]] ImuMotionState read_imu_motion(
         const mjData &data) const;

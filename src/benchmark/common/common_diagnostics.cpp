@@ -37,6 +37,12 @@ void CommonDiagnostics::observe(const SimulationSample &sample) {
     if (sample.contact.wheel[BC_L] && sample.contact.wheel[BC_R]) {
         ++both_wheel_contact_count_;
     }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        if (sample.contact.wheel[side]) ++wheel_contact_count_[side];
+        minimum_wheel_normal_force_[side] = std::min(
+            minimum_wheel_normal_force_[side],
+            sample.contact.wheel_normal_force[side]);
+    }
     if (sample.contact.other) ++other_contact_count_;
     finite_ = finite_ && controller_snapshot_is_finite(snapshot);
 
@@ -72,6 +78,14 @@ void CommonDiagnostics::observe(const SimulationSample &sample) {
 
 double CommonDiagnostics::wheel_contact_ratio() const {
     return ratio(both_wheel_contact_count_, sample_count_);
+}
+
+double CommonDiagnostics::wheel_contact_ratio(const int side) const {
+    return ratio(wheel_contact_count_[side], sample_count_);
+}
+
+double CommonDiagnostics::minimum_wheel_normal_force(const int side) const {
+    return sample_count_ == 0U ? 0.0 : minimum_wheel_normal_force_[side];
 }
 
 double CommonDiagnostics::wheel_saturation_ratio(const int side) const {
@@ -134,16 +148,15 @@ std::string common_diagnostic_issue(const SimulationSample &sample) {
     if (!controller_snapshot_is_finite(sample.controller)) {
         return "non_finite_telemetry";
     }
-    if (sample.contact.other) {
-        return "non_wheel_contact:" + sample.contact.unexpected;
-    }
-
     const double pitch = std::abs(static_cast<double>(
         sample.controller.state.value[BC_STATE_THETA_B]));
     const double roll = std::abs(static_cast<double>(
         sample.controller.roll));
     if (pitch > kTerminationAngle || roll > kTerminationAngle) {
         return "attitude_termination";
+    }
+    if (sample.contact.other) {
+        return "non_wheel_contact:" + sample.contact.unexpected;
     }
     return {};
 }
