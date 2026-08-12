@@ -10,10 +10,17 @@
 #include "common/simulation_sample.hpp"
 #include "common/csv_writer.hpp"
 #include "drop_policy.hpp"
+#include "landing_suspension.hpp"
 #include "mujoco_plant.hpp"
 #include "simulation_runner.hpp"
 
 namespace balance::benchmark {
+
+enum class PlatformLandingPolicy {
+    normal,
+    hold_extended,
+    suspension,
+};
 
 struct PlatformDropSpec {
     double height{};
@@ -22,12 +29,17 @@ struct PlatformDropSpec {
     double airborne_leg_length{};
     DropAirPolicy policy{DropAirPolicy::length_only};
     double airborne_pitch_rate{};
+    PlatformLandingPolicy landing_policy{PlatformLandingPolicy::normal};
+    double landing_stiffness{};
+    double landing_damping{};
 };
 
 [[nodiscard]] std::string platform_drop_case_name(
     const PlatformDropSpec &spec);
 [[nodiscard]] const std::array<PlatformDropSpec, 36> &
 platform_drop_cases();
+[[nodiscard]] const std::array<PlatformDropSpec, 6> &
+platform_landing_suspension_cases();
 [[nodiscard]] const PlatformDropSpec *find_platform_drop_case(
     std::string_view name) noexcept;
 
@@ -88,6 +100,20 @@ public:
     [[nodiscard]] float held_heading() const noexcept {
         return held_heading_;
     }
+    [[nodiscard]] const LandingSuspensionOutput &suspension_output()
+        const noexcept {
+        return suspension_.output();
+    }
+    [[nodiscard]] bool landing_recovery_started() const noexcept {
+        return landing_recovery_started_;
+    }
+    [[nodiscard]] double landing_recovery_time() const noexcept {
+        return landing_recovery_time_;
+    }
+    [[nodiscard]] const std::array<double, BC_SIDE_NUM> &
+    landing_recovery_reference() const noexcept {
+        return landing_recovery_reference_;
+    }
 
 private:
     [[nodiscard]] double axle_velocity(
@@ -106,18 +132,23 @@ private:
     double touchdown_time_{};
     double edge_velocity_{};
     std::array<double, BC_SIDE_NUM> edge_leg_length_{};
+    double landing_recovery_hold_start_{-1.0};
+    double landing_recovery_time_{};
+    std::array<double, BC_SIDE_NUM> landing_recovery_reference_{};
     bool edge_crossed_{};
     bool balance_engaged_{};
     bool speed_stable_{};
     bool platform_contact_seen_{};
     bool left_platform_{};
     bool touchdown_{};
+    bool landing_recovery_started_{};
     bool heading_initialized_{};
     float held_heading_{};
     const char *issue_{"none"};
     int base_qpos_{};
     int base_dof_{};
     std::array<int, BC_SIDE_NUM> wheel_axis_{};
+    LandingSuspensionController suspension_;
 };
 
 struct PlatformDropResult {
@@ -157,6 +188,22 @@ struct PlatformDropResult {
     double airborne_joint_saturation_ratio{};
     double touchdown_vertical_velocity{};
     double post_touchdown_maximum_support_force{};
+    double post_touchdown_minimum_base_z{
+        std::numeric_limits<double>::infinity()};
+    double post_touchdown_maximum_pitch{};
+    double post_touchdown_maximum_roll{};
+    std::array<double, BC_SIDE_NUM> maximum_leg_compression{};
+    std::array<double, BC_SIDE_NUM> maximum_ground_normal_force{};
+    std::array<double, BC_SIDE_NUM> maximum_requested_axial_force{};
+    std::array<double, BC_SIDE_NUM> maximum_applied_axial_force{};
+    double force_rate_limited_ratio{};
+    double post_touchdown_joint_saturation_ratio{};
+    bool landing_recovery_started{};
+    double landing_recovery_seconds{
+        std::numeric_limits<double>::quiet_NaN()};
+    bool rebound{};
+    double landing_stable_time{
+        std::numeric_limits<double>::quiet_NaN()};
     std::array<double, BC_SIDE_NUM> wheel_touchdown_time{{
         std::numeric_limits<double>::quiet_NaN(),
         std::numeric_limits<double>::quiet_NaN(),

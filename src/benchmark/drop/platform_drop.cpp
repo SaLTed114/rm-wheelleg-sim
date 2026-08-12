@@ -20,10 +20,30 @@ constexpr double kSpeedTolerance = 0.1;
 constexpr double kPlatformEdgeX = 2.0;
 constexpr double kScenarioTimeoutSeconds = 16.0;
 constexpr double kPostTouchdownSeconds = 1.5;
+constexpr double kLandingRecoveryHoldSeconds = 0.050;
+constexpr double kLandingRecoveryLegSpeed = 0.1;
+constexpr double kLandingRecoveryVerticalSpeed = 0.1;
 constexpr double kKfRecoveredTolerance = 0.1;
 constexpr double kRecoveryAttitudeLimit = 15.0 * BC_PI / 180.0;
 constexpr double kDivergenceAttitude = 60.0 * BC_PI / 180.0;
 constexpr double kTimestepSeconds = 0.001;
+
+LandingSuspensionSpec suspension_spec(const PlatformDropSpec &spec) {
+    LandingSuspensionSpec suspension;
+    suspension.stiffness = spec.landing_stiffness;
+    suspension.damping = spec.landing_damping;
+    suspension.retracted_length = spec.leg_length;
+    return suspension;
+}
+
+const char *landing_policy_name(const PlatformLandingPolicy policy) {
+    switch (policy) {
+    case PlatformLandingPolicy::normal: return "normal";
+    case PlatformLandingPolicy::hold_extended: return "hold_extended";
+    case PlatformLandingPolicy::suspension: return "suspension";
+    }
+    return "unknown";
+}
 
 int require_id(
     const mjModel &model, const mjtObj type, const char *name
@@ -70,9 +90,35 @@ std::string platform_drop_case_name(const PlatformDropSpec &spec) {
              << (spec.airborne_pitch_rate > 0.0 ? "pos_" : "neg_")
              << std::setprecision(1) << std::abs(spec.airborne_pitch_rate);
     }
+    if (spec.landing_policy != PlatformLandingPolicy::normal) {
+        name << "_landing_" << landing_policy_name(spec.landing_policy);
+        if (spec.landing_policy == PlatformLandingPolicy::suspension) {
+            name << "_k" << std::setprecision(0) << spec.landing_stiffness
+                 << "_d" << spec.landing_damping;
+        }
+    }
     std::string result = name.str();
     std::replace(result.begin(), result.end(), '.', 'p');
     return result;
+}
+
+const std::array<PlatformDropSpec, 6> &
+platform_landing_suspension_cases() {
+    static const std::array<PlatformDropSpec, 6> cases{{
+        {0.2, 2.0, 0.18, 0.38, DropAirPolicy::leg_lqr, 0.0,
+         PlatformLandingPolicy::hold_extended},
+        {0.2, 2.0, 0.18, 0.38, DropAirPolicy::leg_lqr, 0.0,
+         PlatformLandingPolicy::suspension, 400.0, 80.0},
+        {0.2, 2.0, 0.18, 0.38, DropAirPolicy::leg_lqr, 0.0,
+         PlatformLandingPolicy::suspension, 800.0, 80.0},
+        {0.2, 2.0, 0.18, 0.38, DropAirPolicy::leg_lqr, 0.0,
+         PlatformLandingPolicy::suspension, 1200.0, 80.0},
+        {0.2, 2.0, 0.18, 0.38, DropAirPolicy::leg_lqr, 0.0,
+         PlatformLandingPolicy::suspension, 800.0, 40.0},
+        {0.2, 2.0, 0.18, 0.38, DropAirPolicy::leg_lqr, 0.0,
+         PlatformLandingPolicy::suspension, 800.0, 120.0},
+    }};
+    return cases;
 }
 
 const std::array<PlatformDropSpec, 36> &platform_drop_cases() {
@@ -120,18 +166,22 @@ const std::array<PlatformDropSpec, 36> &platform_drop_cases() {
 const PlatformDropSpec *find_platform_drop_case(
     const std::string_view name
 ) noexcept {
-    const auto &cases = platform_drop_cases();
-    const auto found = std::find_if(
-        cases.begin(), cases.end(),
-        [name](const PlatformDropSpec &spec) {
-            return platform_drop_case_name(spec) == name;
-        });
-    return found == cases.end() ? nullptr : &*found;
+    const auto find_in = [name](const auto &cases) -> const PlatformDropSpec * {
+        const auto found = std::find_if(
+            cases.begin(), cases.end(),
+            [name](const PlatformDropSpec &spec) {
+                return platform_drop_case_name(spec) == name;
+            });
+        return found == cases.end() ? nullptr : &*found;
+    };
+    if (const auto *found = find_in(platform_drop_cases())) return found;
+    return find_in(platform_landing_suspension_cases());
 }
 
 PlatformDropScenario::PlatformDropScenario(
     const PlatformDropSpec &spec, const mjModel &model
-) : spec_(spec), name_(platform_drop_case_name(spec)) {
+) : spec_(spec), name_(platform_drop_case_name(spec)),
+    suspension_(suspension_spec(spec)) {
     const int base_joint = require_id(
         model, mjOBJ_JOINT, "base_free_joint");
     base_qpos_ = model.jnt_qposadr[base_joint];
@@ -168,15 +218,20 @@ void PlatformDropScenario::reset(sim::MujocoPlant &plant) {
     touchdown_time_ = 0.0;
     edge_velocity_ = 0.0;
     edge_leg_length_ = {};
+    landing_recovery_hold_start_ = -1.0;
+    landing_recovery_time_ = 0.0;
+    landing_recovery_reference_ = {};
     edge_crossed_ = false;
     balance_engaged_ = false;
     speed_stable_ = false;
     platform_contact_seen_ = false;
     left_platform_ = false;
     touchdown_ = false;
+    landing_recovery_started_ = false;
     heading_initialized_ = false;
     held_heading_ = 0.0F;
     issue_ = "none";
+    suspension_.reset();
 }
 
 const char *PlatformDropScenario::phase_name() const noexcept {
@@ -354,6 +409,108 @@ void PlatformDropScenario::step(
                 }
             });
     } else if (phase_ == PlatformDropPhase::post_touchdown &&
+               spec_.landing_policy != PlatformLandingPolicy::normal) {
+        const std::array<bool, BC_SIDE_NUM> contact{{
+            sample.contact.wheel_on_lower_ground[BC_L],
+            sample.contact.wheel_on_lower_ground[BC_R],
+        }};
+        if (spec_.landing_policy == PlatformLandingPolicy::suspension) {
+            suspension_.update(
+                sample.controller, contact, plant.timestep());
+
+            const auto &suspension = suspension_.output();
+            const auto &suspension_config = suspension_.spec();
+            const bool recovery_ready =
+                contact[BC_L] && contact[BC_R] &&
+                suspension.contact_latched[BC_L] &&
+                suspension.contact_latched[BC_R] &&
+                std::abs(suspension.equilibrium_length[BC_L] -
+                         spec_.leg_length) <= 1.0e-6 &&
+                std::abs(suspension.equilibrium_length[BC_R] -
+                         spec_.leg_length) <= 1.0e-6 &&
+                std::abs(sample.controller.leg[BC_L].length_velocity) <
+                    kLandingRecoveryLegSpeed &&
+                std::abs(sample.controller.leg[BC_R].length_velocity) <
+                    kLandingRecoveryLegSpeed &&
+                std::abs(sample.base.vertical_velocity) <
+                    kLandingRecoveryVerticalSpeed;
+            if (!landing_recovery_started_ && recovery_ready) {
+                if (landing_recovery_hold_start_ < 0.0) {
+                    landing_recovery_hold_start_ = sample.time;
+                } else if (sample.time - landing_recovery_hold_start_ >=
+                           kLandingRecoveryHoldSeconds) {
+                    landing_recovery_started_ = true;
+                    landing_recovery_time_ = sample.time;
+                    const double raw_roll_force =
+                        -suspension_config.roll_kp * sample.controller.roll -
+                        suspension_config.roll_kd *
+                            sample.controller.roll_rate;
+                    const double roll_force = std::clamp(
+                        raw_roll_force,
+                        -suspension_config.roll_force_limit,
+                        suspension_config.roll_force_limit);
+                    const std::array<double, BC_SIDE_NUM> roll_sign{{
+                        +1.0, -1.0,
+                    }};
+                    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                        landing_recovery_reference_[side] =
+                            sample.controller.leg[side].length +
+                            (suspension.applied_force[side] -
+                             suspension_config.support_force -
+                             roll_sign[side] * roll_force +
+                             suspension_config.recovery_length_kd *
+                                 sample.controller.leg[side].length_velocity) /
+                                suspension_config.recovery_length_kp;
+                    }
+                }
+            } else if (!landing_recovery_started_) {
+                landing_recovery_hold_start_ = -1.0;
+            }
+            if (landing_recovery_started_ &&
+                sample.time > landing_recovery_time_) {
+                const double maximum_step =
+                    suspension_config.recovery_reference_speed *
+                    plant.timestep();
+                for (double &reference : landing_recovery_reference_) {
+                    reference += std::clamp(
+                        spec_.leg_length - reference,
+                        -maximum_step, maximum_step);
+                }
+            }
+        }
+        runner.step_with_control_transform(
+            command_, gimbal,
+            [this](
+                bc_control_command_t &control
+            ) {
+                const auto &suspension = suspension_.output();
+                for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                    if (landing_recovery_started_) {
+                        control.leg[side].length_strategy =
+                            BC_LEG_LENGTH_POSITION_SUPPORT;
+                        control.leg[side].target.length =
+                            static_cast<float>(
+                                landing_recovery_reference_[side]);
+                    } else if (spec_.landing_policy ==
+                        PlatformLandingPolicy::suspension &&
+                        suspension.contact_latched[side]) {
+                        control.leg[side].length_strategy =
+                            BC_LEG_LENGTH_AXIAL_FORCE;
+                        control.leg[side].target.axial_force =
+                            static_cast<float>(
+                                suspension.applied_force[side]);
+                    } else {
+                        if (spec_.landing_policy ==
+                            PlatformLandingPolicy::suspension) {
+                            control.leg[side].length_strategy =
+                                BC_LEG_LENGTH_POSITION;
+                        }
+                        control.leg[side].target.length =
+                            static_cast<float>(spec_.airborne_leg_length);
+                    }
+                }
+            });
+    } else if (phase_ == PlatformDropPhase::post_touchdown &&
                spec_.airborne_leg_length > 0.0) {
         runner.step_with_control_transform(
             command_, gimbal,
@@ -380,6 +537,7 @@ PlatformDropBenchmark::PlatformDropBenchmark(
     summary_(output_directory / "platform_summary.csv", {
         "case", "height", "target_velocity", "leg_length",
         "airborne_leg_length", "policy", "airborne_pitch_rate",
+        "landing_policy", "landing_stiffness", "landing_damping",
         "completed",
         "finite", "balance_engaged", "speed_stable", "left_platform",
         "touchdown", "recovered", "diverged", "issue",
@@ -399,6 +557,14 @@ PlatformDropBenchmark::PlatformDropBenchmark(
         "airborne_max_joint_torque_request",
         "airborne_max_joint_torque", "airborne_joint_saturation_ratio",
         "touchdown_vertical_velocity", "post_max_support_force",
+        "post_min_base_z", "post_max_pitch_deg", "post_max_roll_deg",
+        "max_leg_compression_l", "max_leg_compression_r",
+        "max_ground_normal_force_l", "max_ground_normal_force_r",
+        "max_requested_axial_force_l", "max_requested_axial_force_r",
+        "max_applied_axial_force_l", "max_applied_axial_force_r",
+        "force_rate_limited_ratio", "post_joint_saturation_ratio",
+        "landing_recovery_started", "landing_recovery_seconds",
+        "rebound", "landing_stable_seconds",
         "wheel_touchdown_delay_l", "wheel_touchdown_delay_r",
         "wheel_touchdown_time_difference",
         "airborne_max_velocity_error", "touchdown_velocity_error",
@@ -429,7 +595,9 @@ PlatformDropResult PlatformDropBenchmark::run(
     result.name = scenario.name();
     CsvWriter trace(output_directory_ / result.name / "trace.csv", {
         "case", "phase", "simulation_time", "target_velocity",
-        "axle_x", "base_z", "leg_length_l", "leg_length_r",
+        "axle_x", "base_z", "base_vertical_velocity",
+        "leg_length_l", "leg_length_r",
+        "leg_length_rate_l", "leg_length_rate_r",
         "truth_axle_velocity",
         "truth_base_velocity", "estimated_axle_velocity",
         "wheel_odometry_velocity", "kf_velocity_x", "kf_variance_x",
@@ -446,7 +614,17 @@ PlatformDropResult PlatformDropBenchmark::run(
         "joint_l_front", "joint_l_rear",
         "joint_r_front", "joint_r_rear",
         "contact_platform_l", "contact_platform_r",
-        "contact_ground_l", "contact_ground_r", "other_contact",
+        "contact_ground_l", "contact_ground_r",
+        "ground_normal_force_l", "ground_normal_force_r",
+        "suspension_contact_l", "suspension_contact_r",
+        "suspension_capture_l", "suspension_capture_r",
+        "suspension_equilibrium_l", "suspension_equilibrium_r",
+        "suspension_requested_force_l", "suspension_requested_force_r",
+        "suspension_applied_force_l", "suspension_applied_force_r",
+        "suspension_rate_limited_l", "suspension_rate_limited_r",
+        "landing_recovery_active", "landing_recovery_reference_l",
+        "landing_recovery_reference_r",
+        "other_contact",
         "other_contact_kind",
     });
 
@@ -455,6 +633,13 @@ PlatformDropResult PlatformDropBenchmark::run(
     bool kf_recovered = false;
     std::size_t airborne_samples = 0U;
     std::size_t airborne_saturated_samples = 0U;
+    std::size_t post_touchdown_samples = 0U;
+    std::size_t post_touchdown_saturated_samples = 0U;
+    std::size_t force_rate_limited_samples = 0U;
+    std::array<bool, BC_SIDE_NUM> truth_touchdown_latched{};
+    std::array<double, BC_SIDE_NUM> truth_touchdown_length{};
+    double rebound_start = std::numeric_limits<double>::quiet_NaN();
+    double stable_start = std::numeric_limits<double>::quiet_NaN();
     while (!scenario.finished()) {
         scenario.step(plant_, runner, sampler_);
         const SimulationSample sample = sampler_.read(
@@ -578,12 +763,88 @@ PlatformDropResult PlatformDropBenchmark::run(
             result.touchdown_velocity_error = velocity_error;
         }
         if (touchdown_captured) {
+            ++post_touchdown_samples;
+            result.post_touchdown_minimum_base_z = std::min(
+                result.post_touchdown_minimum_base_z, sample.base.z);
+            result.post_touchdown_maximum_pitch = std::max(
+                result.post_touchdown_maximum_pitch, pitch);
+            result.post_touchdown_maximum_roll = std::max(
+                result.post_touchdown_maximum_roll, roll);
+            bool joint_saturated = false;
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                if (!truth_touchdown_latched[side] &&
+                    sample.contact.wheel_on_lower_ground[side]) {
+                    truth_touchdown_latched[side] = true;
+                    truth_touchdown_length[side] =
+                        sample.controller.leg[side].length;
+                }
+                if (truth_touchdown_latched[side]) {
+                    result.maximum_leg_compression[side] = std::max(
+                        result.maximum_leg_compression[side],
+                        truth_touchdown_length[side] -
+                            sample.controller.leg[side].length);
+                }
                 result.post_touchdown_maximum_support_force = std::max(
                     result.post_touchdown_maximum_support_force,
                     std::abs(static_cast<double>(
                         sample.controller.support_force[side].
                             filtered_vertical_force)));
+                result.maximum_ground_normal_force[side] = std::max(
+                    result.maximum_ground_normal_force[side],
+                    sample.contact.wheel_normal_force[side]);
+                const auto &suspension = scenario.suspension_output();
+                result.maximum_requested_axial_force[side] = std::max(
+                    result.maximum_requested_axial_force[side],
+                    std::abs(suspension.requested_force[side]));
+                result.maximum_applied_axial_force[side] = std::max(
+                    result.maximum_applied_axial_force[side],
+                    std::abs(suspension.applied_force[side]));
+                for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+                    joint_saturated = joint_saturated || std::abs(
+                        sample.controller.actuation_request.leg[side].
+                            joint_torque[joint] -
+                        sample.controller.actuation.leg[side].
+                            joint_torque[joint]) > 1.0e-4;
+                }
+            }
+            if (joint_saturated) ++post_touchdown_saturated_samples;
+            const auto &suspension = scenario.suspension_output();
+            if (suspension.force_rate_limited[BC_L] ||
+                suspension.force_rate_limited[BC_R]) {
+                ++force_rate_limited_samples;
+            }
+
+            const bool both_latched =
+                truth_touchdown_latched[BC_L] &&
+                truth_touchdown_latched[BC_R];
+            const bool any_contact =
+                sample.contact.wheel_on_lower_ground[BC_L] ||
+                sample.contact.wheel_on_lower_ground[BC_R];
+            if (both_latched && !any_contact) {
+                if (!std::isfinite(rebound_start)) {
+                    rebound_start = sample.time;
+                } else if (sample.time - rebound_start >= 0.010) {
+                    result.rebound = true;
+                }
+            } else {
+                rebound_start = std::numeric_limits<double>::quiet_NaN();
+            }
+
+            const bool stable = both_latched &&
+                sample.contact.wheel_on_lower_ground[BC_L] &&
+                sample.contact.wheel_on_lower_ground[BC_R] &&
+                std::abs(sample.base.vertical_velocity) < 0.1 &&
+                pitch < 5.0 * BC_PI / 180.0 &&
+                roll < 5.0 * BC_PI / 180.0;
+            if (stable) {
+                if (!std::isfinite(stable_start)) stable_start = sample.time;
+                if (!std::isfinite(result.landing_stable_time) &&
+                    sample.time - stable_start >= 0.100) {
+                    result.landing_stable_time =
+                        sample.time - scenario.touchdown_time();
+                }
+            } else {
+                stable_start = std::numeric_limits<double>::quiet_NaN();
             }
         }
         if (touchdown_captured && !kf_recovered &&
@@ -607,10 +868,24 @@ PlatformDropResult PlatformDropBenchmark::run(
     result.touchdown_time = scenario.touchdown_time();
     result.edge_velocity = scenario.edge_velocity();
     result.edge_leg_length = scenario.edge_leg_length();
+    result.landing_recovery_started =
+        scenario.landing_recovery_started();
+    if (result.landing_recovery_started) {
+        result.landing_recovery_seconds =
+            scenario.landing_recovery_time() - scenario.touchdown_time();
+    }
     result.airborne_joint_saturation_ratio =
         airborne_samples == 0U ? 0.0 :
         static_cast<double>(airborne_saturated_samples) /
             static_cast<double>(airborne_samples);
+    if (post_touchdown_samples > 0U) {
+        result.force_rate_limited_ratio =
+            static_cast<double>(force_rate_limited_samples) /
+            static_cast<double>(post_touchdown_samples);
+        result.post_touchdown_joint_saturation_ratio =
+            static_cast<double>(post_touchdown_saturated_samples) /
+            static_cast<double>(post_touchdown_samples);
+    }
     if (std::isfinite(result.wheel_touchdown_time[BC_L]) &&
         std::isfinite(result.wheel_touchdown_time[BC_R])) {
         result.wheel_touchdown_time_difference = std::abs(
@@ -642,6 +917,9 @@ void PlatformDropBenchmark::write_summary(
         .value(result.spec.airborne_leg_length)
         .value(drop_air_policy_name(result.spec.policy))
         .value(result.spec.airborne_pitch_rate)
+        .value(landing_policy_name(result.spec.landing_policy))
+        .value(result.spec.landing_stiffness)
+        .value(result.spec.landing_damping)
         .value(result.completed)
         .value(result.finite)
         .value(result.balance_engaged)
@@ -679,6 +957,23 @@ void PlatformDropBenchmark::write_summary(
         .value(result.airborne_joint_saturation_ratio)
         .value(result.touchdown_vertical_velocity)
         .value(result.post_touchdown_maximum_support_force)
+        .value(result.post_touchdown_minimum_base_z)
+        .value(degrees(result.post_touchdown_maximum_pitch))
+        .value(degrees(result.post_touchdown_maximum_roll))
+        .value(result.maximum_leg_compression[BC_L])
+        .value(result.maximum_leg_compression[BC_R])
+        .value(result.maximum_ground_normal_force[BC_L])
+        .value(result.maximum_ground_normal_force[BC_R])
+        .value(result.maximum_requested_axial_force[BC_L])
+        .value(result.maximum_requested_axial_force[BC_R])
+        .value(result.maximum_applied_axial_force[BC_L])
+        .value(result.maximum_applied_axial_force[BC_R])
+        .value(result.force_rate_limited_ratio)
+        .value(result.post_touchdown_joint_saturation_ratio)
+        .value(result.landing_recovery_started)
+        .value(result.landing_recovery_seconds)
+        .value(result.rebound)
+        .value(result.landing_stable_time)
         .value(result.wheel_touchdown_time[BC_L] - result.departure_time)
         .value(result.wheel_touchdown_time[BC_R] - result.departure_time)
         .value(result.wheel_touchdown_time_difference)
@@ -705,6 +1000,7 @@ void PlatformDropBenchmark::write_trace(
     const double truth_axle_velocity = 0.5 * (
         sample.wheel.forward_velocity[BC_L] +
         sample.wheel.forward_velocity[BC_R]);
+    const auto &suspension = scenario.suspension_output();
     trace.begin_row();
     trace.value(scenario.name())
         .value(scenario.phase_name())
@@ -712,8 +1008,11 @@ void PlatformDropBenchmark::write_trace(
         .value(scenario.spec().target_velocity)
         .value(sample.axle.x)
         .value(sample.base.z)
+        .value(sample.base.vertical_velocity)
         .value(snapshot.leg[BC_L].length)
         .value(snapshot.leg[BC_R].length)
+        .value(snapshot.leg[BC_L].length_velocity)
+        .value(snapshot.leg[BC_R].length_velocity)
         .value(truth_axle_velocity)
         .value(sample.base.forward_velocity)
         .value(snapshot.forward_velocity.estimated_axle)
@@ -755,6 +1054,23 @@ void PlatformDropBenchmark::write_trace(
         .value(sample.contact.wheel_on_platform[BC_R])
         .value(sample.contact.wheel_on_lower_ground[BC_L])
         .value(sample.contact.wheel_on_lower_ground[BC_R])
+        .value(sample.contact.wheel_normal_force[BC_L])
+        .value(sample.contact.wheel_normal_force[BC_R])
+        .value(suspension.contact_latched[BC_L])
+        .value(suspension.contact_latched[BC_R])
+        .value(suspension.captured_length[BC_L])
+        .value(suspension.captured_length[BC_R])
+        .value(suspension.equilibrium_length[BC_L])
+        .value(suspension.equilibrium_length[BC_R])
+        .value(suspension.requested_force[BC_L])
+        .value(suspension.requested_force[BC_R])
+        .value(suspension.applied_force[BC_L])
+        .value(suspension.applied_force[BC_R])
+        .value(suspension.force_rate_limited[BC_L])
+        .value(suspension.force_rate_limited[BC_R])
+        .value(scenario.landing_recovery_started())
+        .value(scenario.landing_recovery_reference()[BC_L])
+        .value(scenario.landing_recovery_reference()[BC_R])
         .value(sample.contact.other)
         .value(sample.contact.unexpected);
     trace.end_row();

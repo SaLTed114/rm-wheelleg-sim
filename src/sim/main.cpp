@@ -41,6 +41,13 @@ void print_usage() {
                   << balance::benchmark::platform_drop_case_name(spec)
                   << '\n';
     }
+    std::cerr << "available landing suspension cases:\n";
+    for (const auto &spec :
+         balance::benchmark::platform_landing_suspension_cases()) {
+        std::cerr << "  "
+                  << balance::benchmark::platform_drop_case_name(spec)
+                  << '\n';
+    }
 }
 
 bool parse_arguments(

@@ -47,6 +47,28 @@ python tools/experiments/plot_drop.py \
 Use `--wheel-clearance 0.4` with a separate output directory for the
 `400 mm` pressure run.
 
+The first landing-suspension exploration compares the existing extended-leg
+position hold with five axial impedance candidates. These cases are available
+through GUI `--case`, but remain outside the default CTest platform matrix.
+The plot focuses on the first 300 ms after touchdown because the common initial
+contact peak and axial-force limit make full-duration peak plots unsuitable for
+comparing the impedance parameters:
+
+The current isolated policy moves each leg's impedance equilibrium toward the
+normal working length after touchdown. Once both legs and the base settle, it
+bumplessly initializes `POSITION_SUPPORT` from the current axial force and
+ramps the position reference back to the working target. Contact and switching
+remain benchmark-local and use MuJoCo truth; they are not production state
+machine behavior yet.
+
+```bash
+build/rm_balance_drop models/MJCF/COD-2026RoboMaster-Balance.xml \
+  build/experiments/landing-suspension --landing-suspension
+python tools/experiments/plot_landing_suspension.py \
+  build/experiments/landing-suspension \
+  build/experiments/landing-suspension/comparison.svg
+```
+
 The production controller estimates each leg's vertical support force from
 measured joint torque and reports a filtered `ground/air` diagnosis. The
 benchmark records this diagnosis against MuJoCo contact truth, but still uses

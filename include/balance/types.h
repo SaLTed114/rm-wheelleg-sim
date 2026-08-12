@@ -86,12 +86,14 @@ typedef struct {
 typedef struct {
     float length;
     float angle_body;
+    float axial_force;
 } bc_leg_target_t;
 
 typedef enum {
     BC_LEG_LENGTH_DISABLED,
     BC_LEG_LENGTH_POSITION,
-    BC_LEG_LENGTH_POSITION_SUPPORT
+    BC_LEG_LENGTH_POSITION_SUPPORT,
+    BC_LEG_LENGTH_AXIAL_FORCE
 } bc_leg_length_strategy_t;
 
 typedef enum {

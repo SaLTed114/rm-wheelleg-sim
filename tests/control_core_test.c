@@ -363,6 +363,37 @@ int main() {
         return 1;
     }
 
+    bc_control_config_t force_config = config;
+    force_config.joint_torque_limit = 1000.0F;
+    bc_control_core_t force_core;
+    bc_control_core_init(&force_core, &force_config);
+    bc_control_core_update(&force_core, &feedback, 0.001F, 0U);
+    bc_control_command_t force_command = {0};
+    force_command.leg[BC_L].length_strategy = BC_LEG_LENGTH_AXIAL_FORCE;
+    force_command.leg[BC_L].target.axial_force = 123.0F;
+    force_command.leg[BC_R].length_strategy = BC_LEG_LENGTH_DISABLED;
+    bc_control_core_calculate(&force_core, &force_command);
+    for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+        const float expected = 123.0F * force_core.observer.leg[BC_L]
+            .jacobian[BC_LEG_LENGTH][joint];
+        if (fabsf(
+                force_core.actuation_request.leg[BC_L]
+                    .joint_torque[joint] - expected) > 1.0e-5F ||
+            force_core.actuation_request.leg[BC_R]
+                    .joint_torque[joint] != 0.0F) {
+            fputs("direct axial force mapping is incorrect\n", stderr);
+            return 1;
+        }
+    }
+    force_core.config.joint_torque_limit = 0.5F;
+    bc_control_core_execute(&force_core, 1U, &actuation);
+    for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+        if (fabsf(actuation.leg[BC_L].joint_torque[joint]) > 0.5F) {
+            fputs("direct axial force bypassed joint torque limiting\n", stderr);
+            return 1;
+        }
+    }
+
     bc_control_core_reset(&core);
     if (core.tick_count != 0U) {
         fputs("reset did not clear tick count\n", stderr);

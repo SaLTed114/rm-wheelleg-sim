@@ -22,7 +22,11 @@ int main(int argc, char **argv) {
             "air_extend_l0p38") == nullptr ||
         balance::benchmark::find_platform_drop_case(
             "platform_drop_200mm_l0p18_v2p0_leg_lqr_"
-            "air_extend_l0p38") == nullptr) {
+            "air_extend_l0p38") == nullptr ||
+        balance::benchmark::platform_landing_suspension_cases().size() != 6U ||
+        balance::benchmark::find_platform_drop_case(
+            "platform_drop_200mm_l0p18_v2p0_leg_lqr_"
+            "air_extend_l0p38_landing_suspension_k800_d80") == nullptr) {
         std::cerr << "platform drop case registry is incorrect\n";
         return EXIT_FAILURE;
     }

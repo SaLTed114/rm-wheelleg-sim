@@ -47,13 +47,17 @@ void print_result(const balance::benchmark::PlatformDropResult &result) {
 } // namespace
 
 int main(int argc, char **argv) {
-    if (argc != 3 && argc != 5) {
+    if (argc != 3 && argc != 4 && argc != 5) {
         std::cerr << "usage: rm_balance_drop <model.xml> <output-directory> "
-                     "[--wheel-clearance <metres>]\n";
+                     "[--wheel-clearance <metres> | "
+                     "--landing-suspension]\n";
         return EXIT_FAILURE;
     }
 
     std::optional<double> wheel_clearance;
+    const bool landing_suspension =
+        argc == 4 && std::string(argv[3]) == "--landing-suspension";
+    if (argc == 4 && !landing_suspension) return EXIT_FAILURE;
     if (argc == 5) {
         if (std::string(argv[3]) != "--wheel-clearance") {
             return EXIT_FAILURE;
@@ -71,6 +75,17 @@ int main(int argc, char **argv) {
     }
 
     try {
+        if (landing_suspension) {
+            balance::benchmark::PlatformDropBenchmark platform_benchmark(
+                argv[1], argv[2]);
+            for (const auto &spec :
+                 balance::benchmark::platform_landing_suspension_cases()) {
+                const auto result = platform_benchmark.run(spec);
+                platform_benchmark.write_summary(result);
+                print_result(result);
+            }
+            return EXIT_SUCCESS;
+        }
         balance::benchmark::DropBenchmark benchmark(argv[1], argv[2]);
         for (const auto &configured_spec :
              balance::benchmark::drop_exploration_cases()) {

@@ -189,6 +189,10 @@ void bc_control_core_calculate(
                     core->config.roll_force_sign[side] * roll_force;
             }
             break;
+
+        case BC_LEG_LENGTH_AXIAL_FORCE:
+            axial_force = target->axial_force;
+            break;
         }
 
         float leg_torque = 0.0F;
