@@ -48,9 +48,11 @@ void bc_control_core_update(
     const bc_sensor_feedback_t *feedback,
     float timestep_seconds,
     uint8_t wheel_velocity_update_enabled);
+void bc_control_core_reject_wheel_velocity(bc_control_core_t *core);
 void bc_control_core_calculate(
     bc_control_core_t *core,
     const bc_control_command_t *command);
+float bc_control_core_roll_force(const bc_control_core_t *core);
 void bc_control_core_execute(
     bc_control_core_t *core,
     uint8_t output_enabled,

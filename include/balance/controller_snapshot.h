@@ -11,6 +11,7 @@ typedef struct {
     bc_system_state_t system;
     bc_motion_state_t motion;
     bc_forward_state_t forward;
+    bc_support_phase_state_t support;
     bc_chassis_alignment_t alignment;
 } bc_state_machine_snapshot_t;
 
@@ -22,6 +23,7 @@ typedef struct {
     float roll;
     float roll_rate;
     float roll_force_request;
+    float specific_force_norm;
     bc_gimbal_feedback_t gimbal;
     float mapped_forward_velocity;
     float heading_error;
@@ -29,6 +31,7 @@ typedef struct {
     bc_velocity_estimator_output_t velocity_estimator;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];
     bc_support_force_output_t support_force[BC_SIDE_NUM];
+    bc_support_phase_request_t support_request;
     bc_actuation_t actuation_request;
     bc_actuation_t actuation;
     uint32_t tick_count;

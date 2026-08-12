@@ -64,6 +64,7 @@ add_library(balance_control_core STATIC
   src/control/reference/yaw.c
   src/control/state_machine/forward_mode.c
   src/control/state_machine/motion.c
+  src/control/state_machine/support_phase.c
   src/control/state_machine/system.c)
 set(BALANCE_LQR_SCHEDULE_DIR
   "${CMAKE_CURRENT_SOURCE_DIR}/tools/lqr/generated"
@@ -237,6 +238,11 @@ if(BUILD_TESTING)
   target_link_libraries(support_force_test PRIVATE balance_control_core)
   balance_enable_warnings(support_force_test)
   add_test(NAME support_force COMMAND support_force_test)
+
+  add_executable(support_phase_test tests/support_phase_test.c)
+  target_link_libraries(support_phase_test PRIVATE balance_control_core)
+  balance_enable_warnings(support_phase_test)
+  add_test(NAME support_phase COMMAND support_phase_test)
 
   add_executable(observer_test tests/observer_test.c)
   target_link_libraries(observer_test PRIVATE balance_control_core)

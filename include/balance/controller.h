@@ -22,6 +22,7 @@ typedef struct {
     bc_actuation_t last_actuation;
     bc_condition_hold_t velocity_estimator_hold;
     float velocity_estimator_update_delay;
+    float specific_force_norm;
     float timestep_seconds;
 } bc_controller_t;
 

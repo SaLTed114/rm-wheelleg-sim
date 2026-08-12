@@ -7,6 +7,7 @@
 #include "balance/state_machine/condition_hold.h"
 #include "balance/state_machine/forward_mode.h"
 #include "balance/state_machine/input.h"
+#include "balance/state_machine/support_phase.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +41,7 @@ typedef struct {
     bc_forward_mode_config_t forward;
     bc_forward_reference_config_t forward_reference;
     bc_yaw_reference_config_t yaw_reference;
+    bc_support_phase_config_t support_phase;
 } bc_motion_config_t;
 
 typedef struct {
@@ -53,6 +55,7 @@ typedef struct {
     bc_forward_mode_t forward;
     bc_forward_reference_t forward_reference;
     bc_yaw_reference_t yaw_reference;
+    bc_support_phase_t support_phase;
     bc_condition_hold_t leg_stable_hold;
     bc_condition_hold_t engage_hold;
 } bc_motion_t;

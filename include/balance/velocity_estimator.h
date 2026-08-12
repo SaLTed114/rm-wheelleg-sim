@@ -57,6 +57,8 @@ void bc_velocity_estimator_init(
 void bc_velocity_estimator_reset(bc_velocity_estimator_t *estimator);
 void bc_velocity_estimator_skip_update(
     bc_velocity_estimator_t *estimator);
+void bc_velocity_estimator_reject_wheel(
+    bc_velocity_estimator_t *estimator);
 void bc_velocity_estimator_update(
     bc_velocity_estimator_t *estimator,
     float wheel_velocity_measurement,

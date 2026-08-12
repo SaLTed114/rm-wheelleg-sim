@@ -128,3 +128,8 @@ void bc_observer_update(
             feedback->imu.pitch_rate;
     }
 }
+
+void bc_observer_reject_wheel_velocity(bc_observer_t *observer) {
+    bc_velocity_estimator_reject_wheel(
+        &observer->velocity_estimator);
+}

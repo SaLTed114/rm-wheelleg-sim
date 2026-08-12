@@ -183,6 +183,8 @@ void SimulationUi::draw_motion(const SimulationUiFrame &frame) {
             snapshot.state_machine.motion));
         table_value("Forward", bc_forward_state_name(
             snapshot.state_machine.forward));
+        table_value("Support", bc_support_phase_state_name(
+            snapshot.state_machine.support));
         table_value("Alignment", bc_chassis_alignment_name(
             snapshot.state_machine.alignment));
         ImGui::TableNextRow();

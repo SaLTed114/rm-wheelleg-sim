@@ -32,6 +32,7 @@ private:
     bc_system_state_t previous_system_{BC_SYSTEM_OFF};
     bc_motion_state_t previous_motion_{BC_MOTION_IDLE};
     bc_forward_state_t previous_forward_{BC_FORWARD_IDLE};
+    bc_support_phase_state_t previous_support_{BC_SUPPORT_GROUND};
     bool state_initialized_{};
 };
 

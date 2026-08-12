@@ -62,6 +62,7 @@ void DropScenario::reset() noexcept {
     release_time_ = 0.0;
     touchdown_time_ = 0.0;
     release_clearance_ = {};
+    normal_leg_length_ = {};
     balance_engaged_ = false;
     heading_initialized_ = false;
     held_heading_ = 0.0F;
@@ -144,6 +145,10 @@ void DropScenario::step(
             balance_engaged_ = true;
             if (active_start_time_ < 0.0) active_start_time_ = plant.data().time;
             if (plant.data().time - active_start_time_ >= kStandingSeconds) {
+                normal_leg_length_ = {{
+                    runner.snapshot().leg[BC_L].length,
+                    runner.snapshot().leg[BC_R].length,
+                }};
                 release(plant);
             }
         }
@@ -167,11 +172,27 @@ void DropScenario::step(
     if (!latched) {
         runner.step_with_control_transform(
             command_, gimbal,
-            [policy = spec_.policy](bc_control_command_t &control) {
+            [policy = spec_.policy,
+             normal_leg_length = normal_leg_length_](
+                bc_control_command_t &control
+            ) {
                 apply_drop_air_policy(policy, control);
+                for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                    control.leg[side].target.length =
+                        normal_leg_length[side];
+                }
             });
     } else {
-        runner.step(command_, gimbal);
+        runner.step_with_control_transform(
+            command_, gimbal,
+            [](bc_control_command_t &control) {
+                control.wheel_strategy = BC_WHEEL_LQR;
+                for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                    control.leg[side].length_strategy =
+                        BC_LEG_LENGTH_POSITION_SUPPORT;
+                    control.leg[side].angle_strategy = BC_LEG_ANGLE_LQR;
+                }
+            });
         if (plant.data().time - touchdown_time_ >= kPostTouchdownSeconds) {
             phase_ = DropPhase::complete;
         }

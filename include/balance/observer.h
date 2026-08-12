@@ -51,6 +51,7 @@ void bc_observer_update(
     const bc_sensor_feedback_t *feedback,
     float timestep_seconds,
     uint8_t wheel_velocity_update_enabled);
+void bc_observer_reject_wheel_velocity(bc_observer_t *observer);
 
 #ifdef __cplusplus
 }

@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。支持力识别、抬升释放和实体平台驶离实验已经建立；当前主线是先重整 ACTIVE 内部的职责和命令所有权，再把离地识别与空中策略从仿真实验接管器收回生产控制器。
+项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。支持力识别、抬升释放和实体平台驶离实验已经建立；ACTIVE 内首版 support phase 已接管离地、空中伸腿、落地收腿和恢复，当前主线转为扩大落地工况验证并继续收紧 ACTIVE 的职责边界。
 
-最近一次参数变更是 LQR 差分模态降档：共同腿角/角速度权重保持 `60/1`，差分权重从 `1920/32` 降为 `960/16`，并已同步生成器、正式 schedule、验证报告和 golden test。正式四案例和 Python 工具测试均通过；加入离地、支持力和平台跌落测试后，当前 CTest 为 `23/23`。此前 benchmark 分层、转弯包络和八字工具已经提交并推送到 `origin/main`。
+最近一次已提交参数变更是 LQR 差分模态降档：共同腿角/角速度权重保持 `60/1`，差分权重从 `1920/32` 降为 `960/16`。当前未提交工作把支持力融合和落地策略接入生产 ACTIVE 路径，并新增正式 controller 平台案例；完整回归为 `26/26`。
 
 ## 设计边界
 
@@ -52,9 +52,10 @@ MujocoAdapter::read
 system: OFF / ON / FAULT
 motion: IDLE / SELF_RIGHTING / LEG_POSITIONING / BALANCE_ENGAGING / ACTIVE
 forward: IDLE / HOLD / VELOCITY
+support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 ```
 
-- `BC_MOTION_ACTIVE` 当前同时拥有纵向模式与参考、云台跟随、front/rear 映射和工作腿长规划，尚无独立 ACTIVE 协调器。目标架构将 ACTIVE 作为运行期容器：task 描述 `NORMAL/SPIN` 等整车意图，longitudinal 管理 `HOLD/VELOCITY` 与 `S/DS` 参考，yaw 和腿长规划器管理各自连续参考，support phase 描述 `GROUND/AIRBORNE/LANDING` 的物理能力。它们不是平权或完全正交的状态机，最终控制命令必须由 ACTIVE 按“任务意图 -> 轴参考 -> support 能力约束”统一合成，不能由多个模块按调用顺序覆盖同一个命令。
+- `BC_MOTION_ACTIVE` 当前统一合成纵向、云台跟随、front/rear、工作腿长和 support 请求，尚无独立 ACTIVE 类型。support 模块不接收或覆盖整份命令，而是输出轮能力、反馈 mask 和逐腿策略请求；motion 是最终组装者。目标架构仍将 task、longitudinal、yaw、腿长和 support 分离，避免组合状态和隐式覆盖顺序。
 - ACTIVE 从 `HOLD` 开始；`VELOCITY` 关闭 `S` 位置误差但保留 `DS`。命令和参考归零、融合 `DS` 与原始轮速均低于 `0.05 m/s`、轮速可靠并连续满足 `0.25 s` 后回到 `HOLD`，重新捕获停车位置。
 - 普通 heading follow 与 forward mode 独立，在 `HOLD/VELOCITY` 中始终启用 `PSI/DPSI`。motion 根据云台相对角以 `5 deg` 滞回选择 chassis front/rear，rear 时反转纵向命令。
 - operator command 目前只有系统使能、单周期 restart 和云台坐标下前进速度；heading 来自云台相对角/速度。任务级高速 SPIN 尚未实现，不能由普通 heading 命令幅度隐式触发。
@@ -63,12 +64,12 @@ forward: IDLE / HOLD / VELOCITY
 ## 参考、估计与控制律
 
 - forward reference 上限为 `3 m/s`、默认斜坡为 `5 m/s^2`，输出 `DS_ref` 并积分 `S_ref`。yaw reference 从云台反馈重建 `PSI_ref/DPSI_ref`，正式上限为 `+/-1.5*pi rad/s`、加速度为 `10 rad/s^2`。
-- observer 用 IMU 和共同轮速融合 `DS`，再积分得到 `S`。轮速创新使用 NIS 与 `20 ms` 迟滞；降级时提升速度方差而不重置状态或 bias，恢复后重新接受轮速。IMU 外参、噪声和阈值仍需实车标定。
+- observer 用 IMU 和共同轮速融合 `DS`，再积分得到 `S`。轮速创新使用 NIS 与 `20 ms` 迟滞；AIRBORNE 时生产状态机强制轮速不可靠、KF 只做 IMU 预测，触地后重新经过恢复持续时间。降级不重置状态或 bias。IMU 外参、噪声和阈值仍需实车标定。
 - LQR 状态为 `[s,ds,psi,dpsi,theta_l,dtheta_l,theta_r,dtheta_r,theta_b,dtheta_b]`，输入为 `[T_wheel_l,T_wheel_r,Tp_leg_l,Tp_leg_r]`，调度范围为 `0.160-0.390 m`。
 - 正式基础 `Q=[90,260,40,15,60,1,60,1,900,120]`、`R=[1.6,1.6,0.7,0.7]`。非对角腿块表达共同/差分模态：腿角为 `60/960`，腿角速度为 `1/16`；它允许纵向共同摆腿，同时约束偏航差分劈腿。
 - yaw 加速度前馈为 `u = K(r-x) + 0.9*F_yaw*DDPSI_ref`。关闭它会显著增大 heading 滞后和停转残振，因此保留；其模型基于接近零纵向速度的线性工作点，尚未做速度调度。
-- roll 不进入十维 LQR，由 `Kp=800 N/rad`、`Kd=60 N/(rad/s)`、限幅 `200 N` 的独立 PD 生成左右腿差分轴向力。支持力接触诊断尚未接入控制策略，因此仍无正式离地门控和积分项。
-- `control/support_force` 从每侧两个关节的实际力矩经 `J^T` 反解轴向力/腿矩，再投影为竖直支持力；输出原始值、滤波值及带滞回和持续时间的 `GROUND/AIR` 诊断。当前默认低通系数为 `0.2`，离地/触地持续时间为 `20/15 ms`；它只进入 snapshot、GUI 和 benchmark 对照，尚未驱动正式状态机。
+- roll 不进入十维 LQR，由 `Kp=800 N/rad`、`Kd=60 N/(rad/s)`、限幅 `200 N` 的独立 PD 生成左右腿差分轴向力；落地阻抗复用同一普通支撑和 roll 前馈，不复制另一套参数。
+- `control/support_force` 从每侧两个关节的实际力矩经 `J^T` 反解轴向力/腿矩，再投影为竖直支持力；输出原始值、滤波值及带滞回和持续时间的 `GROUND/AIR` 诊断。当前默认低通系数为 `0.2`，离地/触地持续时间为 `20/15 ms`；整机 support phase 另融合两侧滤波支持力和 IMU 比力用于快速离地/触地。
 - 站立工作点使用共同腿角补偿 `+2.42 deg` 和每腿 `76.204 N` 支撑前馈。定位阶段只用长度/角度位置反馈，支撑与 roll 差分力只属于 `POSITION_SUPPORT`。
 
 ## 已建立的性能基线
@@ -93,6 +94,9 @@ forward: IDLE / HOLD / VELOCITY
 - Jacobian 复核表明 `0.18-0.38 m` 腿长范围内，`40 N*m` 软件限幅在纯轴向输出时至少对应约 `263 N/leg`；实验上限已从 `180 N` 放宽到 `240 N`。同组 `200 mm` 案例仍全部恢复且没有关节饱和，`K=400/800/1200,D=80` 最大压缩约为 `83/76/73 mm`，`K=800,D=40/120` 约为 `84/73 mm`。这种约 `10 mm` 的竖直差异很难从 GUI 整机姿态辨认，而且除 `D=40` 外仍会碰到 `240 N` 上限，因此参数仍未定稿。下一轮应以压缩余量、竖直速度衰减、反弹/冲量和关节力矩余量评价少量软/中/硬候选，并跨触地强度验证，而不是继续靠视觉密扫相近参数。
 - 固定触地平衡点会一直顶住长腿，不符合落地后快速回收的意图；隔离策略现改为每腿触地捕获 `L_eq=L_touch`，再以 `0.8 m/s` 将平衡点降至正常工作腿长。相同 `200 mm` 案例均恢复且没有失撑、反弹、关节饱和或其他部件触地，实际腿长约 `0.23-0.35 s` 内收至 `0.20 m` 以下，瞬时最低约 `0.154-0.170 m`。方向可行，但回收末端存在约 `10-26 mm` 动态下冲；下一步重点是末端减速和退出/切回条件，而不是继续密扫固定平衡点的 `K/D`。
 - 隔离实验已加入无扰退出：双轮接触、平衡点到达工作腿长、双腿长度速度和机体竖直速度均低于 `0.1 m/s` 并保持 `50 ms` 后，按当前轴向力反算位置 PD 等效参考，再以 `0.1 m/s` 拉回 `0.18 m`。五组在触地后约 `0.47-0.59 s` 切回 `POSITION_SUPPORT`，切换首采样支持力变化小于 `1 N`，随后 `50 ms` 最大关节力矩约 `12.5-13.3 N*m`，未产生二次冲击。当前真值接触和退出编排仍只属于 benchmark；下一步才是将该阶段语义接入 ACTIVE 接触状态机并改用生产支持力诊断。
+- support phase 接管前先以影子方式验证：只等待单腿完整诊断时离地/触地延迟约为 `55/17 ms`；增加“两腿滤波支持力 `<50 N`、IMU 比力范数 `<5 m/s^2`、持续 `5 ms`”的快速离地融合，以及深度卸载后支持力回升持续 `3 ms` 的触地确认后，名义案例延迟降至约 `33/4-5 ms` 且阶段不抖动。
+- 首版 support phase 已从影子诊断升级为正式 ACTIVE 请求：AIRBORNE 关闭轮输出、伸腿至 `0.38 m` 并只保留腿角 LQR；LANDING_RETRACT 恢复轮和完整姿态 LQR，以 `K=800 N/m,D=80 N*s/m`、`0-240 N`、`3000 N/s` 的逐腿轴向阻抗和 `0.8 m/s` 移动平衡点快速收腿；GROUND_RECOVER 反算位置 PD 等效参考并以 `0.1 m/s` 回到普通支撑。support 不覆盖整份命令，最终合成仍由 motion ACTIVE 完成。
+- 新增 `platform_drop_200mm_l0p18_v2p0_leg_lqr_landing_controller` 不使用 MuJoCo 接触真值或 `step_with_control_transform()` 驱动控制。实际边缘速度约 `1.94 m/s`，离台后约 `10 ms` 进入 AIRBORNE，触地后约 `8 ms` 进入 LANDING_RETRACT，约 `0.457/0.618 s` 进入 RECOVER/回到 GROUND；无发散、反弹、其他接触或关节饱和。正式直线、偏航和八字仍全程 GROUND。上述阈值和落地参数仍只经过理想仿真，未覆盖实车噪声、颠簸、单轮卸载、非对称落地或 `400 mm` 压力工况。
 - `tools/experiments/run_experiment.py` 从 TOML 生成隔离 schedule、构建和案例结果；`tools/experiments/plot_trajectory.py` 生成无额外依赖的轨迹 SVG。
 - 本地 MuJoCo、GLFW、ImGui 可置于被忽略的 `third_party/`，通过 `MUJOCO_ROOT`、`FETCHCONTENT_SOURCE_DIR_GLFW`、`IMGUI_ROOT` 显式指定；详细构建命令见根 README。
 

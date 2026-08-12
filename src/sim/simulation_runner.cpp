@@ -119,10 +119,27 @@ void SimulationRunner::step_with_feedback_and_transform(
     } else {
         bc_control_command_t control_command{};
         bc_state_machine_input_t input{};
+        bc_support_force_output_t support_force[BC_SIDE_NUM]{};
+        const float roll_force =
+            bc_control_core_roll_force(&controller_.control_core);
+        for (int side = 0; side < BC_SIDE_NUM; ++side) {
+            support_force[side] =
+                controller_.control_core.support_force[side].output;
+            input.nominal_axial_force[side] =
+                controller_.control_core.config.support_force +
+                controller_.control_core.config.roll_force_sign[side] *
+                    roll_force;
+        }
         input.operator_command = &controller_.operator_command;
         input.gimbal_feedback = &controller_.gimbal_feedback;
         input.state = &controller_.control_core.observer.state;
         input.leg = controller_.control_core.observer.leg;
+        input.support_force = support_force;
+        input.length_position_kp =
+            controller_.control_core.config.length_controller.kp;
+        input.length_position_kd =
+            controller_.control_core.config.length_controller.kd;
+        input.specific_force_norm = controller_.specific_force_norm;
         input.wheel_odometry_velocity =
             controller_.control_core.observer.forward_velocity.
                 wheel_odometry;
@@ -131,6 +148,11 @@ void SimulationRunner::step_with_feedback_and_transform(
                 wheel_velocity_reliable;
         input.timestep_seconds = controller_.timestep_seconds;
         bc_system_update(&controller_.system, &input, &control_command);
+        if (controller_.system.motion.support_phase.state ==
+            BC_SUPPORT_AIRBORNE) {
+            bc_control_core_reject_wheel_velocity(
+                &controller_.control_core);
+        }
         (*transform)(control_command);
         bc_control_core_calculate(
             &controller_.control_core, &control_command);

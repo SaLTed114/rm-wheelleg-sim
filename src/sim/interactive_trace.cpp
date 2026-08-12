@@ -17,7 +17,7 @@ InteractiveTraceWriter::InteractiveTraceWriter(
     "keyboard_forward_axis", "keyboard_yaw_axis", "keyboard_boost",
     "command_system_enabled", "command_balance_restart", "command_forward",
     "gimbal_world_yaw", "gimbal_world_yaw_rate",
-    "system", "motion", "forward", "alignment",
+    "system", "motion", "forward", "support", "alignment",
     "base_x", "base_y", "base_z", "base_forward_velocity",
     "base_vertical_velocity",
     "s", "ds", "ref_s", "ref_ds", "psi", "dpsi", "ref_psi",
@@ -64,7 +64,8 @@ void InteractiveTraceWriter::write(
     const bool state_changed = state_initialized_ &&
         (snapshot.state_machine.system != previous_system_ ||
          snapshot.state_machine.motion != previous_motion_ ||
-         snapshot.state_machine.forward != previous_forward_);
+         snapshot.state_machine.forward != previous_forward_ ||
+         snapshot.state_machine.support != previous_support_);
 
     csv_.begin_row();
     csv_.value(reset_index)
@@ -82,6 +83,7 @@ void InteractiveTraceWriter::write(
         .value(bc_system_state_name(snapshot.state_machine.system))
         .value(bc_motion_state_name(snapshot.state_machine.motion))
         .value(bc_forward_state_name(snapshot.state_machine.forward))
+        .value(bc_support_phase_state_name(snapshot.state_machine.support))
         .value(bc_chassis_alignment_name(snapshot.state_machine.alignment))
         .value(sample.base.x)
         .value(sample.base.y)
@@ -167,6 +169,7 @@ void InteractiveTraceWriter::write(
     previous_system_ = snapshot.state_machine.system;
     previous_motion_ = snapshot.state_machine.motion;
     previous_forward_ = snapshot.state_machine.forward;
+    previous_support_ = snapshot.state_machine.support;
     state_initialized_ = true;
 }
 

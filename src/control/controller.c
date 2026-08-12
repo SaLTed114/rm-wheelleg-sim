@@ -1,5 +1,6 @@
 #include "balance/controller.h"
 
+#include <math.h>
 #include <string.h>
 
 void bc_controller_default_config(bc_controller_config_t *config) {
@@ -32,6 +33,7 @@ void bc_controller_reset(bc_controller_t *controller) {
         &controller->last_actuation, 0,
         sizeof(controller->last_actuation));
     bc_condition_hold_reset(&controller->velocity_estimator_hold);
+    controller->specific_force_norm = 0.0F;
     controller->timestep_seconds = 0.0F;
 }
 
@@ -42,6 +44,10 @@ void bc_controller_update(
 ) {
     controller->timestep_seconds = timestep_seconds;
     controller->gimbal_feedback = feedback->gimbal;
+    controller->specific_force_norm = sqrtf(
+        feedback->imu.specific_force_x * feedback->imu.specific_force_x +
+        feedback->imu.specific_force_y * feedback->imu.specific_force_y +
+        feedback->imu.specific_force_z * feedback->imu.specific_force_z);
     const uint8_t balance_motion =
         controller->system.motion.state == BC_MOTION_BALANCE_ENGAGING ||
         controller->system.motion.state == BC_MOTION_ACTIVE;
@@ -50,10 +56,16 @@ void bc_controller_update(
             &controller->velocity_estimator_hold,
             controller->system.state == BC_SYSTEM_ON && balance_motion,
             controller->velocity_estimator_update_delay,
-            timestep_seconds);
+            timestep_seconds) &&
+        controller->system.motion.support_phase.state !=
+            BC_SUPPORT_AIRBORNE;
     bc_control_core_update(
         &controller->control_core, feedback, timestep_seconds,
         wheel_velocity_update_enabled);
+    if (controller->system.motion.support_phase.state ==
+        BC_SUPPORT_AIRBORNE) {
+        bc_control_core_reject_wheel_velocity(&controller->control_core);
+    }
 }
 
 void bc_controller_set_command(
@@ -65,12 +77,33 @@ void bc_controller_set_command(
 
 void bc_controller_calculate(bc_controller_t *controller) {
     bc_control_command_t control_command;
+    bc_support_force_output_t support_force[BC_SIDE_NUM];
+    float nominal_axial_force[BC_SIDE_NUM];
+    const float roll_force = bc_control_core_roll_force(
+        &controller->control_core);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        support_force[side] =
+            controller->control_core.support_force[side].output;
+        nominal_axial_force[side] =
+            controller->control_core.config.support_force +
+            controller->control_core.config.roll_force_sign[side] *
+                roll_force;
+    }
 
     const bc_state_machine_input_t input = {
         .operator_command = &controller->operator_command,
         .gimbal_feedback = &controller->gimbal_feedback,
         .state = &controller->control_core.observer.state,
         .leg = controller->control_core.observer.leg,
+        .support_force = support_force,
+        .nominal_axial_force = {
+            nominal_axial_force[BC_L], nominal_axial_force[BC_R],
+        },
+        .length_position_kp =
+            controller->control_core.config.length_controller.kp,
+        .length_position_kd =
+            controller->control_core.config.length_controller.kd,
+        .specific_force_norm = controller->specific_force_norm,
         .wheel_odometry_velocity =
             controller->control_core.observer.forward_velocity.
                 wheel_odometry,
@@ -80,6 +113,10 @@ void bc_controller_calculate(bc_controller_t *controller) {
         .timestep_seconds = controller->timestep_seconds,
     };
     bc_system_update(&controller->system, &input, &control_command);
+    if (controller->system.motion.support_phase.state ==
+        BC_SUPPORT_AIRBORNE) {
+        bc_control_core_reject_wheel_velocity(&controller->control_core);
+    }
     bc_control_core_calculate(&controller->control_core, &control_command);
 }
 

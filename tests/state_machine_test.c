@@ -27,18 +27,29 @@ int main() {
     bc_gimbal_feedback_t gimbal_feedback = {0};
     bc_state_vector_t state = {0};
     bc_leg_kinematics_t leg[BC_SIDE_NUM] = {0};
+    bc_support_force_output_t support[BC_SIDE_NUM] = {0};
     bc_control_command_t command;
-    const bc_state_machine_input_t input = {
+    bc_state_machine_input_t input = {
         .operator_command = &operator_command,
         .gimbal_feedback = &gimbal_feedback,
         .state = &state,
         .leg = leg,
+        .support_force = support,
+        .nominal_axial_force = {80.0F, 72.0F},
+        .length_position_kp = 1600.0F,
+        .length_position_kd = 75.0F,
+        .specific_force_norm = 9.81F,
         .wheel_odometry_velocity = 0.0F,
         .wheel_velocity_reliable = 1U,
         .timestep_seconds = 0.1F,
     };
 
     bc_motion_default_config(&config);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        support[side].valid = 1U;
+        support[side].state = BC_CONTACT_GROUND;
+        support[side].filtered_vertical_force = 70.0F;
+    }
     if (config.startup_leg_length != 0.18F ||
         config.leg_length != 0.18F ||
         config.leg_length_ramp.value_limit != 0.39F ||
@@ -251,6 +262,35 @@ int main() {
         strcmp(bc_chassis_alignment_name(BC_CHASSIS_FRONT), "front") != 0 ||
         strcmp(bc_chassis_alignment_name(BC_CHASSIS_REAR), "rear") != 0) {
         fputs("normal mapping did not return to the front direction\n", stderr);
+        return 1;
+    }
+
+    input.specific_force_norm = 0.0F;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        support[side].state = BC_CONTACT_AIR;
+        support[side].filtered_vertical_force = 0.0F;
+    }
+    bc_system_update(&system, &input, &command);
+    if (system.motion.support_phase.state != BC_SUPPORT_AIRBORNE ||
+        command.wheel_strategy != BC_WHEEL_DISABLED ||
+        command.leg[BC_L].length_strategy != BC_LEG_LENGTH_POSITION ||
+        command.leg[BC_L].angle_strategy != BC_LEG_ANGLE_LQR ||
+        command.leg[BC_L].target.length !=
+            config.support_phase.airborne_leg_length) {
+        fputs("ACTIVE did not compose the airborne support request\n", stderr);
+        return 1;
+    }
+    input.specific_force_norm = 9.81F;
+    support[BC_L].state = BC_CONTACT_GROUND;
+    support[BC_L].filtered_vertical_force = 20.0F;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.support_phase.state !=
+            BC_SUPPORT_LANDING_RETRACT ||
+        command.wheel_strategy != BC_WHEEL_LQR ||
+        command.leg[BC_L].length_strategy !=
+            BC_LEG_LENGTH_AXIAL_FORCE ||
+        command.leg[BC_R].length_strategy != BC_LEG_LENGTH_POSITION) {
+        fputs("ACTIVE did not compose the landing support request\n", stderr);
         return 1;
     }
 

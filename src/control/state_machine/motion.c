@@ -169,6 +169,29 @@ static void bc_motion_update_forward(
     }
 }
 
+static void bc_motion_apply_support_request(
+    const bc_support_phase_t *phase,
+    bc_control_command_t *output
+) {
+    const bc_support_phase_request_t *request = &phase->request;
+    if (request->disable_wheels) {
+        output->wheel_strategy = BC_WHEEL_DISABLED;
+        output->yaw_acceleration_reference = 0.0F;
+    }
+    output->disabled_state_feedback |=
+        request->disabled_state_feedback;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        const bc_support_leg_request_t *leg = &request->leg[side];
+        if (!leg->override_length) continue;
+        output->leg[side].length_strategy = leg->length_strategy;
+        if (leg->length_strategy == BC_LEG_LENGTH_AXIAL_FORCE) {
+            output->leg[side].target.axial_force = leg->target;
+        } else {
+            output->leg[side].target.length = leg->target;
+        }
+    }
+}
+
 static void bc_motion_action(
     bc_motion_t *motion,
     const bc_state_machine_input_t *input,
@@ -195,6 +218,8 @@ static void bc_motion_action(
         break;
 
     case BC_MOTION_ACTIVE:
+        bc_support_phase_update(
+            &motion->support_phase, input, motion->config.leg_length);
         bc_reference_ramp_update(
             &motion->leg_length_reference,
             &motion->config.leg_length_ramp,
@@ -214,6 +239,7 @@ static void bc_motion_action(
         output->state_reference = motion->state_reference;
         output->yaw_acceleration_reference =
             motion->yaw_reference.acceleration_reference;
+        bc_motion_apply_support_request(&motion->support_phase, output);
         break;
     }
 }
@@ -222,9 +248,11 @@ void bc_motion_default_config(bc_motion_config_t *config) {
     bc_forward_mode_config_t forward;
     bc_forward_reference_config_t forward_reference;
     bc_yaw_reference_config_t yaw_reference;
+    bc_support_phase_config_t support_phase;
     bc_forward_mode_default_config(&forward);
     bc_forward_reference_default_config(&forward_reference);
     bc_yaw_reference_default_config(&yaw_reference);
+    bc_support_phase_default_config(&support_phase);
     *config = (bc_motion_config_t){
         .startup_leg_length         = 0.18F,
         .leg_length                 = 0.18F,
@@ -243,6 +271,7 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .forward                    = forward,
         .forward_reference          = forward_reference,
         .yaw_reference              = yaw_reference,
+        .support_phase              = support_phase,
     };
 }
 
@@ -257,6 +286,8 @@ void bc_motion_init(
         &config->forward_reference);
     bc_yaw_reference_init(
         &motion->yaw_reference, &config->yaw_reference);
+    bc_support_phase_init(
+        &motion->support_phase, &config->support_phase);
     bc_motion_reset(motion);
 }
 
@@ -274,6 +305,7 @@ void bc_motion_reset(bc_motion_t *motion) {
     bc_forward_mode_reset(&motion->forward);
     bc_forward_reference_reset(&motion->forward_reference);
     bc_yaw_reference_reset(&motion->yaw_reference);
+    bc_support_phase_reset(&motion->support_phase);
     bc_condition_hold_reset(&motion->leg_stable_hold);
     bc_condition_hold_reset(&motion->engage_hold);
 }

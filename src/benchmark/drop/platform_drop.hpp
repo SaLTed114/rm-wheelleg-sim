@@ -20,6 +20,7 @@ enum class PlatformLandingPolicy {
     normal,
     hold_extended,
     suspension,
+    controller,
 };
 
 struct PlatformDropSpec {
@@ -38,7 +39,7 @@ struct PlatformDropSpec {
     const PlatformDropSpec &spec);
 [[nodiscard]] const std::array<PlatformDropSpec, 36> &
 platform_drop_cases();
-[[nodiscard]] const std::array<PlatformDropSpec, 6> &
+[[nodiscard]] const std::array<PlatformDropSpec, 10> &
 platform_landing_suspension_cases();
 [[nodiscard]] const PlatformDropSpec *find_platform_drop_case(
     std::string_view name) noexcept;
@@ -96,6 +97,9 @@ public:
     [[nodiscard]] const std::array<double, BC_SIDE_NUM> &
     edge_leg_length() const noexcept {
         return edge_leg_length_;
+    }
+    [[nodiscard]] bool controller_landing() const noexcept {
+        return spec_.landing_policy == PlatformLandingPolicy::controller;
     }
     [[nodiscard]] float held_heading() const noexcept {
         return held_heading_;
@@ -200,6 +204,14 @@ struct PlatformDropResult {
     double post_touchdown_joint_saturation_ratio{};
     bool landing_recovery_started{};
     double landing_recovery_seconds{
+        std::numeric_limits<double>::quiet_NaN()};
+    double shadow_airborne_delay{
+        std::numeric_limits<double>::quiet_NaN()};
+    double shadow_landing_delay{
+        std::numeric_limits<double>::quiet_NaN()};
+    double shadow_recover_delay{
+        std::numeric_limits<double>::quiet_NaN()};
+    double shadow_ground_delay{
         std::numeric_limits<double>::quiet_NaN()};
     bool rebound{};
     double landing_stable_time{

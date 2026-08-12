@@ -298,6 +298,29 @@ static int test_measurement_health(void) {
         return 1;
     }
 
+    bc_velocity_estimator_update(&estimator, estimator.state[0], 0.001F);
+    bc_velocity_estimator_reject_wheel(&estimator);
+    if (estimator.output.measurement_accepted ||
+        estimator.output.wheel_velocity_reliable ||
+        !estimator.measurement_initialized ||
+        estimator.output.velocity_variance_x <
+            config.recovery_velocity_variance) {
+        fputs("forced wheel rejection did not preserve recovery state\n", stderr);
+        return 1;
+    }
+    bc_velocity_estimator_update(&estimator, estimator.state[0], 0.001F);
+    if (estimator.output.measurement_accepted ||
+        estimator.output.wheel_velocity_reliable) {
+        fputs("wheel recovered without the configured hold\n", stderr);
+        return 1;
+    }
+    bc_velocity_estimator_update(&estimator, estimator.state[0], 0.001F);
+    if (!estimator.output.measurement_accepted ||
+        !estimator.output.wheel_velocity_reliable) {
+        fputs("wheel did not recover after forced rejection\n", stderr);
+        return 1;
+    }
+
     return 0;
 }
 

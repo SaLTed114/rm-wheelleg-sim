@@ -11,6 +11,8 @@ void bc_controller_capture_snapshot(
     snapshot->state_machine.motion = controller->system.motion.state;
     snapshot->state_machine.forward =
         controller->system.motion.forward.state;
+    snapshot->state_machine.support =
+        controller->system.motion.support_phase.state;
     snapshot->state_machine.alignment =
         controller->system.motion.alignment;
     snapshot->state = controller->control_core.observer.state;
@@ -21,6 +23,7 @@ void bc_controller_capture_snapshot(
     snapshot->roll_rate = controller->control_core.observer.roll_rate;
     snapshot->roll_force_request =
         controller->control_core.roll_force_request;
+    snapshot->specific_force_norm = controller->specific_force_norm;
     snapshot->gimbal = controller->gimbal_feedback;
     snapshot->mapped_forward_velocity =
         controller->system.motion.mapped_forward_velocity;
@@ -37,6 +40,8 @@ void bc_controller_capture_snapshot(
         snapshot->support_force[side] =
             controller->control_core.support_force[side].output;
     }
+    snapshot->support_request =
+        controller->system.motion.support_phase.request;
     snapshot->actuation_request =
         controller->control_core.actuation_request;
     snapshot->actuation = controller->last_actuation;

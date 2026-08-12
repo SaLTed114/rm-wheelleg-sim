@@ -115,6 +115,10 @@ void bc_control_core_update(
     }
 }
 
+void bc_control_core_reject_wheel_velocity(bc_control_core_t *core) {
+    bc_observer_reject_wheel_velocity(&core->observer);
+}
+
 void bc_control_core_calculate(
     bc_control_core_t *core,
     const bc_control_command_t *command
@@ -159,10 +163,7 @@ void bc_control_core_calculate(
             &lqr_output);
     }
 
-    const float roll_force = bc_pd_calculate(
-        &core->config.roll_controller,
-        -core->observer.roll,
-        -core->observer.roll_rate);
+    const float roll_force = bc_control_core_roll_force(core);
 
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         const bc_leg_kinematics_t *leg = &core->observer.leg[side];
@@ -230,6 +231,13 @@ void bc_control_core_calculate(
             request->joint_torque[joint] = joint_torque;
         }
     }
+}
+
+float bc_control_core_roll_force(const bc_control_core_t *core) {
+    return bc_pd_calculate(
+        &core->config.roll_controller,
+        -core->observer.roll,
+        -core->observer.roll_rate);
 }
 
 void bc_control_core_execute(

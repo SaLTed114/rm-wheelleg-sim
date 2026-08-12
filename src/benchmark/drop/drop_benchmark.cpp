@@ -234,10 +234,19 @@ DropResult DropBenchmark::run(const DropCaseSpec &spec) {
     bool was_airborne_after_touchdown = false;
     bc_gimbal_feedback_t gimbal = held_heading_feedback(
         runner_.snapshot(), held_heading);
+    const std::array<float, BC_SIDE_NUM> normal_leg_length{{
+        runner_.snapshot().leg[BC_L].length,
+        runner_.snapshot().leg[BC_R].length,
+    }};
     runner_.step_with_control_transform(
         command, gimbal,
-        [policy = spec.policy](bc_control_command_t &control) {
+        [policy = spec.policy, normal_leg_length](
+            bc_control_command_t &control
+        ) {
             apply_drop_air_policy(policy, control);
+            for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                control.leg[side].target.length = normal_leg_length[side];
+            }
         });
     const double deadline = result.release_time + kDropTimeoutSeconds;
     while (plant_.data().time <= deadline) {
@@ -356,13 +365,30 @@ DropResult DropBenchmark::run(const DropCaseSpec &spec) {
                 runner_.snapshot(), held_heading);
             runner_.step_with_control_transform(
                 command, gimbal,
-                [policy = spec.policy](bc_control_command_t &control) {
+                [policy = spec.policy, normal_leg_length](
+                    bc_control_command_t &control
+                ) {
                     apply_drop_air_policy(policy, control);
+                    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                        control.leg[side].target.length =
+                            normal_leg_length[side];
+                    }
                 });
         } else {
             gimbal = held_heading_feedback(
                 runner_.snapshot(), held_heading);
-            runner_.step(command, gimbal);
+            runner_.step_with_control_transform(
+                command, gimbal,
+                [normal_leg_length](bc_control_command_t &control) {
+                    control.wheel_strategy = BC_WHEEL_LQR;
+                    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                        control.leg[side].length_strategy =
+                            BC_LEG_LENGTH_POSITION_SUPPORT;
+                        control.leg[side].angle_strategy = BC_LEG_ANGLE_LQR;
+                        control.leg[side].target.length =
+                            normal_leg_length[side];
+                    }
+                });
         }
     }
     trace.flush();

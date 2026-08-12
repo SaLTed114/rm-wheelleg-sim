@@ -219,6 +219,34 @@ int main() {
         return 1;
     }
 
+    controller.system.motion.support_phase.state = BC_SUPPORT_AIRBORNE;
+    bc_controller_update(&controller, &feedback, 0.001F);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.velocity_estimator.measurement_accepted ||
+        snapshot.velocity_estimator.wheel_velocity_reliable ||
+        !controller.control_core.observer.velocity_estimator.
+            measurement_initialized) {
+        fputs("airborne controller accepted wheel velocity\n", stderr);
+        return 1;
+    }
+    controller.system.motion.support_phase.state = BC_SUPPORT_GROUND;
+    bc_controller_update(&controller, &feedback, 0.001F);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.velocity_estimator.measurement_accepted ||
+        snapshot.velocity_estimator.wheel_velocity_reliable) {
+        fputs("wheel velocity recovered on the first ground sample\n", stderr);
+        return 1;
+    }
+    for (int step = 0; step < 25; ++step) {
+        bc_controller_update(&controller, &feedback, 0.001F);
+    }
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (!snapshot.velocity_estimator.measurement_accepted ||
+        !snapshot.velocity_estimator.wheel_velocity_reliable) {
+        fputs("wheel velocity did not recover after the ground hold\n", stderr);
+        return 1;
+    }
+
     controller.system.motion.state = BC_MOTION_IDLE;
     bc_controller_update(&controller, &feedback, 0.001F);
     bc_controller_set_command(&controller, &command);

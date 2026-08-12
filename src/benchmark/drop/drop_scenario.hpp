@@ -64,6 +64,7 @@ private:
     double release_time_{};
     double touchdown_time_{};
     std::array<double, BC_SIDE_NUM> release_clearance_{};
+    std::array<float, BC_SIDE_NUM> normal_leg_length_{};
     bool balance_engaged_{};
     bool heading_initialized_{};
     float held_heading_{};

@@ -221,6 +221,26 @@ void bc_velocity_estimator_skip_update(
     capture_estimate(estimator);
 }
 
+void bc_velocity_estimator_reject_wheel(
+    bc_velocity_estimator_t *estimator
+) {
+    estimator->output.prior_velocity_x = estimator->state[VELOCITY_X];
+    estimator->output.prior_velocity_y = estimator->state[VELOCITY_Y];
+    estimator->output.wheel_velocity_measurement = 0.0F;
+    estimator->output.innovation = 0.0F;
+    estimator->output.innovation_variance = 0.0F;
+    estimator->output.nis = 0.0F;
+    estimator->output.measurement_accepted = 0U;
+    estimator->rejection_elapsed_seconds = 0.0F;
+    estimator->recovery_elapsed_seconds = 0.0F;
+    estimator->measurement_initialized = 1U;
+    if (estimator->wheel_velocity_reliable) {
+        inflate_recovery_covariance(estimator);
+    }
+    estimator->wheel_velocity_reliable = 0U;
+    capture_estimate(estimator);
+}
+
 void bc_velocity_estimator_update(
     bc_velocity_estimator_t *estimator,
     const float wheel_velocity_measurement,

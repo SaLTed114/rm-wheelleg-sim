@@ -148,7 +148,7 @@ PerformanceBenchmark::PerformanceBenchmark(
         "gimbal_relative_yaw", "gimbal_relative_yaw_rate",
         "alignment", "command_forward", "mapped_forward",
         "heading_error", "ref_ddpsi",
-        "system", "motion", "forward", "s", "ds", "psi", "dpsi",
+        "system", "motion", "forward", "support_phase", "s", "ds", "psi", "dpsi",
         "theta_l",
         "dtheta_l", "theta_r", "dtheta_r", "theta_b", "dtheta_b",
         "ref_s", "ref_ds", "ref_psi", "ref_dpsi", "ref_theta_l",
@@ -646,7 +646,9 @@ void PerformanceBenchmark::write_trace(
         .value(snapshot.yaw_acceleration_reference)
         .value(snapshot.state_machine.system)
         .value(snapshot.state_machine.motion)
-        .value(bc_forward_state_name(snapshot.state_machine.forward));
+        .value(bc_forward_state_name(snapshot.state_machine.forward))
+        .value(bc_support_phase_state_name(
+            snapshot.state_machine.support));
     for (const float value : snapshot.state.value) trace_.value(value);
     for (const float value : snapshot.state_reference.value) {
         trace_.value(value);

@@ -12,8 +12,7 @@ int main(int argc, char **argv) {
     }
 
     const auto *spec = balance::benchmark::find_platform_drop_case(
-        "platform_drop_200mm_l0p18_v2p0_leg_lqr_air_extend_l0p38_"
-        "landing_suspension_k800_d120");
+        "platform_drop_200mm_l0p18_v2p0_leg_lqr_landing_controller");
     if (spec == nullptr) {
         std::cerr << "landing suspension smoke case is missing\n";
         return EXIT_FAILURE;
@@ -26,6 +25,12 @@ int main(int argc, char **argv) {
         result.diverged || result.rebound ||
         !result.landing_recovery_started ||
         result.landing_recovery_seconds <= 0.0 ||
+        result.shadow_airborne_delay <= 0.0 ||
+        result.shadow_airborne_delay > 0.045 ||
+        result.shadow_landing_delay <= 0.0 ||
+        result.shadow_landing_delay > 0.015 ||
+        result.shadow_recover_delay <= result.shadow_landing_delay ||
+        result.shadow_ground_delay <= result.shadow_recover_delay ||
         result.other_contact ||
         result.maximum_applied_axial_force[BC_L] <= 0.0 ||
         result.maximum_applied_axial_force[BC_R] <= 0.0 ||
