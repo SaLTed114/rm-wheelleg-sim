@@ -9,6 +9,7 @@
 
 #include "balance/math_utils.h"
 #include "drop_benchmark.hpp"
+#include "platform_drop.hpp"
 
 namespace {
 
@@ -27,6 +28,19 @@ void print_result(const balance::benchmark::DropResult &result) {
               << result.post_max_pitch * 180.0 / BC_PI
               << " rebound=" << result.post_rebound
               << " other_contact=" << result.post_other_contact
+              << '\n';
+}
+
+void print_result(const balance::benchmark::PlatformDropResult &result) {
+    std::cout << std::left << std::setw(44) << result.name
+              << " complete=" << result.completed
+              << " recovered=" << result.recovered
+              << " diverged=" << result.diverged
+              << " edge_velocity=" << result.edge_velocity
+              << " flight_time="
+              << result.touchdown_time - result.departure_time
+              << " kf_air_error="
+              << result.airborne_maximum_velocity_error
               << '\n';
 }
 
@@ -65,6 +79,16 @@ int main(int argc, char **argv) {
             const auto result = benchmark.run(spec);
             benchmark.write_summary(result);
             print_result(result);
+        }
+        if (!wheel_clearance) {
+            balance::benchmark::PlatformDropBenchmark platform_benchmark(
+                argv[1], argv[2]);
+            for (const auto &spec :
+                 balance::benchmark::platform_drop_cases()) {
+                const auto result = platform_benchmark.run(spec);
+                platform_benchmark.write_summary(result);
+                print_result(result);
+            }
         }
     } catch (const std::exception &error) {
         std::cerr << "rm_balance_drop: " << error.what() << '\n';

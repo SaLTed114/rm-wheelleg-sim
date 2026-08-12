@@ -20,7 +20,11 @@ struct BaseState {
 
 struct GroundContactState {
     std::array<bool, BC_SIDE_NUM> wheel{};
+    std::array<bool, BC_SIDE_NUM> wheel_on_lower_ground{};
+    std::array<bool, BC_SIDE_NUM> wheel_on_platform{};
     std::array<double, BC_SIDE_NUM> wheel_normal_force{};
+    bool lower_ground{};
+    bool platform{};
     bool other{};
     std::string unexpected;
 };
@@ -76,6 +80,7 @@ private:
     int base_dof_{};
     int base_body_{};
     int ground_{};
+    std::array<int, 2> platform_{};
     std::array<int, BC_SIDE_NUM> wheel_{};
     std::array<int, BC_SIDE_NUM> wheel_axis_{};
     std::array<int, BC_SIDE_NUM> wheel_dof_{};

@@ -6,7 +6,7 @@
 
 项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。当前主线转向离地与落地：先建立支持力识别和可复现的抬升释放实验，再讨论正式 airborne motion 状态机。
 
-最近一次参数变更是 LQR 差分模态降档：共同腿角/角速度权重保持 `60/1`，差分权重从 `1920/32` 降为 `960/16`，并已同步生成器、正式 schedule、验证报告和 golden test。正式四案例、CTest `18/18`、Python 工具测试 `13/13 + 4/4` 均通过。此前 benchmark 分层、转弯包络和八字工具已经提交并推送到 `origin/main`。
+最近一次参数变更是 LQR 差分模态降档：共同腿角/角速度权重保持 `60/1`，差分权重从 `1920/32` 降为 `960/16`，并已同步生成器、正式 schedule、验证报告和 golden test。正式四案例和 Python 工具测试均通过；加入离地、支持力和平台跌落测试后，当前 CTest 为 `23/23`。此前 benchmark 分层、转弯包络和八字工具已经提交并推送到 `origin/main`。
 
 ## 设计边界
 
@@ -84,7 +84,10 @@ forward: IDLE / HOLD / VELOCITY
 
 - C++ 仿真层由 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner`、`MujocoViewer`、`SimulationUi` 和场景编排组成。GUI 与 performance benchmark 共用 `PerformanceScenario`。
 - GUI 侧栏显示状态机、state/reference、roll、云台反馈、腿运动学和限幅前后输出；`--trace <csv>` 可写交互式 1 kHz trace。
-- 独立 drop benchmark 以轮胎碰撞几何净空执行 `200/400 mm` 抬升释放，保留 `length_only` 与 `leg_lqr` 两种空中策略及 `-0.5/0/+0.5 rad/s` 初始 pitch rate。MuJoCo 接触真值目前仍只负责实验切换，并与支持力诊断记录对照。
+- 独立 drop benchmark 既支持以轮胎碰撞几何净空执行 `200/400 mm` 抬升释放，也支持出生在实体平台后自动驶离的 `200/400 mm` 跌落。平台基线覆盖 `0.18/0.24 m` 腿长、`0.5/1.0/2.0 m/s` 与 `length_only/leg_lqr` 共 24 例，另有 `200 mm、1.5/2.0/2.5 m/s` 的固定腿长与空中伸到 `0.38 m` 对照；速度参考跨越空中与落地保持不变。MuJoCo 接触真值只负责实验切换，支持力与 KF 对真值误差只并行记录，不进入生产控制器。
+- 当前实体平台实验首先测到的是直角边缘通过性，不能直接解释为纯空中控制能力。`0.18 m` 低速驶离时底盘或后腿会持续碰撞平台边缘，碰撞在 pitch 恶化之前发生；`0.24 m` 明显缩短碰撞，并使 200 mm 六例全部恢复，但 400 mm 的 `0.5/1.0 m/s` 仍会碰边发散，两个高度的 `2.0 m/s` 均无边缘碰撞并恢复。KF 空中误差仍需在排除边缘碰撞的独立实验中归因。
+- 200 mm 正常速度下的探索实验表明，离台后将腿从 `0.18 m` 目标快速伸至 `0.38 m`，可把首次触地前机体下降从约 `171-178 mm` 降至 `19-24 mm`，触地 pitch 降至约 `0.22-0.31 deg`，触地竖直速度降至约 `0.67-0.78 m/s`。实际触地腿长约 `0.31-0.35 m`，空中关节峰值请求约 `30-31 N*m` 且没有触发 `40 N*m` 限幅；这只验证快速接地有效，触地顺应和缓慢回收尚未设计。
+- `leg_lqr` 空中策略的直接目标是让虚拟腿相对世界接近竖直，而不是最小化机体 pitch；有效腿角参考包含约 `+2.42 deg` trim。按正确指标比较，`2.0 m/s` 名义触地腿角由 `length_only` 的约 `6.89/5.24 deg` 收到 `4.35/3.96 deg`，左右差由 `1.65 deg` 降到 `0.39 deg`；`2.5 m/s` 由约 `8.15/8.27 deg` 收到 `5.09/5.05 deg`。在 `+/-0.5 rad/s` 离台 pitch-rate 扰动下，LQR 也都降低最大腿角误差和左右差。它会与机体交换角动量，因此机体 pitch 可能略大；不能用机体 pitch 单独否定该策略。
 - `tools/experiments/run_experiment.py` 从 TOML 生成隔离 schedule、构建和案例结果；`tools/experiments/plot_trajectory.py` 生成无额外依赖的轨迹 SVG。
 - 本地 MuJoCo、GLFW、ImGui 可置于被忽略的 `third_party/`，通过 `MUJOCO_ROOT`、`FETCHCONTENT_SOURCE_DIR_GLFW`、`IMGUI_ROOT` 显式指定；详细构建命令见根 README。
 

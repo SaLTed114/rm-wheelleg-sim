@@ -19,6 +19,8 @@ public:
     void reset();
     void step();
     void set_equality_active(const char *name, bool active);
+    void place_mocap_surface(
+        const char *name, double x, double y, double z, bool visible);
 
     [[nodiscard]] const mjModel &model() const noexcept { return *model_; }
     [[nodiscard]] mjData &data() noexcept { return *data_; }

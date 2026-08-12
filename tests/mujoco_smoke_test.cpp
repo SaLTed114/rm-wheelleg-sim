@@ -146,8 +146,21 @@ int main(int argc, char **argv) {
 
         const int ground = mj_name2id(
             &plant.model(), mjOBJ_GEOM, "ground");
+        const int platform_200 = mj_name2id(
+            &plant.model(), mjOBJ_GEOM, "drop_platform_200mm");
+        const int platform_400 = mj_name2id(
+            &plant.model(), mjOBJ_GEOM, "drop_platform_400mm");
+        if (platform_200 < 0 || platform_400 < 0 ||
+            plant.model().geom_contype[platform_200] != 1 ||
+            plant.model().geom_contype[platform_400] != 1 ||
+            plant.data().geom_xpos[3 * platform_200 + 2] > -1.0 ||
+            plant.data().geom_xpos[3 * platform_400 + 2] > -1.0) {
+            std::cerr << "drop platforms are missing or active by default\n";
+            return EXIT_FAILURE;
+        }
         for (int geom = 0; geom < plant.model().ngeom; ++geom) {
-            if (geom == ground) continue;
+            if (geom == ground || geom == platform_200 ||
+                geom == platform_400) continue;
 
             const bool collides_with_ground =
                 plant.model().geom_conaffinity[geom] &

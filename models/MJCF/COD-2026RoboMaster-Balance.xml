@@ -31,6 +31,13 @@
     <light name="key_light" directional="true" pos="-1 -1 2" dir="0.4 0.3 -1" diffuse="0.8 0.8 0.75" specular="0.2 0.2 0.2"/>
     <light name="fill_light" directional="true" pos="1 1 1" dir="-0.3 -0.2 -1" diffuse="0.35 0.38 0.42" specular="0.05 0.05 0.05"/>
     <geom name="ground" type="plane" pos="0 0 -0.43" size="20 20 0.05" material="ground_material" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    <!-- Platform-drop cases move one buried platform into place and reveal it. -->
+    <body name="drop_platform_200mm_body" mocap="true" pos="0.5 0 -2">
+      <geom name="drop_platform_200mm" type="box" size="1.5 1 0.1" mass="0" rgba="0.55 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="drop_platform_400mm_body" mocap="true" pos="0.5 0 -2">
+      <geom name="drop_platform_400mm" type="box" size="1.5 1 0.2" mass="0" rgba="0.55 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
 
     <body name="base_support" mocap="true"/>
     <body name="base_link">

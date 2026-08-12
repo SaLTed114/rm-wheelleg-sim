@@ -27,6 +27,10 @@ SimulationSampler::SimulationSampler(const mjModel &model) : model_(model) {
     base_dof_ = model_.jnt_dofadr[base_joint];
     base_body_ = require_id(model_, mjOBJ_BODY, "base_link");
     ground_ = require_id(model_, mjOBJ_GEOM, "ground");
+    platform_ = {{
+        require_id(model_, mjOBJ_GEOM, "drop_platform_200mm"),
+        require_id(model_, mjOBJ_GEOM, "drop_platform_400mm"),
+    }};
     wheel_ = {{
         require_id(model_, mjOBJ_GEOM, "Right_wheel_collision"),
         require_id(model_, mjOBJ_GEOM, "Left_wheel_collision"),
@@ -124,24 +128,41 @@ GroundContactState SimulationSampler::read_contacts(
     GroundContactState state{};
     for (int index = 0; index < data.ncon; ++index) {
         const mjContact &contact = data.contact[index];
-        const bool has_ground =
-            contact.geom[0] == ground_ || contact.geom[1] == ground_;
-        if (!has_ground) {
+        int surface = -1;
+        bool lower_ground = false;
+        for (const int candidate : {contact.geom[0], contact.geom[1]}) {
+            if (candidate == ground_) {
+                surface = candidate;
+                lower_ground = true;
+            } else if (candidate == platform_[0] ||
+                       candidate == platform_[1]) {
+                surface = candidate;
+            }
+        }
+        if (surface < 0) {
             state.other = true;
             if (state.unexpected.empty()) {
                 state.unexpected = contact_name(contact);
             }
             continue;
         }
+        state.lower_ground = state.lower_ground || lower_ground;
+        state.platform = state.platform || !lower_ground;
 
         bool wheel_contact = false;
         for (int side = 0; side < BC_SIDE_NUM; ++side) {
             const bool pair =
-                (contact.geom[0] == ground_ &&
+                (contact.geom[0] == surface &&
                  contact.geom[1] == wheel_[side]) ||
-                (contact.geom[1] == ground_ &&
+                (contact.geom[1] == surface &&
                  contact.geom[0] == wheel_[side]);
             state.wheel[side] = state.wheel[side] || pair;
+            state.wheel_on_lower_ground[side] =
+                state.wheel_on_lower_ground[side] ||
+                (pair && lower_ground);
+            state.wheel_on_platform[side] =
+                state.wheel_on_platform[side] ||
+                (pair && !lower_ground);
             if (pair) {
                 mjtNum force[6] = {};
                 mj_contactForce(&model_, &data, index, force);

@@ -61,4 +61,28 @@ void MujocoPlant::set_equality_active(
     data_->eq_active[equality] = active ? 1 : 0;
 }
 
+void MujocoPlant::place_mocap_surface(
+    const char *name, const double x, const double y, const double z,
+    const bool visible
+) {
+    const int geom = mj_name2id(model_.get(), mjOBJ_GEOM, name);
+    if (geom < 0) {
+        throw std::runtime_error(
+            "MuJoCo model is missing geom '" +
+            std::string(name) + "'");
+    }
+    const int body = model_->geom_bodyid[geom];
+    const int mocap = model_->body_mocapid[body];
+    if (mocap < 0) {
+        throw std::runtime_error(
+            "MuJoCo surface '" + std::string(name) +
+            "' is not attached to a mocap body");
+    }
+    data_->mocap_pos[3 * mocap] = x;
+    data_->mocap_pos[3 * mocap + 1] = y;
+    data_->mocap_pos[3 * mocap + 2] = z;
+    model_->geom_rgba[4 * geom + 3] = visible ? 1.0F : 0.0F;
+    mj_forward(model_.get(), data_.get());
+}
+
 } // namespace balance::sim

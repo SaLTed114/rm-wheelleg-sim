@@ -5,6 +5,7 @@
 #include <string>
 
 #include "drop/drop_benchmark.hpp"
+#include "drop/platform_drop.hpp"
 #include "performance/performance_scenario.hpp"
 #include "simulation_app.hpp"
 
@@ -34,6 +35,12 @@ void print_usage() {
     for (const auto &spec : balance::benchmark::drop_exploration_cases()) {
         std::cerr << "  " << balance::benchmark::drop_case_name(spec) << '\n';
     }
+    std::cerr << "available platform drop cases:\n";
+    for (const auto &spec : balance::benchmark::platform_drop_cases()) {
+        std::cerr << "  "
+                  << balance::benchmark::platform_drop_case_name(spec)
+                  << '\n';
+    }
 }
 
 bool parse_arguments(
@@ -54,7 +61,8 @@ bool parse_arguments(
 
         const std::string value = argv[index + 1];
         if (option == "--case" && options.performance_case == nullptr &&
-            options.drop_case == nullptr) {
+            options.drop_case == nullptr &&
+            options.platform_drop_case == nullptr) {
             options.performance_case =
                 balance::benchmark::find_performance_case(value);
             if (options.performance_case == nullptr) {
@@ -63,6 +71,12 @@ bool parse_arguments(
             }
             if (options.performance_case == nullptr &&
                 options.drop_case == nullptr) {
+                options.platform_drop_case =
+                    balance::benchmark::find_platform_drop_case(value);
+            }
+            if (options.performance_case == nullptr &&
+                options.drop_case == nullptr &&
+                options.platform_drop_case == nullptr) {
                 std::cerr << "unknown case: " << value << '\n';
                 return false;
             }
@@ -115,10 +129,13 @@ bool parse_arguments(
         index += 2;
     }
     const bool case_selected = options.performance_case != nullptr ||
-        options.drop_case != nullptr;
+        options.drop_case != nullptr ||
+        options.platform_drop_case != nullptr;
     return !(options.keyboard_drive && case_selected) &&
         !(options.trace_path && case_selected) &&
-        (!options.drop_wheel_clearance || options.drop_case != nullptr);
+        (!options.drop_wheel_clearance ||
+         (options.drop_case != nullptr &&
+          options.platform_drop_case == nullptr));
 }
 
 } // namespace

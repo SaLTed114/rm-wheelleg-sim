@@ -97,6 +97,7 @@ add_library(balance_benchmark_support STATIC
   src/benchmark/drop/drop_benchmark.cpp
   src/benchmark/drop/drop_policy.cpp
   src/benchmark/drop/drop_scenario.cpp
+  src/benchmark/drop/platform_drop.cpp
   src/benchmark/performance/base_roll_restraint.cpp
   src/benchmark/performance/forward_velocity_diagnostic.cpp
   src/benchmark/performance/performance_benchmark.cpp
@@ -277,6 +278,17 @@ if(BUILD_TESTING)
     COMMAND mujoco_drop_test
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/drop")
+
+  add_executable(mujoco_platform_drop_test
+    tests/mujoco_platform_drop_test.cpp)
+  target_link_libraries(
+    mujoco_platform_drop_test PRIVATE balance_benchmark_support)
+  balance_enable_warnings(mujoco_platform_drop_test)
+  balance_configure_mujoco_runtime(mujoco_platform_drop_test)
+  add_test(NAME mujoco_platform_drop
+    COMMAND mujoco_platform_drop_test
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_BINARY_DIR}/test-results/platform-drop")
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_benchmark_support)

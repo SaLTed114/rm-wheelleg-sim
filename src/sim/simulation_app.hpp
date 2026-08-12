@@ -6,6 +6,7 @@
 
 namespace balance::benchmark {
 struct DropCaseSpec;
+struct PlatformDropSpec;
 struct PerformanceCaseSpec;
 }
 
@@ -15,6 +16,7 @@ struct SimulationAppOptions {
     std::filesystem::path model_path;
     std::optional<std::filesystem::path> trace_path;
     const benchmark::DropCaseSpec *drop_case{};
+    const benchmark::PlatformDropSpec *platform_drop_case{};
     const benchmark::PerformanceCaseSpec *performance_case{};
     std::optional<double> drop_wheel_clearance;
     std::optional<float> leg_length;
