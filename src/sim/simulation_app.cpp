@@ -9,6 +9,7 @@
 
 #include "common/common_diagnostics.hpp"
 #include "common/simulation_sample.hpp"
+#include "drop/drop_scenario.hpp"
 #include "input/interactive_scenario.hpp"
 #include "interactive_trace.hpp"
 #include "mujoco_adapter.hpp"
@@ -38,6 +39,13 @@ public:
               InteractiveMode::keyboard : InteractiveMode::demo) {
         if (options_.performance_case != nullptr) {
             performance_.emplace(*options_.performance_case);
+        }
+        if (options_.drop_case != nullptr) {
+            auto spec = *options_.drop_case;
+            if (options_.drop_wheel_clearance) {
+                spec.wheel_clearance = *options_.drop_wheel_clearance;
+            }
+            drop_.emplace(spec, plant_.model());
         }
         if (options_.trace_path) {
             trace_ = std::make_unique<InteractiveTraceWriter>(
@@ -77,8 +85,9 @@ public:
                 accumulated_time += std::clamp(
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant_.timestep()) {
-                    const bool keep_stepping = performance_ ?
-                        step_performance() : step_interactive();
+                    const bool keep_stepping = drop_ ?
+                        step_drop() : performance_ ?
+                            step_performance() : step_interactive();
                     if (!keep_stepping) {
                         accumulated_time = 0.0;
                         break;
@@ -117,6 +126,7 @@ private:
         ++reset_index_;
         runner_.reset();
         if (performance_) performance_->reset(plant_.data().time);
+        if (drop_) drop_->reset();
         interactive_.reset(runner_.snapshot());
         phase_ = bc_system_state_name(
             runner_.snapshot().state_machine.system);
@@ -184,18 +194,56 @@ private:
         return true;
     }
 
+    bool step_drop() {
+        drop_->step(plant_, runner_, sampler_);
+        phase_ = drop_->phase_name();
+        case_balance_engaged_ = drop_->balance_engaged();
+        if (std::string_view(drop_->issue()) != "none" &&
+            case_issue_ == "none") {
+            case_issue_ = drop_->issue();
+        }
+
+        if (drop_->phase() != benchmark::DropPhase::disabled_settle &&
+            drop_->phase() != benchmark::DropPhase::standing) {
+            const auto sample = sampler_.read(
+                plant_.data(), runner_.snapshot());
+            const std::string issue =
+                benchmark::common_diagnostic_issue(sample);
+            const bool tuning_only = issue.rfind(
+                "non_wheel_contact:", 0) == 0;
+            if (!issue.empty() && !tuning_only && case_issue_ == "none") {
+                case_issue_ = issue;
+            }
+            if (issue == "non_finite_telemetry") {
+                case_finished_ = true;
+                return false;
+            }
+        }
+
+        if (drop_->finished()) {
+            case_finished_ = true;
+            return false;
+        }
+        return true;
+    }
+
     void finish_performance_case() {
         case_finished_ = true;
         if (!case_balance_engaged_) case_issue_ = "balance_not_engaged";
     }
 
     [[nodiscard]] SimulationUiFrame ui_frame() const {
+        const char *case_name = nullptr;
+        if (drop_) case_name = drop_->name().c_str();
+        else if (performance_) {
+            case_name = options_.performance_case->name.data();
+        }
         return {
             &runner_.snapshot(),
             displayed_gimbal_,
             plant_.data().time,
             phase_.c_str(),
-            performance_ ? options_.performance_case->name.data() : nullptr,
+            case_name,
             case_issue_.c_str(),
             paused_,
             case_finished_,
@@ -210,6 +258,7 @@ private:
     SimulationUi ui_;
     benchmark::SimulationSampler sampler_;
     InteractiveScenario interactive_;
+    std::optional<benchmark::DropScenario> drop_;
     std::optional<benchmark::PerformanceScenario> performance_;
     std::unique_ptr<InteractiveTraceWriter> trace_;
     VirtualGimbalState displayed_gimbal_{};

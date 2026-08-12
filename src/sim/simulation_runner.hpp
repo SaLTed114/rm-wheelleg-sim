@@ -2,6 +2,7 @@
 #define BALANCE_SIM_SIMULATION_RUNNER_HPP
 
 #include <cstddef>
+#include <functional>
 
 #include "balance/controller.h"
 #include "balance/controller_snapshot.h"
@@ -18,6 +19,9 @@ struct SimulationStats {
 
 class SimulationRunner {
 public:
+    using ControlCommandTransform =
+        std::function<void(bc_control_command_t &)>;
+
     SimulationRunner(MujocoPlant &plant, const MujocoAdapter &adapter);
     SimulationRunner(
         MujocoPlant &plant,
@@ -36,6 +40,10 @@ public:
     void step_with_feedback(
         const bc_operator_command_t &command,
         const bc_sensor_feedback_t &feedback);
+    void step_with_control_transform(
+        const bc_operator_command_t &command,
+        const bc_gimbal_feedback_t &gimbal_feedback,
+        const ControlCommandTransform &transform);
     [[nodiscard]] bc_gimbal_feedback_t gimbal_feedback(
         float world_yaw,
         float world_yaw_rate,
@@ -52,6 +60,11 @@ public:
     }
 
 private:
+    void step_with_feedback_and_transform(
+        const bc_operator_command_t &command,
+        const bc_sensor_feedback_t &feedback,
+        const ControlCommandTransform *transform);
+
     MujocoPlant &plant_;
     const MujocoAdapter &adapter_;
     bc_controller_t controller_{};

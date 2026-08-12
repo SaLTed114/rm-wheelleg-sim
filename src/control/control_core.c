@@ -10,6 +10,8 @@ _Static_assert(
     "state feedback mask is too small for the state vector");
 
 void bc_control_default_config(bc_control_config_t *config) {
+    bc_support_force_config_t support_force_estimator;
+    bc_support_force_default_config(&support_force_estimator);
     *config = (bc_control_config_t){
         .observer = {
             .leg_geometry = {
@@ -60,6 +62,7 @@ void bc_control_default_config(bc_control_config_t *config) {
             .leg_angle_trim = 2.42F * BC_PI_F / 180.0F,
             .yaw_acceleration_feedforward_scale = 0.9F,
         },
+        .support_force_estimator = support_force_estimator,
         .support_force      = 76.204F,
         .wheel_torque_limit = 6.32F,
         .joint_torque_limit = 40.0F,
@@ -72,12 +75,20 @@ void bc_control_core_init(
 ) {
     core->config = *config;
     bc_observer_init(&core->observer, &config->observer);
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        bc_support_force_init(
+            &core->support_force[side],
+            &config->support_force_estimator);
+    }
     bc_control_core_reset(core);
 }
 
 void bc_control_core_reset(bc_control_core_t *core) {
     bc_observer_reset(&core->observer);
     memset(&core->actuation_request, 0, sizeof(core->actuation_request));
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        bc_support_force_reset(&core->support_force[side]);
+    }
     core->roll_force_request = 0.0F;
     core->tick_count = 0U;
 }
@@ -91,6 +102,17 @@ void bc_control_core_update(
     bc_observer_update(
         &core->observer, feedback, timestep_seconds,
         wheel_velocity_update_enabled);
+    const int angle_state[BC_SIDE_NUM] = {
+        BC_STATE_THETA_L, BC_STATE_THETA_R,
+    };
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        bc_support_force_update(
+            &core->support_force[side],
+            &core->observer.leg[side],
+            &feedback->leg[side],
+            core->observer.state.value[angle_state[side]],
+            timestep_seconds);
+    }
 }
 
 void bc_control_core_calculate(

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 
+#include "drop/drop_benchmark.hpp"
 #include "performance/performance_scenario.hpp"
 #include "simulation_app.hpp"
 
@@ -14,6 +15,7 @@ void print_usage() {
         << "usage: rm_balance_sim <model.xml> [--keyboard] "
            "[--trace <csv-path>] "
            "[--case <case-name>] "
+           "[--wheel-clearance <metres>] "
            "[--leg-length <metres>] "
            "[--yaw-acceleration-feedforward <scale>]\n"
         << "keyboard mode: W/S forward/reverse, A/D left/right, "
@@ -27,6 +29,10 @@ void print_usage() {
     for (const auto &spec :
          balance::benchmark::trajectory_performance_cases()) {
         std::cerr << "  " << spec.name << '\n';
+    }
+    std::cerr << "available drop cases:\n";
+    for (const auto &spec : balance::benchmark::drop_exploration_cases()) {
+        std::cerr << "  " << balance::benchmark::drop_case_name(spec) << '\n';
     }
 }
 
@@ -47,16 +53,35 @@ bool parse_arguments(
         if (index + 1 >= argc) return false;
 
         const std::string value = argv[index + 1];
-        if (option == "--case" && options.performance_case == nullptr) {
+        if (option == "--case" && options.performance_case == nullptr &&
+            options.drop_case == nullptr) {
             options.performance_case =
                 balance::benchmark::find_performance_case(value);
             if (options.performance_case == nullptr) {
-                std::cerr << "unknown performance case: " << value << '\n';
+                options.drop_case =
+                    balance::benchmark::find_drop_case(value);
+            }
+            if (options.performance_case == nullptr &&
+                options.drop_case == nullptr) {
+                std::cerr << "unknown case: " << value << '\n';
                 return false;
             }
         } else if (option == "--trace" && !options.trace_path &&
                    !value.empty()) {
             options.trace_path = std::filesystem::path(value);
+        } else if (option == "--wheel-clearance" &&
+                   !options.drop_wheel_clearance) {
+            std::size_t consumed = 0U;
+            try {
+                options.drop_wheel_clearance = std::stod(value, &consumed);
+            } catch (const std::exception &) {
+                return false;
+            }
+            if (consumed != value.size() ||
+                !std::isfinite(*options.drop_wheel_clearance) ||
+                *options.drop_wheel_clearance <= 0.0) {
+                return false;
+            }
         } else if (option == "--leg-length" && !options.leg_length) {
             std::size_t consumed = 0U;
             try {
@@ -89,8 +114,11 @@ bool parse_arguments(
         }
         index += 2;
     }
-    return !(options.keyboard_drive && options.performance_case != nullptr) &&
-        !(options.trace_path && options.performance_case != nullptr);
+    const bool case_selected = options.performance_case != nullptr ||
+        options.drop_case != nullptr;
+    return !(options.keyboard_drive && case_selected) &&
+        !(options.trace_path && case_selected) &&
+        (!options.drop_wheel_clearance || options.drop_case != nullptr);
 }
 
 } // namespace

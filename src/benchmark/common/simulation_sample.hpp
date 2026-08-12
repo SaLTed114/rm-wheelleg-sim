@@ -27,6 +27,7 @@ struct GroundContactState {
 
 struct WheelMotionState {
     std::array<double, BC_SIDE_NUM> forward_velocity{};
+    std::array<double, BC_SIDE_NUM> angular_velocity{};
 };
 
 struct AxlePositionState {
@@ -77,6 +78,7 @@ private:
     int ground_{};
     std::array<int, BC_SIDE_NUM> wheel_{};
     std::array<int, BC_SIDE_NUM> wheel_axis_{};
+    std::array<int, BC_SIDE_NUM> wheel_dof_{};
     int imu_site_{};
 };
 

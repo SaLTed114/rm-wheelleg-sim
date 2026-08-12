@@ -32,6 +32,33 @@ python tools/experiments/plot_trajectory.py \
   build/performance/figure-eight/trajectory.svg
 ```
 
+The exploratory drop benchmark stands normally, moves the whole robot until
+the wheel collision geometry has `200 mm` clearance, then releases it with
+three initial pitch rates under two airborne control policies. It records
+the first wheel touchdown separately from the following one-second recovery:
+
+```bash
+build/rm_balance_drop models/MJCF/COD-2026RoboMaster-Balance.xml \
+  build/drop/200mm
+python tools/experiments/plot_drop.py \
+  build/drop/200mm build/drop/200mm/comparison.svg
+```
+
+Use `--wheel-clearance 0.4` with a separate output directory for the
+`400 mm` pressure run.
+
+The production controller estimates each leg's vertical support force from
+measured joint torque and reports a filtered `ground/air` diagnosis. The
+benchmark records this diagnosis against MuJoCo contact truth, but still uses
+truth for the experimental switch until the estimator is accepted separately.
+Any individual drop case can be inspected in the GUI through the existing
+case selector, for example:
+
+```bash
+build/rm_balance_sim models/MJCF/COD-2026RoboMaster-Balance.xml \
+  --case leg_lqr_pitch_rate_pos_0p5 --wheel-clearance 0.4
+```
+
 To run an existing schedule without regeneration, replace the generation tables with:
 
 ```toml

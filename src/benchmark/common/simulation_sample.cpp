@@ -35,6 +35,13 @@ SimulationSampler::SimulationSampler(const mjModel &model) : model_(model) {
         require_id(model_, mjOBJ_SITE, "Right_wheel_axis_site"),
         require_id(model_, mjOBJ_SITE, "Left_wheel_axis_site"),
     }};
+    const std::array<int, BC_SIDE_NUM> wheel_joint{{
+        require_id(model_, mjOBJ_JOINT, "Right_Wheel_joint"),
+        require_id(model_, mjOBJ_JOINT, "Left_Wheel_joint"),
+    }};
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        wheel_dof_[side] = model_.jnt_dofadr[wheel_joint[side]];
+    }
     imu_site_ = require_id(model_, mjOBJ_SITE, "imu_site");
 }
 
@@ -94,6 +101,7 @@ WheelMotionState SimulationSampler::read_wheel_motion(
             &model_, &data, mjOBJ_SITE, wheel_axis_[side], velocity, 0);
         state.forward_velocity[side] =
             velocity[3] * heading_x + velocity[4] * heading_y;
+        state.angular_velocity[side] = data.qvel[wheel_dof_[side]];
     }
     return state;
 }

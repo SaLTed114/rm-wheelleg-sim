@@ -164,6 +164,9 @@ PerformanceBenchmark::PerformanceBenchmark(
         "raw_joint_l_front", "raw_joint_l_rear", "raw_joint_r_front",
         "raw_joint_r_rear", "wheel_l", "wheel_r", "joint_l_front",
         "joint_l_rear", "joint_r_front", "joint_r_rear",
+        "support_force_raw_l", "support_force_raw_r",
+        "support_force_filtered_l", "support_force_filtered_r",
+        "support_contact_l", "support_contact_r",
         "contact_wheel_l", "contact_wheel_r", "other_contact",
         "normal_force_l", "normal_force_r",
     }),
@@ -683,6 +686,16 @@ void PerformanceBenchmark::write_trace(
         for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
             trace_.value(snapshot.actuation.leg[side].joint_torque[joint]);
         }
+    }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        trace_.value(snapshot.support_force[side].vertical_force);
+    }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        trace_.value(snapshot.support_force[side].filtered_vertical_force);
+    }
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        trace_.value(bc_contact_state_name(
+            snapshot.support_force[side].state));
     }
     trace_.value(sample.contact.wheel[BC_L])
         .value(sample.contact.wheel[BC_R])

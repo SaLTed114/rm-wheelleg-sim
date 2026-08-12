@@ -43,6 +43,9 @@ InteractiveTraceWriter::InteractiveTraceWriter(
     "wheel_torque_applied_r", "wheel_contact_l", "wheel_contact_r",
     "other_contact", "wheel_normal_force_l", "wheel_normal_force_r",
     "leg_length_l", "leg_length_r", "leg_angle_l", "leg_angle_r",
+    "support_force_raw_l", "support_force_raw_r",
+    "support_force_filtered_l", "support_force_filtered_r",
+    "support_contact_l", "support_contact_r",
     "roll", "roll_rate",
 }) {}
 
@@ -147,6 +150,12 @@ void InteractiveTraceWriter::write(
         .value(snapshot.leg[BC_R].length)
         .value(snapshot.leg[BC_L].angle_body)
         .value(snapshot.leg[BC_R].angle_body)
+        .value(snapshot.support_force[BC_L].vertical_force)
+        .value(snapshot.support_force[BC_R].vertical_force)
+        .value(snapshot.support_force[BC_L].filtered_vertical_force)
+        .value(snapshot.support_force[BC_R].filtered_vertical_force)
+        .value(bc_contact_state_name(snapshot.support_force[BC_L].state))
+        .value(bc_contact_state_name(snapshot.support_force[BC_R].state))
         .value(snapshot.roll)
         .value(snapshot.roll_rate);
     csv_.end_row();

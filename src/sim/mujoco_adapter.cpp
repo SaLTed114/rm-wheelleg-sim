@@ -162,6 +162,8 @@ void MujocoAdapter::read(
                 address.scale * data.qpos[address.qpos] + address.offset);
             joint_feedback.angular_velocity = static_cast<float>(
                 address.scale * data.qvel[address.dof]);
+            joint_feedback.torque = static_cast<float>(
+                address.scale * data.actuator_force[address.actuator]);
         }
 
         const auto &address = wheel_addresses_[side];

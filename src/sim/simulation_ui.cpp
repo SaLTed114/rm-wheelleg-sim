@@ -304,6 +304,31 @@ void SimulationUi::draw_legs(const bc_controller_snapshot_t &snapshot) {
         ImGui::Text("% .3f", leg.angular_velocity);
     }
     ImGui::EndTable();
+
+    if (!ImGui::BeginTable(
+            "support force", 5,
+            ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) return;
+    ImGui::TableSetupColumn("Side");
+    ImGui::TableSetupColumn("Raw [N]");
+    ImGui::TableSetupColumn("Filtered [N]");
+    ImGui::TableSetupColumn("Contact");
+    ImGui::TableSetupColumn("Valid");
+    ImGui::TableHeadersRow();
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        const auto &support = snapshot.support_force[side];
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(side == BC_L ? "L" : "R");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("% .1f", support.vertical_force);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Text("% .1f", support.filtered_vertical_force);
+        ImGui::TableSetColumnIndex(3);
+        ImGui::TextUnformatted(bc_contact_state_name(support.state));
+        ImGui::TableSetColumnIndex(4);
+        ImGui::TextUnformatted(support.valid ? "yes" : "no");
+    }
+    ImGui::EndTable();
 }
 
 void SimulationUi::draw_actuation(

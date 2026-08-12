@@ -88,6 +88,25 @@ void SimulationRunner::step_with_feedback(
     const bc_operator_command_t &command,
     const bc_sensor_feedback_t &feedback
 ) {
+    step_with_feedback_and_transform(command, feedback, nullptr);
+}
+
+void SimulationRunner::step_with_control_transform(
+    const bc_operator_command_t &command,
+    const bc_gimbal_feedback_t &gimbal_feedback,
+    const ControlCommandTransform &transform
+) {
+    bc_sensor_feedback_t feedback{};
+    adapter_.read(plant_.data(), feedback);
+    feedback.gimbal = gimbal_feedback;
+    step_with_feedback_and_transform(command, feedback, &transform);
+}
+
+void SimulationRunner::step_with_feedback_and_transform(
+    const bc_operator_command_t &command,
+    const bc_sensor_feedback_t &feedback,
+    const ControlCommandTransform *transform
+) {
     bc_actuation_t actuation{};
 
     feedback_ = feedback;
@@ -95,7 +114,27 @@ void SimulationRunner::step_with_feedback(
         &controller_, &feedback_,
         static_cast<float>(plant_.timestep()));
     bc_controller_set_command(&controller_, &command);
-    bc_controller_calculate(&controller_);
+    if (transform == nullptr) {
+        bc_controller_calculate(&controller_);
+    } else {
+        bc_control_command_t control_command{};
+        bc_state_machine_input_t input{};
+        input.operator_command = &controller_.operator_command;
+        input.gimbal_feedback = &controller_.gimbal_feedback;
+        input.state = &controller_.control_core.observer.state;
+        input.leg = controller_.control_core.observer.leg;
+        input.wheel_odometry_velocity =
+            controller_.control_core.observer.forward_velocity.
+                wheel_odometry;
+        input.wheel_velocity_reliable =
+            controller_.control_core.observer.velocity_estimator.output.
+                wheel_velocity_reliable;
+        input.timestep_seconds = controller_.timestep_seconds;
+        bc_system_update(&controller_.system, &input, &control_command);
+        (*transform)(control_command);
+        bc_control_core_calculate(
+            &controller_.control_core, &control_command);
+    }
     bc_controller_execute(&controller_, &actuation);
     bc_controller_capture_snapshot(&controller_, &snapshot_);
     adapter_.write(plant_.data(), actuation);

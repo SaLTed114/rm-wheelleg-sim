@@ -3,6 +3,7 @@
 
 #include "balance/control_law/pd.h"
 #include "balance/observer.h"
+#include "balance/support_force.h"
 #include "balance/types.h"
 
 #ifdef __cplusplus
@@ -21,6 +22,7 @@ typedef struct {
     bc_pd_controller_t roll_controller;
     float roll_force_sign[BC_SIDE_NUM];
     bc_lqr_compensation_t lqr_compensation;
+    bc_support_force_config_t support_force_estimator;
     float support_force;
     float wheel_torque_limit;
     float joint_torque_limit;
@@ -30,6 +32,7 @@ typedef struct {
     bc_control_config_t config;
     bc_observer_t observer;
     bc_actuation_t actuation_request;
+    bc_support_force_t support_force[BC_SIDE_NUM];
     float roll_force_request;
     uint32_t tick_count;
 } bc_control_core_t;

@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。下一项产品功能尚未确定，应先讨论功能语义、状态机归属和输入输出，再实现；已有运动基线用于回归而不是继续盲调。
+项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。当前主线转向离地与落地：先建立支持力识别和可复现的抬升释放实验，再讨论正式 airborne motion 状态机。
 
 最近一次参数变更是 LQR 差分模态降档：共同腿角/角速度权重保持 `60/1`，差分权重从 `1920/32` 降为 `960/16`，并已同步生成器、正式 schedule、验证报告和 golden test。正式四案例、CTest `18/18`、Python 工具测试 `13/13 + 4/4` 均通过。此前 benchmark 分层、转弯包络和八字工具已经提交并推送到 `origin/main`。
 
@@ -66,7 +66,8 @@ forward: IDLE / HOLD / VELOCITY
 - LQR 状态为 `[s,ds,psi,dpsi,theta_l,dtheta_l,theta_r,dtheta_r,theta_b,dtheta_b]`，输入为 `[T_wheel_l,T_wheel_r,Tp_leg_l,Tp_leg_r]`，调度范围为 `0.160-0.390 m`。
 - 正式基础 `Q=[90,260,40,15,60,1,60,1,900,120]`、`R=[1.6,1.6,0.7,0.7]`。非对角腿块表达共同/差分模态：腿角为 `60/960`，腿角速度为 `1/16`；它允许纵向共同摆腿，同时约束偏航差分劈腿。
 - yaw 加速度前馈为 `u = K(r-x) + 0.9*F_yaw*DDPSI_ref`。关闭它会显著增大 heading 滞后和停转残振，因此保留；其模型基于接近零纵向速度的线性工作点，尚未做速度调度。
-- roll 不进入十维 LQR，由 `Kp=800 N/rad`、`Kd=60 N/(rad/s)`、限幅 `200 N` 的独立 PD 生成左右腿差分轴向力。当前 sensor feedback 没有可迁移到实车的接触状态，因此尚无离地门控和积分项。
+- roll 不进入十维 LQR，由 `Kp=800 N/rad`、`Kd=60 N/(rad/s)`、限幅 `200 N` 的独立 PD 生成左右腿差分轴向力。支持力接触诊断尚未接入控制策略，因此仍无正式离地门控和积分项。
+- `control/support_force` 从每侧两个关节的实际力矩经 `J^T` 反解轴向力/腿矩，再投影为竖直支持力；输出原始值、滤波值及带滞回和持续时间的 `GROUND/AIR` 诊断。当前默认低通系数为 `0.2`，离地/触地持续时间为 `20/15 ms`；它只进入 snapshot、GUI 和 benchmark 对照，尚未驱动正式状态机。
 - 站立工作点使用共同腿角补偿 `+2.42 deg` 和每腿 `76.204 N` 支撑前馈。定位阶段只用长度/角度位置反馈，支撑与 roll 差分力只属于 `POSITION_SUPPORT`。
 
 ## 已建立的性能基线
@@ -83,6 +84,7 @@ forward: IDLE / HOLD / VELOCITY
 
 - C++ 仿真层由 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner`、`MujocoViewer`、`SimulationUi` 和场景编排组成。GUI 与 performance benchmark 共用 `PerformanceScenario`。
 - GUI 侧栏显示状态机、state/reference、roll、云台反馈、腿运动学和限幅前后输出；`--trace <csv>` 可写交互式 1 kHz trace。
+- 独立 drop benchmark 以轮胎碰撞几何净空执行 `200/400 mm` 抬升释放，保留 `length_only` 与 `leg_lqr` 两种空中策略及 `-0.5/0/+0.5 rad/s` 初始 pitch rate。MuJoCo 接触真值目前仍只负责实验切换，并与支持力诊断记录对照。
 - `tools/experiments/run_experiment.py` 从 TOML 生成隔离 schedule、构建和案例结果；`tools/experiments/plot_trajectory.py` 生成无额外依赖的轨迹 SVG。
 - 本地 MuJoCo、GLFW、ImGui 可置于被忽略的 `third_party/`，通过 `MUJOCO_ROOT`、`FETCHCONTENT_SOURCE_DIR_GLFW`、`IMGUI_ROOT` 显式指定；详细构建命令见根 README。
 

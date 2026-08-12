@@ -42,6 +42,7 @@ typedef enum {
 typedef struct {
     float angle;
     float angular_velocity;
+    float torque;
 } bc_joint_feedback_t;
 
 typedef struct {

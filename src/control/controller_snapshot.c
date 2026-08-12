@@ -33,6 +33,10 @@ void bc_controller_capture_snapshot(
         snapshot->leg,
         controller->control_core.observer.leg,
         sizeof(snapshot->leg));
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        snapshot->support_force[side] =
+            controller->control_core.support_force[side].output;
+    }
     snapshot->actuation_request =
         controller->control_core.actuation_request;
     snapshot->actuation = controller->last_actuation;

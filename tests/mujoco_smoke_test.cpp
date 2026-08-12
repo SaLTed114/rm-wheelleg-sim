@@ -178,6 +178,19 @@ int main(int argc, char **argv) {
             }
         }
         bc_sensor_feedback_t feedback{};
+        const char *mapped_actuator_names[BC_SIDE_NUM][BC_JOINT_NUM] = {
+            {"Right_front_joint_actuator", "Right_rear_joint_actuator"},
+            {"Left_front_joint_actuator", "Left_rear_joint_actuator"},
+        };
+        for (int side = 0; side < BC_SIDE_NUM; ++side) {
+            for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+                const int actuator = mj_name2id(
+                    &plant.model(), mjOBJ_ACTUATOR,
+                    mapped_actuator_names[side][joint]);
+                plant.data().actuator_force[actuator] =
+                    1.0 + 2.0 * side + joint;
+            }
+        }
         adapter.read(plant.data(), feedback);
         const char *mapped_joint_names[BC_SIDE_NUM][BC_JOINT_NUM] = {
             {"Right_front_joint", "Right_rear_joint"},
@@ -196,7 +209,12 @@ int main(int argc, char **argv) {
                 const double error = std::abs(
                     feedback.leg[side].joint[joint].angle -
                     expected);
-                if (error > 1.0e-6) {
+                const double expected_torque =
+                    balance::sim::calibration::kJointScales[side][joint] *
+                    (1.0 + 2.0 * side + joint);
+                if (error > 1.0e-6 ||
+                    std::abs(feedback.leg[side].joint[joint].torque -
+                             expected_torque) > 1.0e-6) {
                     std::cerr << "incorrect joint feedback mapping at "
                               << side << ", " << joint << '\n';
                     return EXIT_FAILURE;
