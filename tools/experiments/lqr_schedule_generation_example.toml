@@ -23,8 +23,8 @@ mode = "generate"
 model_parameters = "../lqr/generated/current_model_schedule.json"
 q_diagonal = [90, 260, 40, 15, 60, 1, 60, 1, 900, 120]
 r_diagonal = [1.6, 1.6, 0.7, 0.7]
-leg_angle_difference_weight = 1920
-leg_angular_velocity_difference_weight = 32
+leg_angle_difference_weight = 960
+leg_angular_velocity_difference_weight = 16
 
 [analysis]
 forward_linear = true
