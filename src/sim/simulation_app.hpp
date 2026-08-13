@@ -8,6 +8,7 @@ namespace balance::benchmark {
 struct DropCaseSpec;
 struct PlatformDropSpec;
 struct PerformanceCaseSpec;
+struct RampCourseSpec;
 }
 
 namespace balance::sim {
@@ -18,6 +19,7 @@ struct SimulationAppOptions {
     const benchmark::DropCaseSpec *drop_case{};
     const benchmark::PlatformDropSpec *platform_drop_case{};
     const benchmark::PerformanceCaseSpec *performance_case{};
+    const benchmark::RampCourseSpec *ramp_course_case{};
     std::optional<double> drop_wheel_clearance;
     std::optional<float> leg_length;
     std::optional<float> yaw_acceleration_feedforward_scale;

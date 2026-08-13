@@ -136,4 +136,72 @@ void MujocoPlant::configure_ramp_climb_benchmark() {
         kGroundHeight + 0.5 * kHeight, true);
 }
 
+RampCourseLayout MujocoPlant::configure_ramp_course_benchmark(
+    const bool beveled_transition
+) {
+    constexpr double kGroundHeight = -0.43;
+    constexpr double kAscentStartX = 1.5;
+    constexpr double kHeight = 0.35;
+    constexpr double kPlatformLength = 2.0;
+    constexpr double kAngle = 17.0 * 3.14159265358979323846 / 180.0;
+    const double run = kHeight / std::tan(kAngle);
+    constexpr double kBevelHalfLength = 0.20;
+    const double ascent_run = run +
+        (beveled_transition ? kBevelHalfLength : 0.0);
+    const RampCourseLayout layout{
+        kAscentStartX,
+        kAscentStartX + ascent_run,
+        kAscentStartX + ascent_run + kPlatformLength,
+        kAscentStartX + ascent_run + run + kPlatformLength,
+        kHeight,
+    };
+    const char *normal_surfaces[] = {
+        "ramp_course_up", "ramp_course_platform", "ramp_course_down",
+    };
+    const char *beveled_surfaces[] = {
+        "ramp_course_beveled_up", "ramp_course_bevel",
+        "ramp_course_beveled_platform", "ramp_course_beveled_down",
+    };
+    if (beveled_transition) {
+        for (const char *surface : normal_surfaces) {
+            place_mocap_surface(surface, 0.0, 0.0, -2.0, false);
+        }
+    } else {
+        for (const char *surface : beveled_surfaces) {
+            place_mocap_surface(surface, 0.0, 0.0, -2.0, false);
+        }
+    }
+    if (beveled_transition) {
+        const double main_run = run - kBevelHalfLength;
+        const double main_height = main_run * std::tan(kAngle);
+        place_mocap_surface(
+            "ramp_course_beveled_up", kAscentStartX + 0.5 * main_run,
+            0.0, kGroundHeight + 0.5 * main_height, true);
+        place_mocap_surface(
+            "ramp_course_bevel", kAscentStartX + main_run +
+                kBevelHalfLength,
+            0.0, kGroundHeight + 0.5 * kHeight, true);
+        place_mocap_surface(
+            "ramp_course_beveled_platform",
+            0.5 * (layout.ascent_end_x + layout.platform_end_x), 0.0,
+            kGroundHeight + 0.5 * kHeight, true);
+        place_mocap_surface(
+            "ramp_course_beveled_down",
+            layout.platform_end_x + 0.5 * run, 0.0,
+            kGroundHeight + 0.5 * kHeight, true);
+        return layout;
+    }
+    place_mocap_surface(
+        "ramp_course_up", kAscentStartX + 0.5 * run, 0.0,
+        kGroundHeight + 0.5 * kHeight, true);
+    place_mocap_surface(
+        "ramp_course_platform",
+        0.5 * (layout.ascent_end_x + layout.platform_end_x), 0.0,
+        kGroundHeight + 0.5 * kHeight, true);
+    place_mocap_surface(
+        "ramp_course_down", layout.platform_end_x + 0.5 * run, 0.0,
+        kGroundHeight + 0.5 * kHeight, true);
+    return layout;
+}
+
 } // namespace balance::sim

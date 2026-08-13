@@ -15,6 +15,9 @@
     <mesh name="keyboard_wedge_15deg" vertex="-0.373205080757 -1 -0.1 -0.373205080757 1 -0.1 0.373205080757 -1 -0.1 0.373205080757 1 -0.1 0.373205080757 -1 0.1 0.373205080757 1 0.1"/>
     <mesh name="keyboard_wedge_17deg" vertex="-0.572399208235 -0.43 -0.175 -0.572399208235 0.43 -0.175 0.572399208235 -0.43 -0.175 0.572399208235 0.43 -0.175 0.572399208235 -0.43 0.175 0.572399208235 0.43 0.175"/>
     <mesh name="benchmark_wide_wedge_17deg" vertex="-0.572399208235 -2 -0.175 -0.572399208235 2 -0.175 0.572399208235 -2 -0.175 0.572399208235 2 -0.175 0.572399208235 -2 0.175 0.572399208235 2 0.175"/>
+    <mesh name="benchmark_wide_down_wedge_17deg" vertex="-0.572399208235 -2 -0.175 -0.572399208235 2 -0.175 -0.572399208235 -2 0.175 -0.572399208235 2 0.175 0.572399208235 -2 -0.175 0.572399208235 2 -0.175"/>
+    <mesh name="ramp_course_beveled_main" vertex="-0.472399208235 -2 -0.144426931854 -0.472399208235 2 -0.144426931854 0.472399208235 -2 -0.144426931854 0.472399208235 2 -0.144426931854 0.472399208235 -2 0.144426931854 0.472399208235 2 0.144426931854"/>
+    <mesh name="ramp_course_bevel" vertex="-0.2 -2 -0.175 -0.2 2 -0.175 0.2 -2 -0.175 0.2 2 -0.175 -0.2 -2 0.113853863708 -0.2 2 0.113853863708 0.2 -2 0.175 0.2 2 0.175"/>
     <mesh name="base_link" content_type="model/stl" file="base_link.STL" />
     <mesh name="Left_front_link" content_type="model/stl" file="Left_front_link.STL" />
     <mesh name="Left_front_child1_link" content_type="model/stl" file="Left_front_child1_link.STL" />
@@ -54,6 +57,27 @@
     </body>
     <body name="benchmark_ramp_17deg_body" mocap="true" pos="0 0 -2">
       <geom name="benchmark_ramp_17deg" type="mesh" mesh="benchmark_wide_wedge_17deg" mass="0" rgba="0.72 0.42 0.24 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="ramp_course_up_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_up" type="mesh" mesh="benchmark_wide_wedge_17deg" mass="0" rgba="0.70 0.43 0.22 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="ramp_course_platform_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_platform" type="box" size="1 2 0.175" mass="0" rgba="0.35 0.50 0.28 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="ramp_course_down_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_down" type="mesh" mesh="benchmark_wide_down_wedge_17deg" mass="0" rgba="0.70 0.43 0.22 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="ramp_course_beveled_up_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_beveled_up" type="mesh" mesh="ramp_course_beveled_main" mass="0" rgba="0.67 0.47 0.23 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="ramp_course_bevel_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_bevel" type="mesh" mesh="ramp_course_bevel" mass="0" rgba="0.82 0.61 0.28 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="ramp_course_beveled_platform_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_beveled_platform" type="box" size="1 2 0.175" mass="0" rgba="0.35 0.50 0.28 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="ramp_course_beveled_down_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_beveled_down" type="mesh" mesh="benchmark_wide_down_wedge_17deg" mass="0" rgba="0.67 0.47 0.23 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
     </body>
 
     <body name="base_support" mocap="true"/>

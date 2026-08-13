@@ -19,9 +19,6 @@ typedef struct {
     float leg_speed_threshold;
     float leg_length_tolerance;
     float stable_duration;
-    float fast_air_force_threshold;
-    float fast_air_specific_force_threshold;
-    float fast_air_confirm_duration;
     float unloaded_force_threshold;
     float landing_force_threshold;
     float landing_confirm_duration;
@@ -57,12 +54,7 @@ typedef struct {
     bc_support_phase_config_t config;
     bc_support_phase_state_t state;
     bc_condition_hold_t transition_hold;
-    bc_condition_hold_t fast_air_hold;
     bc_condition_hold_t landing_hold;
-    uint8_t airborne_unloaded;
-    uint8_t airborne_diagnosed;
-    uint8_t fast_air_mixed_contact;
-    uint8_t side_airborne_diagnosed[BC_SIDE_NUM];
     bc_support_phase_request_t request;
 } bc_support_phase_t;
 

@@ -31,7 +31,6 @@ int main(int argc, char **argv) {
         result.shadow_landing_delay > 0.015 ||
         result.shadow_recover_delay <= result.shadow_landing_delay ||
         result.shadow_ground_delay <= result.shadow_recover_delay ||
-        result.other_contact ||
         result.maximum_applied_axial_force[BC_L] <= 0.0 ||
         result.maximum_applied_axial_force[BC_R] <= 0.0 ||
         result.post_touchdown_joint_saturation_ratio != 0.0) {

@@ -62,74 +62,11 @@ int main(void) {
         support[side].state = BC_CONTACT_GROUND;
         support[side].filtered_vertical_force = 40.0F;
     }
-    update_for(
-        &phase, &input,
-        config.fast_air_confirm_duration + input.timestep_seconds);
-    if (phase.state != BC_SUPPORT_GROUND) {
-        fputs("low support without free fall triggered fast air\n", stderr);
-        return 1;
-    }
     input.specific_force_norm = 0.0F;
-    update_for(
-        &phase, &input,
-        config.fast_air_confirm_duration + input.timestep_seconds);
-    if (phase.state != BC_SUPPORT_AIRBORNE) {
-        fputs("free-fall unloading did not trigger fast air\n", stderr);
-        return 1;
-    }
-    bc_support_phase_update(&phase, &input, 0.18F);
-    if (phase.state != BC_SUPPORT_AIRBORNE) {
-        fputs("fast air treated stale ground state as touchdown\n", stderr);
-        return 1;
-    }
-    for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        support[side].filtered_vertical_force = 5.0F;
-    }
-    bc_support_phase_update(&phase, &input, 0.18F);
-    support[BC_L].filtered_vertical_force = 20.0F;
-    bc_support_phase_update(&phase, &input, 0.18F);
-    if (phase.state != BC_SUPPORT_LANDING_RETRACT) {
-        fputs("force recovery after unloading did not trigger landing\n", stderr);
-        return 1;
-    }
-    if (!phase.request.leg[BC_L].contact_latched ||
-        phase.request.leg[BC_L].length_strategy !=
-            BC_LEG_LENGTH_AXIAL_FORCE ||
-        phase.request.disable_wheels) {
-        fputs("landing request did not restore balance control\n", stderr);
-        return 1;
-    }
-
-    bc_support_phase_reset(&phase);
-    input.specific_force_norm = 3.0F;
-    support[BC_L].state = BC_CONTACT_AIR;
-    support[BC_L].filtered_vertical_force = -17.0F;
-    support[BC_R].state = BC_CONTACT_GROUND;
-    support[BC_R].filtered_vertical_force = 39.0F;
-    update_for(
-        &phase, &input,
-        config.fast_air_confirm_duration + input.timestep_seconds);
-    if (phase.state != BC_SUPPORT_AIRBORNE ||
-        !phase.fast_air_mixed_contact || phase.airborne_unloaded) {
-        fputs("mixed-contact fast air was not diagnosed correctly\n", stderr);
-        return 1;
-    }
-    input.specific_force_norm = 30.0F;
-    for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        support[side].state = BC_CONTACT_GROUND;
-        support[side].filtered_vertical_force = 100.0F;
-    }
-    update_for(
-        &phase, &input,
-        config.landing_confirm_duration + input.timestep_seconds);
-    if (phase.state != BC_SUPPORT_LANDING_RETRACT) {
-        fputs("impact after mixed-contact fast air did not trigger landing\n",
+    update_for(&phase, &input, 0.10F);
+    if (phase.state != BC_SUPPORT_GROUND) {
+        fputs("low support and free-fall cue bypassed contact diagnosis\n",
               stderr);
-        return 1;
-    }
-    if (!phase.request.leg[BC_L].contact_latched ||
-        !phase.request.leg[BC_R].contact_latched) {
-        fputs("fast-air landing did not latch both loaded legs\n", stderr);
         return 1;
     }
 

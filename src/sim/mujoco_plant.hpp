@@ -8,6 +8,14 @@
 
 namespace balance::sim {
 
+struct RampCourseLayout {
+    double ascent_start_x{};
+    double ascent_end_x{};
+    double platform_end_x{};
+    double descent_end_x{};
+    double height{};
+};
+
 class MujocoPlant {
 public:
     MujocoPlant(
@@ -26,6 +34,8 @@ public:
         double pitch_radians, bool visible);
     void configure_keyboard_course();
     void configure_ramp_climb_benchmark();
+    [[nodiscard]] RampCourseLayout configure_ramp_course_benchmark(
+        bool beveled_transition = false);
 
     [[nodiscard]] const mjModel &model() const noexcept { return *model_; }
     [[nodiscard]] mjData &data() noexcept { return *data_; }

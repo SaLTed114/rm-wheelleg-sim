@@ -160,7 +160,17 @@ int main(int argc, char **argv) {
             "keyboard_ramp_15deg",
             "keyboard_ramp_17deg",
         };
+        const char *ramp_course_surface_names[] = {
+            "ramp_course_up",
+            "ramp_course_platform",
+            "ramp_course_down",
+            "ramp_course_beveled_up",
+            "ramp_course_bevel",
+            "ramp_course_beveled_platform",
+            "ramp_course_beveled_down",
+        };
         std::array<int, 3> keyboard_surfaces{};
+        std::array<int, 7> ramp_course_surfaces{};
         bool invalid_hidden_surface = platform_200 < 0 || platform_400 < 0 ||
             benchmark_ramp < 0;
         for (std::size_t index = 0; index < keyboard_surfaces.size(); ++index) {
@@ -169,6 +179,14 @@ int main(int argc, char **argv) {
             invalid_hidden_surface = invalid_hidden_surface ||
                 keyboard_surfaces[index] < 0;
         }
+        for (std::size_t index = 0;
+             index < ramp_course_surfaces.size(); ++index) {
+            ramp_course_surfaces[index] = mj_name2id(
+                &plant.model(), mjOBJ_GEOM,
+                ramp_course_surface_names[index]);
+            invalid_hidden_surface = invalid_hidden_surface ||
+                ramp_course_surfaces[index] < 0;
+        }
         const int hidden_surfaces[] = {
             platform_200,
             platform_400,
@@ -176,6 +194,13 @@ int main(int argc, char **argv) {
             keyboard_surfaces[0],
             keyboard_surfaces[1],
             keyboard_surfaces[2],
+            ramp_course_surfaces[0],
+            ramp_course_surfaces[1],
+            ramp_course_surfaces[2],
+            ramp_course_surfaces[3],
+            ramp_course_surfaces[4],
+            ramp_course_surfaces[5],
+            ramp_course_surfaces[6],
         };
         for (const int geom : hidden_surfaces) {
             invalid_hidden_surface = invalid_hidden_surface || geom < 0 ||
