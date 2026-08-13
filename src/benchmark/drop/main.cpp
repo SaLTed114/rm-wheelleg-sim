@@ -50,14 +50,14 @@ int main(int argc, char **argv) {
     if (argc != 3 && argc != 4 && argc != 5) {
         std::cerr << "usage: rm_balance_drop <model.xml> <output-directory> "
                      "[--wheel-clearance <metres> | "
-                     "--landing-suspension]\n";
+                     "--active-landing]\n";
         return EXIT_FAILURE;
     }
 
     std::optional<double> wheel_clearance;
-    const bool landing_suspension =
-        argc == 4 && std::string(argv[3]) == "--landing-suspension";
-    if (argc == 4 && !landing_suspension) return EXIT_FAILURE;
+    const bool active_landing =
+        argc == 4 && std::string(argv[3]) == "--active-landing";
+    if (argc == 4 && !active_landing) return EXIT_FAILURE;
     if (argc == 5) {
         if (std::string(argv[3]) != "--wheel-clearance") {
             return EXIT_FAILURE;
@@ -75,11 +75,11 @@ int main(int argc, char **argv) {
     }
 
     try {
-        if (landing_suspension) {
+        if (active_landing) {
             balance::benchmark::PlatformDropBenchmark platform_benchmark(
                 argv[1], argv[2]);
             for (const auto &spec :
-                 balance::benchmark::platform_landing_suspension_cases()) {
+                 balance::benchmark::platform_active_landing_cases()) {
                 const auto result = platform_benchmark.run(spec);
                 platform_benchmark.write_summary(result);
                 print_result(result);

@@ -41,9 +41,9 @@ void print_usage() {
                   << balance::benchmark::platform_drop_case_name(spec)
                   << '\n';
     }
-    std::cerr << "available landing suspension cases:\n";
+    std::cerr << "available active landing cases:\n";
     for (const auto &spec :
-         balance::benchmark::platform_landing_suspension_cases()) {
+         balance::benchmark::platform_active_landing_cases()) {
         std::cerr << "  "
                   << balance::benchmark::platform_drop_case_name(spec)
                   << '\n';

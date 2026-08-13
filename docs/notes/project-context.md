@@ -1,12 +1,12 @@
 # rm-balance-sim 项目上下文
 
-> 用于后续开发会话快速恢复当前事实、设计边界和未决事项，不保存逐轮实验流水账。最近整理：2026-08-12。
+> 用于后续开发会话快速恢复当前事实、设计边界和未决事项，不保存逐轮实验流水账。最近整理：2026-08-13。
 
 ## 当前状态
 
 项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。支持力识别、抬升释放和实体平台驶离实验已经建立；ACTIVE 内首版 support phase 已接管离地、空中伸腿、落地收腿和恢复，当前主线转为扩大落地工况验证并继续收紧 ACTIVE 的职责边界。
 
-最近一次已提交参数变更是 LQR 差分模态降档：共同腿角/角速度权重保持 `60/1`，差分权重从 `1920/32` 降为 `960/16`。当前未提交工作把支持力融合和落地策略接入生产 ACTIVE 路径，并新增正式 controller 平台案例；完整回归为 `26/26`。
+生产 ACTIVE 落地路径已由提交 `0bd19ba` 接入。当前未提交工作删除了 benchmark 侧重复的悬挂控制器，并将历史平台机理矩阵归档精简；精简后完整回归为 `25/25`。
 
 ## 设计边界
 
@@ -86,17 +86,20 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 
 - C++ 仿真层由 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner`、`MujocoViewer`、`SimulationUi` 和场景编排组成。GUI 与 performance benchmark 共用 `PerformanceScenario`。
 - GUI 侧栏显示状态机、state/reference、roll、云台反馈、腿运动学和限幅前后输出；`--trace <csv>` 可写交互式 1 kHz trace。
-- 独立 drop benchmark 既支持以轮胎碰撞几何净空执行 `200/400 mm` 抬升释放，也支持出生在实体平台后自动驶离的 `200/400 mm` 跌落。平台基线覆盖 `0.18/0.24 m` 腿长、`0.5/1.0/2.0 m/s` 与 `length_only/leg_lqr` 共 24 例，另有 `200 mm、1.5/2.0/2.5 m/s` 的固定腿长与空中伸到 `0.38 m` 对照；速度参考跨越空中与落地保持不变。MuJoCo 接触真值只负责实验切换，支持力与 KF 对真值误差只并行记录，不进入生产控制器。
+- `--keyboard` 会在出生点前方显示两处场地：右侧为三角形 `15 deg` 坡接 `2.0 x 2.0 m、200 mm` 高平台，左侧为独立的 `860 mm` 宽、`17 deg` 三角坡，坡顶高 `350 mm` 且不接平台；这些几何默认埋藏，不参与 benchmark 或非 keyboard 仿真。
+- 独立 drop benchmark 保留 6 个手动抬升释放案例、2 个平台空中机理对照和 4 个生产 ACTIVE 落地案例。平台机理只比较 `200 mm、2.0 m/s、0.18 -> 0.38 m` 下的 `length_only/leg_lqr`；历史 36 例净空、速度和扰动矩阵已归档到 `docs/notes/platform-drop-exploration-archive.md`，不再常驻注册表。生产案例覆盖正反向 `200/400 mm`，速度参考跨越空中与落地保持不变。
 - 当前实体平台实验首先测到的是直角边缘通过性，不能直接解释为纯空中控制能力。`0.18 m` 低速驶离时底盘或后腿会持续碰撞平台边缘，碰撞在 pitch 恶化之前发生；`0.24 m` 明显缩短碰撞，并使 200 mm 六例全部恢复，但 400 mm 的 `0.5/1.0 m/s` 仍会碰边发散，两个高度的 `2.0 m/s` 均无边缘碰撞并恢复。KF 空中误差仍需在排除边缘碰撞的独立实验中归因。
 - 200 mm 正常速度下的探索实验表明，离台后将腿从 `0.18 m` 目标快速伸至 `0.38 m`，可把首次触地前机体下降从约 `171-178 mm` 降至 `19-24 mm`，触地 pitch 降至约 `0.22-0.31 deg`，触地竖直速度降至约 `0.67-0.78 m/s`。实际触地腿长约 `0.31-0.35 m`，空中关节峰值请求约 `30-31 N*m` 且没有触发 `40 N*m` 限幅；这只验证快速接地有效，触地顺应和缓慢回收尚未设计。
 - `leg_lqr` 空中策略的直接目标是让虚拟腿相对世界接近竖直，而不是最小化机体 pitch；有效腿角参考包含约 `+2.42 deg` trim。按正确指标比较，`2.0 m/s` 名义触地腿角由 `length_only` 的约 `6.89/5.24 deg` 收到 `4.35/3.96 deg`，左右差由 `1.65 deg` 降到 `0.39 deg`；`2.5 m/s` 由约 `8.15/8.27 deg` 收到 `5.09/5.05 deg`。在 `+/-0.5 rad/s` 离台 pitch-rate 扰动下，LQR 也都降低最大腿角误差和左右差。它会与机体交换角动量，因此机体 pitch 可能略大；不能用机体 pitch 单独否定该策略。
-- 首轮主动悬挂探索固定 `200 mm、2.0 m/s、0.18 -> 0.38 m、leg_lqr`，触地后恢复轮 LQR 和完整姿态反馈，仅比较保留支撑前馈并强撑 `0.38 m` 与五组单腿轴向阻抗。六例均恢复，阻抗候选的最大腿压缩为 `92-99 mm`，明显大于位置强撑的约 `37 mm`。峰值数据复查后不能用来选择 `K/D`：共同的约 `267.2 N` MuJoCo 法向力峰值来自触地第一个采样，此时参数尚未来得及产生差异；共同的约 `187.0 N` 估计支持力峰值则由五组均撞上 `180 N` 轴向力上限主导。请求力峰值实际分布在约 `235-322 N`，说明候选有差异但被执行力约束截平。当前只能确认这套受限阻抗可以完成落地，尚不能确认单一最优参数或把峰值下降完全归因于 `K/D`；真值接触、阻抗参数和力约束仍只存在于隔离 benchmark。
+- 首轮主动悬挂探索固定 `200 mm、2.0 m/s、0.18 -> 0.38 m、leg_lqr`，触地后恢复轮 LQR 和完整姿态反馈，仅比较保留支撑前馈并强撑 `0.38 m` 与五组单腿轴向阻抗。六例均恢复，阻抗候选的最大腿压缩为 `92-99 mm`，明显大于位置强撑的约 `37 mm`。峰值数据复查后不能用来选择 `K/D`：共同的约 `267.2 N` MuJoCo 法向力峰值来自触地第一个采样，此时参数尚未来得及产生差异；共同的约 `187.0 N` 估计支持力峰值则由五组均撞上 `180 N` 轴向力上限主导。请求力峰值实际分布在约 `235-322 N`，说明候选有差异但被执行力约束截平。这轮只能确认受限阻抗可以完成落地，不能确认单一最优参数或把峰值下降完全归因于 `K/D`；这些结论来自当时使用真值接触的隔离 benchmark。
 - Jacobian 复核表明 `0.18-0.38 m` 腿长范围内，`40 N*m` 软件限幅在纯轴向输出时至少对应约 `263 N/leg`；实验上限已从 `180 N` 放宽到 `240 N`。同组 `200 mm` 案例仍全部恢复且没有关节饱和，`K=400/800/1200,D=80` 最大压缩约为 `83/76/73 mm`，`K=800,D=40/120` 约为 `84/73 mm`。这种约 `10 mm` 的竖直差异很难从 GUI 整机姿态辨认，而且除 `D=40` 外仍会碰到 `240 N` 上限，因此参数仍未定稿。下一轮应以压缩余量、竖直速度衰减、反弹/冲量和关节力矩余量评价少量软/中/硬候选，并跨触地强度验证，而不是继续靠视觉密扫相近参数。
 - 固定触地平衡点会一直顶住长腿，不符合落地后快速回收的意图；隔离策略现改为每腿触地捕获 `L_eq=L_touch`，再以 `0.8 m/s` 将平衡点降至正常工作腿长。相同 `200 mm` 案例均恢复且没有失撑、反弹、关节饱和或其他部件触地，实际腿长约 `0.23-0.35 s` 内收至 `0.20 m` 以下，瞬时最低约 `0.154-0.170 m`。方向可行，但回收末端存在约 `10-26 mm` 动态下冲；下一步重点是末端减速和退出/切回条件，而不是继续密扫固定平衡点的 `K/D`。
-- 隔离实验已加入无扰退出：双轮接触、平衡点到达工作腿长、双腿长度速度和机体竖直速度均低于 `0.1 m/s` 并保持 `50 ms` 后，按当前轴向力反算位置 PD 等效参考，再以 `0.1 m/s` 拉回 `0.18 m`。五组在触地后约 `0.47-0.59 s` 切回 `POSITION_SUPPORT`，切换首采样支持力变化小于 `1 N`，随后 `50 ms` 最大关节力矩约 `12.5-13.3 N*m`，未产生二次冲击。当前真值接触和退出编排仍只属于 benchmark；下一步才是将该阶段语义接入 ACTIVE 接触状态机并改用生产支持力诊断。
+- 隔离实验曾加入无扰退出：双轮接触、平衡点到达工作腿长、双腿长度速度和机体竖直速度均低于 `0.1 m/s` 并保持 `50 ms` 后，按当前轴向力反算位置 PD 等效参考，再以 `0.1 m/s` 拉回 `0.18 m`。五组在触地后约 `0.47-0.59 s` 切回 `POSITION_SUPPORT`，切换首采样支持力变化小于 `1 N`，随后 `50 ms` 最大关节力矩约 `12.5-13.3 N*m`，未产生二次冲击。这套真值接触编排用于探索阶段，随后已由 ACTIVE 接触状态机和生产支持力诊断取代。
 - support phase 接管前先以影子方式验证：只等待单腿完整诊断时离地/触地延迟约为 `55/17 ms`；增加“两腿滤波支持力 `<50 N`、IMU 比力范数 `<5 m/s^2`、持续 `5 ms`”的快速离地融合，以及深度卸载后支持力回升持续 `3 ms` 的触地确认后，名义案例延迟降至约 `33/4-5 ms` 且阶段不抖动。
+- 上述延迟只说明当前理想平台跌落中融合判据能及时跟随 MuJoCo 真值，不能据此结束离地检测设计。斜坡、平台边缘逐轮卸载、短时失重、颠簸和强加减速可能产生相似的支持力/比力组合；在这些工况完成误报、漏报和状态抖动验证前，阈值、持续时间和融合语义均视为未定稿。
 - 首版 support phase 已从影子诊断升级为正式 ACTIVE 请求：AIRBORNE 关闭轮输出、伸腿至 `0.38 m` 并只保留腿角 LQR；LANDING_RETRACT 恢复轮和完整姿态 LQR，以 `K=800 N/m,D=80 N*s/m`、`0-240 N`、`3000 N/s` 的逐腿轴向阻抗和 `0.8 m/s` 移动平衡点快速收腿；GROUND_RECOVER 反算位置 PD 等效参考并以 `0.1 m/s` 回到普通支撑。support 不覆盖整份命令，最终合成仍由 motion ACTIVE 完成。
-- 新增 `platform_drop_200mm_l0p18_v2p0_leg_lqr_landing_controller` 不使用 MuJoCo 接触真值或 `step_with_control_transform()` 驱动控制。实际边缘速度约 `1.94 m/s`，离台后约 `10 ms` 进入 AIRBORNE，触地后约 `8 ms` 进入 LANDING_RETRACT，约 `0.457/0.618 s` 进入 RECOVER/回到 GROUND；无发散、反弹、其他接触或关节饱和。正式直线、偏航和八字仍全程 GROUND。上述阈值和落地参数仍只经过理想仿真，未覆盖实车噪声、颠簸、单轮卸载、非对称落地或 `400 mm` 压力工况。
+- `platform_drop_200mm_l0p18_v2p0_leg_lqr_landing_controller` 不使用 MuJoCo 接触真值或 `step_with_control_transform()` 驱动控制。实际边缘速度约 `1.94 m/s`，离台后约 `10 ms` 进入 AIRBORNE，触地后约 `8 ms` 进入 LANDING_RETRACT，约 `0.457/0.618 s` 进入 RECOVER/回到 GROUND；无发散、反弹、其他接触或关节饱和。正反向 `200/400 mm` 四例随后均完成且恢复，正式直线、偏航和八字也仍全程 GROUND；上述阈值和落地参数仍只经过理想仿真，未覆盖实车噪声、颠簸、结构柔性或不平地面。
+- 生产接管验证完成后，benchmark 侧重复的 C++ 落地悬挂控制器、五组 `K/D` 扫描和真值驱动回收逻辑已删除。当前仅保留 `length_only/leg_lqr` 空中机理对照，以及正反向 `200/400 mm` 四个完全由生产 ACTIVE 控制器驱动的落地案例；CLI 入口为 `--active-landing`。
 - `tools/experiments/run_experiment.py` 从 TOML 生成隔离 schedule、构建和案例结果；`tools/experiments/plot_trajectory.py` 生成无额外依赖的轨迹 SVG。
 - 本地 MuJoCo、GLFW、ImGui 可置于被忽略的 `third_party/`，通过 `MUJOCO_ROOT`、`FETCHCONTENT_SOURCE_DIR_GLFW`、`IMGUI_ROOT` 显式指定；详细构建命令见根 README。
 
@@ -114,6 +117,7 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 2. `docs/notes/active-motion-design.md`：ACTIVE 运行期架构、模块所有权、交叉约束和重构顺序。
 3. `docs/notes/performance-baseline.md`：逐轮实验、失败归因和完整数值。
 4. `docs/notes/lqr-validation.md`：当前模型、Q/R 和调度验证。
-5. `docs/notes/hardware-bringup.md`：实车逐级部署。
-6. `models/MJCF/COD-2026RoboMaster-Balance.xml`：当前 plant。
-7. `references/rm2026cb-balance-chassis/`、`references/matlab_scripts/lqr.m` 和 `references/SJTU balance control/WBR_modeling.html`：实车与理论来源。
+5. `docs/notes/platform-drop-exploration-archive.md`：实体平台、空中伸腿和早期悬挂探索归档。
+6. `docs/notes/hardware-bringup.md`：实车逐级部署。
+7. `models/MJCF/COD-2026RoboMaster-Balance.xml`：当前 plant。
+8. `references/rm2026cb-balance-chassis/`、`references/matlab_scripts/lqr.m` 和 `references/SJTU balance control/WBR_modeling.html`：实车与理论来源。

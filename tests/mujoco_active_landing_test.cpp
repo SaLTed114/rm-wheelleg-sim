@@ -6,7 +6,7 @@
 
 int main(int argc, char **argv) {
     if (argc != 3) {
-        std::cerr << "usage: mujoco_landing_suspension_test "
+        std::cerr << "usage: mujoco_active_landing_test "
                      "<model.xml> <output-dir>\n";
         return EXIT_FAILURE;
     }
@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
     const auto *spec = balance::benchmark::find_platform_drop_case(
         "platform_drop_200mm_l0p18_v2p0_leg_lqr_landing_controller");
     if (spec == nullptr) {
-        std::cerr << "landing suspension smoke case is missing\n";
+        std::cerr << "active landing smoke case is missing\n";
         return EXIT_FAILURE;
     }
 
@@ -35,13 +35,13 @@ int main(int argc, char **argv) {
         result.maximum_applied_axial_force[BC_L] <= 0.0 ||
         result.maximum_applied_axial_force[BC_R] <= 0.0 ||
         result.post_touchdown_joint_saturation_ratio != 0.0) {
-        std::cerr << "landing suspension smoke case did not recover\n";
+        std::cerr << "active landing smoke case did not recover\n";
         return EXIT_FAILURE;
     }
     if (!std::filesystem::exists(
             std::filesystem::path(argv[2]) /
             result.name / "trace.csv")) {
-        std::cerr << "landing suspension smoke trace is missing\n";
+        std::cerr << "active landing smoke trace is missing\n";
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

@@ -10,18 +10,10 @@
 #include "common/simulation_sample.hpp"
 #include "common/csv_writer.hpp"
 #include "drop_policy.hpp"
-#include "landing_suspension.hpp"
 #include "mujoco_plant.hpp"
 #include "simulation_runner.hpp"
 
 namespace balance::benchmark {
-
-enum class PlatformLandingPolicy {
-    normal,
-    hold_extended,
-    suspension,
-    controller,
-};
 
 struct PlatformDropSpec {
     double height{};
@@ -30,17 +22,15 @@ struct PlatformDropSpec {
     double airborne_leg_length{};
     DropAirPolicy policy{DropAirPolicy::length_only};
     double airborne_pitch_rate{};
-    PlatformLandingPolicy landing_policy{PlatformLandingPolicy::normal};
-    double landing_stiffness{};
-    double landing_damping{};
+    bool active_landing{};
 };
 
 [[nodiscard]] std::string platform_drop_case_name(
     const PlatformDropSpec &spec);
-[[nodiscard]] const std::array<PlatformDropSpec, 36> &
+[[nodiscard]] const std::array<PlatformDropSpec, 2> &
 platform_drop_cases();
-[[nodiscard]] const std::array<PlatformDropSpec, 10> &
-platform_landing_suspension_cases();
+[[nodiscard]] const std::array<PlatformDropSpec, 4> &
+platform_active_landing_cases();
 [[nodiscard]] const PlatformDropSpec *find_platform_drop_case(
     std::string_view name) noexcept;
 
@@ -98,25 +88,8 @@ public:
     edge_leg_length() const noexcept {
         return edge_leg_length_;
     }
-    [[nodiscard]] bool controller_landing() const noexcept {
-        return spec_.landing_policy == PlatformLandingPolicy::controller;
-    }
     [[nodiscard]] float held_heading() const noexcept {
         return held_heading_;
-    }
-    [[nodiscard]] const LandingSuspensionOutput &suspension_output()
-        const noexcept {
-        return suspension_.output();
-    }
-    [[nodiscard]] bool landing_recovery_started() const noexcept {
-        return landing_recovery_started_;
-    }
-    [[nodiscard]] double landing_recovery_time() const noexcept {
-        return landing_recovery_time_;
-    }
-    [[nodiscard]] const std::array<double, BC_SIDE_NUM> &
-    landing_recovery_reference() const noexcept {
-        return landing_recovery_reference_;
     }
 
 private:
@@ -136,23 +109,18 @@ private:
     double touchdown_time_{};
     double edge_velocity_{};
     std::array<double, BC_SIDE_NUM> edge_leg_length_{};
-    double landing_recovery_hold_start_{-1.0};
-    double landing_recovery_time_{};
-    std::array<double, BC_SIDE_NUM> landing_recovery_reference_{};
     bool edge_crossed_{};
     bool balance_engaged_{};
     bool speed_stable_{};
     bool platform_contact_seen_{};
     bool left_platform_{};
     bool touchdown_{};
-    bool landing_recovery_started_{};
     bool heading_initialized_{};
     float held_heading_{};
     const char *issue_{"none"};
     int base_qpos_{};
     int base_dof_{};
     std::array<int, BC_SIDE_NUM> wheel_axis_{};
-    LandingSuspensionController suspension_;
 };
 
 struct PlatformDropResult {

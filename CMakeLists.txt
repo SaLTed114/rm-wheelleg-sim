@@ -98,7 +98,6 @@ add_library(balance_benchmark_support STATIC
   src/benchmark/drop/drop_benchmark.cpp
   src/benchmark/drop/drop_policy.cpp
   src/benchmark/drop/drop_scenario.cpp
-  src/benchmark/drop/landing_suspension.cpp
   src/benchmark/drop/platform_drop.cpp
   src/benchmark/performance/base_roll_restraint.cpp
   src/benchmark/performance/forward_velocity_diagnostic.cpp
@@ -269,13 +268,6 @@ if(BUILD_TESTING)
   balance_enable_warnings(drop_policy_test)
   add_test(NAME drop_policy COMMAND drop_policy_test)
 
-  add_executable(landing_suspension_test
-    tests/landing_suspension_test.cpp)
-  target_link_libraries(
-    landing_suspension_test PRIVATE balance_benchmark_support)
-  balance_enable_warnings(landing_suspension_test)
-  add_test(NAME landing_suspension COMMAND landing_suspension_test)
-
   add_executable(drop_scenario_test tests/drop_scenario_test.cpp)
   target_link_libraries(drop_scenario_test PRIVATE balance_benchmark_support)
   balance_enable_warnings(drop_scenario_test)
@@ -304,16 +296,16 @@ if(BUILD_TESTING)
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/platform-drop")
 
-  add_executable(mujoco_landing_suspension_test
-    tests/mujoco_landing_suspension_test.cpp)
+  add_executable(mujoco_active_landing_test
+    tests/mujoco_active_landing_test.cpp)
   target_link_libraries(
-    mujoco_landing_suspension_test PRIVATE balance_benchmark_support)
-  balance_enable_warnings(mujoco_landing_suspension_test)
-  balance_configure_mujoco_runtime(mujoco_landing_suspension_test)
-  add_test(NAME mujoco_landing_suspension
-    COMMAND mujoco_landing_suspension_test
+    mujoco_active_landing_test PRIVATE balance_benchmark_support)
+  balance_enable_warnings(mujoco_active_landing_test)
+  balance_configure_mujoco_runtime(mujoco_active_landing_test)
+  add_test(NAME mujoco_active_landing
+    COMMAND mujoco_active_landing_test
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-results/landing-suspension")
+      "${CMAKE_CURRENT_BINARY_DIR}/test-results/active-landing")
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_benchmark_support)

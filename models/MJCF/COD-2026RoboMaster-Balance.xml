@@ -11,6 +11,9 @@
     <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.12 0.25 0.42" rgb2="0.55 0.70 0.82" width="512" height="3072"/>
     <texture name="ground_checker" type="2d" builtin="checker" rgb1="0.18 0.20 0.18" rgb2="0.45 0.44 0.39" width="512" height="512"/>
     <material name="ground_material" texture="ground_checker" texrepeat="0.5 0.5" texuniform="true" reflectance="0.05"/>
+    <!-- Convex triangular prisms used by the keyboard-only terrain. -->
+    <mesh name="keyboard_wedge_15deg" vertex="-0.373205080757 -1 -0.1 -0.373205080757 1 -0.1 0.373205080757 -1 -0.1 0.373205080757 1 -0.1 0.373205080757 -1 0.1 0.373205080757 1 0.1"/>
+    <mesh name="keyboard_wedge_17deg" vertex="-0.572399208235 -0.43 -0.175 -0.572399208235 0.43 -0.175 0.572399208235 -0.43 -0.175 0.572399208235 0.43 -0.175 0.572399208235 -0.43 0.175 0.572399208235 0.43 0.175"/>
     <mesh name="base_link" content_type="model/stl" file="base_link.STL" />
     <mesh name="Left_front_link" content_type="model/stl" file="Left_front_link.STL" />
     <mesh name="Left_front_child1_link" content_type="model/stl" file="Left_front_child1_link.STL" />
@@ -37,6 +40,16 @@
     </body>
     <body name="drop_platform_400mm_body" mocap="true" pos="0.5 0 -2">
       <geom name="drop_platform_400mm" type="box" size="1.5 1 0.2" mass="0" rgba="0.55 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <!-- Keyboard-only terrain is buried until SimulationApp places it. -->
+    <body name="keyboard_platform_200mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_platform_200mm" type="box" size="1 1 0.1" mass="0" rgba="0.32 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="keyboard_ramp_15deg_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_ramp_15deg" type="mesh" mesh="keyboard_wedge_15deg" mass="0" rgba="0.38 0.58 0.40 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="keyboard_ramp_17deg_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_ramp_17deg" type="mesh" mesh="keyboard_wedge_17deg" mass="0" rgba="0.42 0.50 0.70 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
     </body>
 
     <body name="base_support" mocap="true"/>

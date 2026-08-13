@@ -1,8 +1,11 @@
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 
 #include "balance/math_utils.h"
 #include "generated/mujoco_leg_calibration.hpp"
@@ -150,17 +153,41 @@ int main(int argc, char **argv) {
             &plant.model(), mjOBJ_GEOM, "drop_platform_200mm");
         const int platform_400 = mj_name2id(
             &plant.model(), mjOBJ_GEOM, "drop_platform_400mm");
-        if (platform_200 < 0 || platform_400 < 0 ||
-            plant.model().geom_contype[platform_200] != 1 ||
-            plant.model().geom_contype[platform_400] != 1 ||
-            plant.data().geom_xpos[3 * platform_200 + 2] > -1.0 ||
-            plant.data().geom_xpos[3 * platform_400 + 2] > -1.0) {
-            std::cerr << "drop platforms are missing or active by default\n";
+        const char *keyboard_surface_names[] = {
+            "keyboard_platform_200mm",
+            "keyboard_ramp_15deg",
+            "keyboard_ramp_17deg",
+        };
+        std::array<int, 3> keyboard_surfaces{};
+        bool invalid_hidden_surface = platform_200 < 0 || platform_400 < 0;
+        for (std::size_t index = 0; index < keyboard_surfaces.size(); ++index) {
+            keyboard_surfaces[index] = mj_name2id(
+                &plant.model(), mjOBJ_GEOM, keyboard_surface_names[index]);
+            invalid_hidden_surface = invalid_hidden_surface ||
+                keyboard_surfaces[index] < 0;
+        }
+        const int hidden_surfaces[] = {
+            platform_200,
+            platform_400,
+            keyboard_surfaces[0],
+            keyboard_surfaces[1],
+            keyboard_surfaces[2],
+        };
+        for (const int geom : hidden_surfaces) {
+            invalid_hidden_surface = invalid_hidden_surface || geom < 0 ||
+                plant.model().geom_contype[geom] != 1 ||
+                plant.data().geom_xpos[3 * geom + 2] > -1.0 ||
+                plant.model().geom_rgba[4 * geom + 3] != 0.0F;
+        }
+        if (invalid_hidden_surface) {
+            std::cerr << "optional terrain is missing or active by default\n";
             return EXIT_FAILURE;
         }
         for (int geom = 0; geom < plant.model().ngeom; ++geom) {
-            if (geom == ground || geom == platform_200 ||
-                geom == platform_400) continue;
+            const bool optional_surface = std::find(
+                std::begin(hidden_surfaces), std::end(hidden_surfaces),
+                geom) != std::end(hidden_surfaces);
+            if (geom == ground || optional_surface) continue;
 
             const bool collides_with_ground =
                 plant.model().geom_conaffinity[geom] &
@@ -170,6 +197,113 @@ int main(int argc, char **argv) {
             if (!collides_with_ground || has_robot_collision_type) {
                 std::cerr << "incorrect ground collision filter at geom "
                           << geom << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
+        plant.configure_keyboard_course();
+        constexpr double kPi = 3.14159265358979323846;
+        struct ExpectedSurface {
+            int geom;
+            std::array<double, 3> position;
+            std::array<double, 3> size;
+        };
+        const ExpectedSurface expected_surface[] = {
+            {keyboard_surfaces[0], {3.746410162, -1.5, -0.33},
+             {1.0, 1.0, 0.1}},
+        };
+        for (const auto &surface : expected_surface) {
+            const int geom = surface.geom;
+            for (int axis = 0; axis < 3; ++axis) {
+                if (std::abs(
+                        plant.data().geom_xpos[3 * geom + axis] -
+                        surface.position[axis]) > 1.0e-8) {
+                    std::cerr << "keyboard terrain position is incorrect\n";
+                    return EXIT_FAILURE;
+                }
+                if (std::abs(
+                        plant.model().geom_size[3 * geom + axis] -
+                        surface.size[axis]) > 1.0e-8) {
+                    std::cerr << "keyboard terrain size is incorrect\n";
+                    return EXIT_FAILURE;
+                }
+            }
+            if (plant.model().geom_rgba[4 * geom + 3] != 1.0F) {
+                std::cerr << "keyboard terrain was not revealed\n";
+                return EXIT_FAILURE;
+            }
+        }
+        const double ramp_angles[] = {
+            15.0 * kPi / 180.0, 17.0 * kPi / 180.0,
+        };
+        const double ramp_heights[] = {0.2, 0.35};
+        const double ramp_widths[] = {2.0, 0.86};
+        const double ramp_lanes[] = {-1.5, 1.0};
+        const int ramp_geoms[] = {
+            keyboard_surfaces[1], keyboard_surfaces[2],
+        };
+        for (int index = 0; index < 2; ++index) {
+            const int mesh = plant.model().geom_dataid[ramp_geoms[index]];
+            const double run = ramp_heights[index] /
+                std::tan(ramp_angles[index]);
+            double minimum_x = std::numeric_limits<double>::infinity();
+            double maximum_x = -std::numeric_limits<double>::infinity();
+            double minimum_y = std::numeric_limits<double>::infinity();
+            double maximum_y = -std::numeric_limits<double>::infinity();
+            double minimum_z = std::numeric_limits<double>::infinity();
+            double maximum_z = -std::numeric_limits<double>::infinity();
+            if (mesh >= 0) {
+                const int first_vertex = plant.model().mesh_vertadr[mesh];
+                for (int vertex = 0;
+                     vertex < plant.model().mesh_vertnum[mesh]; ++vertex) {
+                    const int offset = 3 * (first_vertex + vertex);
+                    double world[3]{};
+                    for (int row = 0; row < 3; ++row) {
+                        world[row] = plant.data().geom_xpos[
+                            3 * ramp_geoms[index] + row];
+                        for (int column = 0; column < 3; ++column) {
+                            world[row] += plant.data().geom_xmat[
+                                9 * ramp_geoms[index] + 3 * row + column] *
+                                plant.model().mesh_vert[offset + column];
+                        }
+                    }
+                    minimum_x = std::min(minimum_x, world[0]);
+                    maximum_x = std::max(maximum_x, world[0]);
+                    minimum_y = std::min(minimum_y, world[1]);
+                    maximum_y = std::max(maximum_y, world[1]);
+                    minimum_z = std::min(minimum_z, world[2]);
+                    maximum_z = std::max(maximum_z, world[2]);
+                }
+            }
+            if (plant.model().geom_type[ramp_geoms[index]] != mjGEOM_MESH ||
+                mesh < 0 || plant.model().mesh_vertnum[mesh] != 6 ||
+                std::abs(minimum_x - 2.0) > 1.0e-6 ||
+                std::abs(0.5 * (minimum_y + maximum_y) -
+                    ramp_lanes[index]) > 1.0e-6 ||
+                std::abs(maximum_y - minimum_y - ramp_widths[index]) >
+                    1.0e-6 ||
+                std::abs(maximum_z - minimum_z - ramp_heights[index]) >
+                    1.0e-6 ||
+                std::abs(maximum_x - minimum_x - run) > 1.0e-6 ||
+                std::abs(minimum_z + 0.43) > 1.0e-6 ||
+                std::abs(maximum_z - (-0.43 + ramp_heights[index])) >
+                    1.0e-6 ||
+                std::abs((maximum_z - minimum_z) /
+                    (maximum_x - minimum_x) -
+                    std::tan(ramp_angles[index])) > 1.0e-6) {
+                std::cerr << "keyboard triangular ramp is incorrect: index="
+                          << index << " x=[" << minimum_x << ',' << maximum_x
+                          << "] y=[" << minimum_y << ',' << maximum_y
+                          << "] z=[" << minimum_z << ',' << maximum_z
+                          << "] center=("
+                          << plant.data().geom_xpos[3 * ramp_geoms[index]]
+                          << ','
+                          << plant.data().geom_xpos[
+                              3 * ramp_geoms[index] + 1]
+                          << ','
+                          << plant.data().geom_xpos[
+                              3 * ramp_geoms[index] + 2]
+                          << ")\n";
                 return EXIT_FAILURE;
             }
         }

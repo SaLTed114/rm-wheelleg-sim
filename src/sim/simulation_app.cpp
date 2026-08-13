@@ -135,6 +135,7 @@ private:
         if (trace_) trace_->flush();
         ++reset_index_;
         runner_.reset();
+        if (options_.keyboard_drive) plant_.configure_keyboard_course();
         if (performance_) performance_->reset(plant_.data().time);
         if (drop_) drop_->reset();
         if (platform_drop_) platform_drop_->reset(plant_);

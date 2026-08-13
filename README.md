@@ -84,6 +84,8 @@ Linux:
 
 Append `--keyboard` to drive manually. `W/S` or the up/down arrows command forward motion, Shift raises the speed limit, and `A/D` or the left/right arrows rotate the virtual gimbal. Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
 
+Keyboard mode also reveals two terrain features in front of the spawn point. The right-hand lane (`y=-1.5 m`) has a triangular `15 deg` ramp onto a `200 mm`-high, `2.0 x 2.0 m` platform. The left-hand lane (`y=+1.0 m`) is a standalone triangular ramp, `860 mm` wide and `17 deg`, with a `350 mm` summit and no top platform. Both features remain buried and non-visible for benchmark cases and non-keyboard simulation.
+
 To capture a control-step diagnostic trace while driving, add `--trace <csv-path>` together with `--keyboard`. The CSV includes keyboard commands, controller modes, `S`/`DS`, velocity-estimator innovations and gating, MuJoCo base/wheel truth, contacts, IMU feedback, and wheel torques. It is flushed every 0.1 seconds so an intermittent failure can be inspected after closing the simulator.
 
 ### Tests
