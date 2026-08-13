@@ -18,6 +18,10 @@ typedef struct {
     float nis_gate;
     float wheel_rejection_duration;
     float wheel_recovery_duration;
+    float reacquisition_stable_duration;
+    float reacquisition_max_wheel_speed;
+    float reacquisition_max_wheel_acceleration;
+    float reacquisition_velocity_rate;
 } bc_velocity_estimator_config_t;
 
 typedef struct {
@@ -36,8 +40,10 @@ typedef struct {
     float velocity_variance_x;
     float rejection_elapsed_seconds;
     float recovery_elapsed_seconds;
+    float reacquisition_elapsed_seconds;
     uint8_t measurement_accepted;
     uint8_t wheel_velocity_reliable;
+    uint8_t reacquisition_active;
 } bc_velocity_estimator_output_t;
 
 typedef struct {
@@ -47,9 +53,17 @@ typedef struct {
     bc_velocity_estimator_output_t output;
     float rejection_elapsed_seconds;
     float recovery_elapsed_seconds;
+    float reacquisition_elapsed_seconds;
+    float previous_wheel_velocity_measurement;
     uint8_t measurement_initialized;
     uint8_t wheel_velocity_reliable;
+    uint8_t previous_wheel_measurement_initialized;
 } bc_velocity_estimator_t;
+
+typedef enum {
+    BC_WHEEL_UPDATE_NORMAL,
+    BC_WHEEL_UPDATE_REACQUIRE
+} bc_wheel_update_mode_t;
 
 void bc_velocity_estimator_init(
     bc_velocity_estimator_t *estimator,
@@ -62,6 +76,7 @@ void bc_velocity_estimator_reject_wheel(
 void bc_velocity_estimator_update(
     bc_velocity_estimator_t *estimator,
     float wheel_velocity_measurement,
+    bc_wheel_update_mode_t mode,
     float timestep_seconds);
 void bc_velocity_estimator_predict(
     bc_velocity_estimator_t *estimator,

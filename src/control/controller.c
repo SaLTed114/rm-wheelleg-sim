@@ -6,7 +6,6 @@
 void bc_controller_default_config(bc_controller_config_t *config) {
     bc_control_default_config(&config->control);
     bc_motion_default_config(&config->motion);
-    config->velocity_estimator_update_delay = 0.5F;
 }
 
 void bc_controller_init(
@@ -15,8 +14,6 @@ void bc_controller_init(
 ) {
     bc_control_core_init(&controller->control_core, &config->control);
     bc_system_init(&controller->system, &config->motion);
-    controller->velocity_estimator_update_delay =
-        config->velocity_estimator_update_delay;
     bc_controller_reset(controller);
 }
 
@@ -32,7 +29,6 @@ void bc_controller_reset(bc_controller_t *controller) {
     memset(
         &controller->last_actuation, 0,
         sizeof(controller->last_actuation));
-    bc_condition_hold_reset(&controller->velocity_estimator_hold);
     controller->specific_force_norm = 0.0F;
     controller->timestep_seconds = 0.0F;
 }
@@ -48,24 +44,11 @@ void bc_controller_update(
         feedback->imu.specific_force_x * feedback->imu.specific_force_x +
         feedback->imu.specific_force_y * feedback->imu.specific_force_y +
         feedback->imu.specific_force_z * feedback->imu.specific_force_z);
-    const uint8_t balance_motion =
-        controller->system.motion.state == BC_MOTION_BALANCE_ENGAGING ||
-        controller->system.motion.state == BC_MOTION_ACTIVE;
-    const uint8_t wheel_velocity_update_enabled =
-        bc_condition_hold_update(
-            &controller->velocity_estimator_hold,
-            controller->system.state == BC_SYSTEM_ON && balance_motion,
-            controller->velocity_estimator_update_delay,
-            timestep_seconds) &&
-        controller->system.motion.support_phase.state !=
-            BC_SUPPORT_AIRBORNE;
+    const bc_observation_context_t observation_context =
+        bc_system_observation_context(&controller->system);
     bc_control_core_update(
-        &controller->control_core, feedback, timestep_seconds,
-        wheel_velocity_update_enabled);
-    if (controller->system.motion.support_phase.state ==
-        BC_SUPPORT_AIRBORNE) {
-        bc_control_core_reject_wheel_velocity(&controller->control_core);
-    }
+        &controller->control_core, feedback, &observation_context,
+        timestep_seconds);
 }
 
 void bc_controller_set_command(

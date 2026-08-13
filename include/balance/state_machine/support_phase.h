@@ -61,6 +61,7 @@ typedef struct {
     bc_condition_hold_t landing_hold;
     uint8_t airborne_unloaded;
     uint8_t airborne_diagnosed;
+    uint8_t fast_air_mixed_contact;
     uint8_t side_airborne_diagnosed[BC_SIDE_NUM];
     bc_support_phase_request_t request;
 } bc_support_phase_t;

@@ -64,6 +64,11 @@ int main() {
     }
     config.leg_length = 0.38F;
     bc_system_init(&system, &config);
+    if (bc_system_observation_context(&system).wheel_velocity !=
+        BC_WHEEL_OBSERVATION_DISABLED) {
+        fputs("idle system exposed wheel observations\n", stderr);
+        return 1;
+    }
 
     operator_command.balance_restart = 1U;
     bc_system_update(&system, &input, &command);
@@ -139,6 +144,12 @@ int main() {
         command.leg[BC_R].target.length !=
             config.startup_leg_length) {
         fputs("stable legs did not engage balance control\n", stderr);
+        return 1;
+    }
+    if (bc_system_observation_context(&system).wheel_velocity !=
+        BC_WHEEL_OBSERVATION_GROUND) {
+        fputs("balance engagement did not expose ground observations\n",
+              stderr);
         return 1;
     }
     if (command.state_reference.value[BC_STATE_S] != 1.0F ||
@@ -280,6 +291,12 @@ int main() {
         fputs("ACTIVE did not compose the airborne support request\n", stderr);
         return 1;
     }
+    if (bc_system_observation_context(&system).wheel_velocity !=
+        BC_WHEEL_OBSERVATION_AIRBORNE) {
+        fputs("airborne support did not reject wheel observations\n",
+              stderr);
+        return 1;
+    }
     input.specific_force_norm = 9.81F;
     support[BC_L].state = BC_CONTACT_GROUND;
     support[BC_L].filtered_vertical_force = 20.0F;
@@ -291,6 +308,12 @@ int main() {
             BC_LEG_LENGTH_AXIAL_FORCE ||
         command.leg[BC_R].length_strategy != BC_LEG_LENGTH_POSITION) {
         fputs("ACTIVE did not compose the landing support request\n", stderr);
+        return 1;
+    }
+    if (bc_system_observation_context(&system).wheel_velocity !=
+        BC_WHEEL_OBSERVATION_CONTACT_TRANSIENT) {
+        fputs("landing did not expose transient wheel observations\n",
+              stderr);
         return 1;
     }
 
@@ -326,6 +349,11 @@ int main() {
             BC_LEG_LENGTH_DISABLED, BC_LEG_ANGLE_DISABLED,
             BC_WHEEL_DISABLED)) {
         fputs("system disable did not reset the state machine\n", stderr);
+        return 1;
+    }
+    if (bc_system_observation_context(&system).wheel_velocity !=
+        BC_WHEEL_OBSERVATION_DISABLED) {
+        fputs("disabled system retained wheel observations\n", stderr);
         return 1;
     }
 

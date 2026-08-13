@@ -58,13 +58,14 @@ void bc_observer_reset(bc_observer_t *observer) {
     observer->previous_yaw = 0.0F;
     observer->yaw = 0.0F;
     observer->initialized = 0U;
+    bc_condition_hold_reset(&observer->wheel_velocity_startup_hold);
 }
 
 void bc_observer_update(
     bc_observer_t *observer,
     const bc_sensor_feedback_t *feedback,
-    const float timestep_seconds,
-    const uint8_t wheel_velocity_update_enabled
+    const bc_observation_context_t *context,
+    const float timestep_seconds
 ) {
     if (!observer->initialized) {
         observer->previous_yaw = feedback->imu.yaw;
@@ -88,14 +89,26 @@ void bc_observer_update(
     const float velocity_offset = axle_velocity_offset_x(observer, feedback);
     observer->forward_velocity.wheel_odometry =
         observer->config.wheel_radius * common_wheel_rate;
-    if (wheel_velocity_update_enabled) {
+    const uint8_t wheel_observation_started = bc_condition_hold_update(
+        &observer->wheel_velocity_startup_hold,
+        context->wheel_velocity != BC_WHEEL_OBSERVATION_DISABLED,
+        observer->config.wheel_velocity_startup_delay,
+        timestep_seconds);
+    if (!wheel_observation_started) {
+        bc_velocity_estimator_skip_update(
+            &observer->velocity_estimator);
+    } else if (context->wheel_velocity == BC_WHEEL_OBSERVATION_AIRBORNE) {
+        bc_velocity_estimator_reject_wheel(
+            &observer->velocity_estimator);
+    } else {
+        const bc_wheel_update_mode_t update_mode =
+            context->wheel_velocity == BC_WHEEL_OBSERVATION_GROUND ?
+            BC_WHEEL_UPDATE_REACQUIRE : BC_WHEEL_UPDATE_NORMAL;
         bc_velocity_estimator_update(
             &observer->velocity_estimator,
             observer->forward_velocity.wheel_odometry - velocity_offset,
+            update_mode,
             timestep_seconds);
-    } else {
-        bc_velocity_estimator_skip_update(
-            &observer->velocity_estimator);
     }
     bc_velocity_estimator_predict(
         &observer->velocity_estimator,

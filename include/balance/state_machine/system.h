@@ -1,6 +1,7 @@
 #ifndef BALANCE_STATE_MACHINE_SYSTEM_H
 #define BALANCE_STATE_MACHINE_SYSTEM_H
 
+#include "balance/observation_context.h"
 #include "balance/state_machine/motion.h"
 
 #ifdef __cplusplus
@@ -27,6 +28,9 @@ void bc_system_update(
     bc_system_t *system,
     const bc_state_machine_input_t *input,
     bc_control_command_t *output);
+
+bc_observation_context_t bc_system_observation_context(
+    const bc_system_t *system);
 
 const char *bc_system_state_name(bc_system_state_t state);
 

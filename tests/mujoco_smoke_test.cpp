@@ -153,13 +153,16 @@ int main(int argc, char **argv) {
             &plant.model(), mjOBJ_GEOM, "drop_platform_200mm");
         const int platform_400 = mj_name2id(
             &plant.model(), mjOBJ_GEOM, "drop_platform_400mm");
+        const int benchmark_ramp = mj_name2id(
+            &plant.model(), mjOBJ_GEOM, "benchmark_ramp_17deg");
         const char *keyboard_surface_names[] = {
             "keyboard_platform_200mm",
             "keyboard_ramp_15deg",
             "keyboard_ramp_17deg",
         };
         std::array<int, 3> keyboard_surfaces{};
-        bool invalid_hidden_surface = platform_200 < 0 || platform_400 < 0;
+        bool invalid_hidden_surface = platform_200 < 0 || platform_400 < 0 ||
+            benchmark_ramp < 0;
         for (std::size_t index = 0; index < keyboard_surfaces.size(); ++index) {
             keyboard_surfaces[index] = mj_name2id(
                 &plant.model(), mjOBJ_GEOM, keyboard_surface_names[index]);
@@ -169,6 +172,7 @@ int main(int argc, char **argv) {
         const int hidden_surfaces[] = {
             platform_200,
             platform_400,
+            benchmark_ramp,
             keyboard_surfaces[0],
             keyboard_surfaces[1],
             keyboard_surfaces[2],

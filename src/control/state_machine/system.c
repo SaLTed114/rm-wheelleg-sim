@@ -69,6 +69,37 @@ void bc_system_update(
     bc_system_action(system, input, output);
 }
 
+bc_observation_context_t bc_system_observation_context(
+    const bc_system_t *system
+) {
+    bc_observation_context_t context = {
+        .wheel_velocity = BC_WHEEL_OBSERVATION_DISABLED,
+    };
+    if (system->state != BC_SYSTEM_ON ||
+        (system->motion.state != BC_MOTION_BALANCE_ENGAGING &&
+         system->motion.state != BC_MOTION_ACTIVE)) {
+        return context;
+    }
+    if (system->motion.state == BC_MOTION_BALANCE_ENGAGING) {
+        context.wheel_velocity = BC_WHEEL_OBSERVATION_GROUND;
+        return context;
+    }
+
+    switch (system->motion.support_phase.state) {
+    case BC_SUPPORT_GROUND:
+        context.wheel_velocity = BC_WHEEL_OBSERVATION_GROUND;
+        break;
+    case BC_SUPPORT_AIRBORNE:
+        context.wheel_velocity = BC_WHEEL_OBSERVATION_AIRBORNE;
+        break;
+    case BC_SUPPORT_LANDING_RETRACT:
+    case BC_SUPPORT_GROUND_RECOVER:
+        context.wheel_velocity = BC_WHEEL_OBSERVATION_CONTACT_TRANSIENT;
+        break;
+    }
+    return context;
+}
+
 const char *bc_system_state_name(const bc_system_state_t state) {
     switch (state) {
     case BC_SYSTEM_OFF:

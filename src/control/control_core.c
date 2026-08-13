@@ -29,6 +29,10 @@ void bc_control_default_config(bc_control_config_t *config) {
                 .nis_gate                  = 9.0F,
                 .wheel_rejection_duration  = 0.02F,
                 .wheel_recovery_duration   = 0.02F,
+                .reacquisition_stable_duration = 0.10F,
+                .reacquisition_max_wheel_speed = 0.5F,
+                .reacquisition_max_wheel_acceleration = 25.0F,
+                .reacquisition_velocity_rate = 2.0F,
             },
             .imu_position = {
                 .x = -0.10F,
@@ -41,6 +45,7 @@ void bc_control_default_config(bc_control_config_t *config) {
                 .z = -0.05F,
             },
             .wheel_radius = 0.05806F,
+            .wheel_velocity_startup_delay = 0.5F,
         },
         .length_controller = {
             .kp           = 1600.0F,
@@ -96,12 +101,11 @@ void bc_control_core_reset(bc_control_core_t *core) {
 void bc_control_core_update(
     bc_control_core_t *core,
     const bc_sensor_feedback_t *feedback,
-    const float timestep_seconds,
-    const uint8_t wheel_velocity_update_enabled
+    const bc_observation_context_t *context,
+    const float timestep_seconds
 ) {
     bc_observer_update(
-        &core->observer, feedback, timestep_seconds,
-        wheel_velocity_update_enabled);
+        &core->observer, feedback, context, timestep_seconds);
     const int angle_state[BC_SIDE_NUM] = {
         BC_STATE_THETA_L, BC_STATE_THETA_R,
     };

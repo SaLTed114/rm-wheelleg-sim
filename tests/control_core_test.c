@@ -12,6 +12,9 @@ int main() {
     bc_sensor_feedback_t feedback = {0};
     bc_control_command_t command = {0};
     bc_actuation_t actuation;
+    const bc_observation_context_t observation_context = {
+        .wheel_velocity = BC_WHEEL_OBSERVATION_DISABLED,
+    };
 
     bc_control_default_config(&config);
     if (fabsf(
@@ -35,7 +38,7 @@ int main() {
         }
     }
 
-    bc_control_core_update(&core, &feedback, 0.001F, 0U);
+    bc_control_core_update(&core, &feedback, &observation_context, 0.001F);
     if (core.tick_count != 0U) {
         fputs("update advanced the control tick\n", stderr);
         return 1;
@@ -72,7 +75,7 @@ int main() {
     bc_control_core_init(
         &feedback_strategy_core, &feedback_strategy_config);
     bc_control_core_update(
-        &feedback_strategy_core, &feedback, 0.001F, 0U);
+        &feedback_strategy_core, &feedback, &observation_context, 0.001F);
     bc_control_command_t feedback_strategy_command = {
         .wheel_strategy = BC_WHEEL_LQR,
         .disabled_state_feedback =
@@ -117,7 +120,8 @@ int main() {
         yaw_acceleration_feedforward_scale = 0.5F;
     bc_control_core_t feedforward_core;
     bc_control_core_init(&feedforward_core, &feedforward_config);
-    bc_control_core_update(&feedforward_core, &feedback, 0.001F, 0U);
+    bc_control_core_update(
+        &feedforward_core, &feedback, &observation_context, 0.001F);
     bc_control_command_t feedforward_command = {
         .wheel_strategy = BC_WHEEL_LQR,
         .state_reference = feedforward_core.observer.state,
@@ -154,7 +158,7 @@ int main() {
             config.observer.leg_geometry.wheel_link_length;
         command.leg[side].target.angle_body = -3.10F;
     }
-    bc_control_core_update(&core, &feedback, 0.001F, 0U);
+    bc_control_core_update(&core, &feedback, &observation_context, 0.001F);
     bc_control_core_calculate(&core, &command);
     bc_control_core_execute(&core, 1U, &actuation);
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
@@ -189,7 +193,8 @@ int main() {
     trim_config.lqr_compensation.leg_angle_trim = 0.12F;
     bc_control_core_t trim_core;
     bc_control_core_init(&trim_core, &trim_config);
-    bc_control_core_update(&trim_core, &feedback, 0.001F, 0U);
+    bc_control_core_update(
+        &trim_core, &feedback, &observation_context, 0.001F);
 
     bc_control_command_t trim_command = {
         .wheel_strategy = BC_WHEEL_LQR,
@@ -232,8 +237,10 @@ int main() {
     bc_control_core_t unsupported_core;
     bc_control_core_init(&supported_core, &supported_config);
     bc_control_core_init(&unsupported_core, &unsupported_config);
-    bc_control_core_update(&supported_core, &feedback, 0.001F, 0U);
-    bc_control_core_update(&unsupported_core, &feedback, 0.001F, 0U);
+    bc_control_core_update(
+        &supported_core, &feedback, &observation_context, 0.001F);
+    bc_control_core_update(
+        &unsupported_core, &feedback, &observation_context, 0.001F);
 
     command = (bc_control_command_t){
         .wheel_strategy = BC_WHEEL_LQR,
@@ -292,7 +299,8 @@ int main() {
     bc_control_core_t roll_core;
     bc_sensor_feedback_t roll_feedback = {0};
     bc_control_core_init(&roll_core, &roll_config);
-    bc_control_core_update(&roll_core, &roll_feedback, 0.001F, 0U);
+    bc_control_core_update(
+        &roll_core, &roll_feedback, &observation_context, 0.001F);
     roll_core.observer.roll = 0.1F;
     roll_core.observer.roll_rate = 0.2F;
     bc_control_command_t roll_command = {
@@ -367,7 +375,8 @@ int main() {
     force_config.joint_torque_limit = 1000.0F;
     bc_control_core_t force_core;
     bc_control_core_init(&force_core, &force_config);
-    bc_control_core_update(&force_core, &feedback, 0.001F, 0U);
+    bc_control_core_update(
+        &force_core, &feedback, &observation_context, 0.001F);
     bc_control_command_t force_command = {0};
     force_command.leg[BC_L].length_strategy = BC_LEG_LENGTH_AXIAL_FORCE;
     force_command.leg[BC_L].target.axial_force = 123.0F;

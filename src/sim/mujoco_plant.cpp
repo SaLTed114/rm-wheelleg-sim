@@ -124,4 +124,16 @@ void MujocoPlant::configure_keyboard_course() {
     place_wedge("keyboard_ramp_17deg", 1.0, 0.35, 17.0);
 }
 
+void MujocoPlant::configure_ramp_climb_benchmark() {
+    constexpr double kGroundHeight = -0.43;
+    constexpr double kRampStartX = 1.5;
+    constexpr double kHeight = 0.35;
+    constexpr double kAngle = 17.0 * 3.14159265358979323846 / 180.0;
+    const double run = kHeight / std::tan(kAngle);
+    place_mocap_surface(
+        "benchmark_ramp_17deg",
+        kRampStartX + 0.5 * run, 0.0,
+        kGroundHeight + 0.5 * kHeight, true);
+}
+
 } // namespace balance::sim

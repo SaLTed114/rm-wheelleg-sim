@@ -11,7 +11,6 @@ extern "C" {
 typedef struct {
     bc_control_config_t control;
     bc_motion_config_t motion;
-    float velocity_estimator_update_delay;
 } bc_controller_config_t;
 
 typedef struct {
@@ -20,8 +19,6 @@ typedef struct {
     bc_operator_command_t operator_command;
     bc_gimbal_feedback_t gimbal_feedback;
     bc_actuation_t last_actuation;
-    bc_condition_hold_t velocity_estimator_hold;
-    float velocity_estimator_update_delay;
     float specific_force_norm;
     float timestep_seconds;
 } bc_controller_t;

@@ -24,7 +24,7 @@ int main() {
     bc_controller_default_config(&config);
     config.motion.stable_duration = 0.002F;
     config.motion.engage_duration = 0.002F;
-    config.velocity_estimator_update_delay = 0.002F;
+    config.control.observer.wheel_velocity_startup_delay = 0.002F;
     bc_controller_init(&controller, &config);
     bc_controller_capture_snapshot(&controller, &snapshot);
     if (snapshot.state_machine.system != BC_SYSTEM_OFF ||

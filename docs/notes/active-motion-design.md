@@ -91,7 +91,7 @@ support phase 对最终控制能力拥有更高约束权。例如任务请求轮
 
 AIRBORNE 时轮速不再代表机体平移速度，因此 support phase 必须向 observer/速度估计链提供“轮速观测不可用”的可靠门控，并向 longitudinal 提供当前无法依靠轮地作用执行速度控制的事实。longitudinal 仍需保存参考连续性，但不能用空转轮速误判停车并切入 `HOLD`。
 
-这一门控横跨当前 `update -> calculate` 边界：支持力在 `bc_control_core_update()` 中计算，而状态机在 `bc_controller_calculate()` 中运行。正式接入时必须明确本周期判定和下一周期生效的时序，不能在仿真层读取 MuJoCo 真值绕过这个问题。
+这一门控横跨当前 `update -> calculate` 边界：支持力在 `bc_control_core_update()` 中计算，而状态机在 `bc_controller_calculate()` 中运行。当前 system 状态机集中导出 observation context，observer 收回启动迟滞、跳过、拒绝、正常融合和低速重捕获策略，避免 controller 生成多个布尔门控；但 context 仍使用周期开始时的 support 状态。新进入 AIRBORNE 后的立即 reject 不能撤销本周期已经完成的 KF 校正，因此仍保留额外一周期的时序债务。未来应将周期拆成“基础运动学与支持力 -> support phase -> observation context -> KF -> 其余状态机与控制律”，不能在仿真层读取 MuJoCo 真值绕过这个问题。
 
 ### Support 与腿长规划
 

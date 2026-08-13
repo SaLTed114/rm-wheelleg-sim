@@ -28,10 +28,19 @@ static bc_observer_config_t observer_config(void) {
             .nis_gate                  = 9.0F,
             .wheel_rejection_duration  = 0.02F,
             .wheel_recovery_duration   = 0.02F,
+            .reacquisition_stable_duration = 0.10F,
+            .reacquisition_max_wheel_speed = 0.5F,
+            .reacquisition_max_wheel_acceleration = 25.0F,
+            .reacquisition_velocity_rate = 2.0F,
         },
         .wheel_radius = 0.06F,
+        .wheel_velocity_startup_delay = 0.0F,
     };
 }
+
+static const bc_observation_context_t kGroundContext = {
+    .wheel_velocity = BC_WHEEL_OBSERVATION_GROUND,
+};
 
 static int test_wheel_measurement_transform(void) {
     bc_observer_config_t config = observer_config();
@@ -46,7 +55,7 @@ static int test_wheel_measurement_transform(void) {
 
     feedback.imu.pitch_rate = 1.0F;
     bc_observer_init(&observer, &config);
-    bc_observer_update(&observer, &feedback, 0.001F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.001F);
     if (expect_near(
             "pitch-rate wheel measurement",
             observer.velocity_estimator.output.wheel_velocity_measurement,
@@ -60,7 +69,7 @@ static int test_wheel_measurement_transform(void) {
         feedback.leg[side].joint[BC_REAR].angular_velocity = 0.4F;
     }
     bc_observer_reset(&observer);
-    bc_observer_update(&observer, &feedback, 0.001F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.001F);
     if (expect_near(
             "leg-motion wheel measurement",
             observer.velocity_estimator.output.wheel_velocity_measurement,
@@ -75,7 +84,7 @@ static int test_wheel_measurement_transform(void) {
     feedback.imu.yaw_rate = 0.5F;
     config.hip_center_position.y = 0.2F;
     bc_observer_init(&observer, &config);
-    bc_observer_update(&observer, &feedback, 0.001F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.001F);
     if (expect_near(
             "yaw-rate wheel measurement",
             observer.velocity_estimator.output.wheel_velocity_measurement,
@@ -96,10 +105,10 @@ static int test_estimated_axle_state(void) {
         feedback.leg[side].joint[BC_REAR].angle = -0.5F * BC_PI_F;
     }
     bc_observer_init(&observer, &config);
-    bc_observer_update(&observer, &feedback, 0.01F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.01F);
 
     observer.velocity_estimator.state[0] = 0.3F;
-    bc_observer_update(&observer, &feedback, 0.01F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.01F);
     if (expect_near(
             "wheel odometry velocity",
             observer.forward_velocity.wheel_odometry, 0.0F) ||
@@ -108,6 +117,41 @@ static int test_estimated_axle_state(void) {
             observer.forward_velocity.estimated_axle, 0.3F) ||
         expect_near("estimator ds", observer.state.value[BC_STATE_DS], 0.3F) ||
         expect_near("estimator s", observer.state.value[BC_STATE_S], 0.003F)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static int test_observation_context(void) {
+    bc_observer_config_t config = observer_config();
+    config.wheel_velocity_startup_delay = 0.002F;
+    bc_observer_t observer;
+    bc_sensor_feedback_t feedback = {0};
+    const bc_observation_context_t disabled = {
+        .wheel_velocity = BC_WHEEL_OBSERVATION_DISABLED,
+    };
+    const bc_observation_context_t airborne = {
+        .wheel_velocity = BC_WHEEL_OBSERVATION_AIRBORNE,
+    };
+
+    bc_observer_init(&observer, &config);
+    bc_observer_update(&observer, &feedback, &disabled, 0.001F);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.001F);
+    if (observer.velocity_estimator.measurement_initialized) {
+        fputs("wheel observation bypassed its startup hold\n", stderr);
+        return 1;
+    }
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.001F);
+    if (!observer.velocity_estimator.output.wheel_velocity_reliable) {
+        fputs("ground context did not start wheel observation\n", stderr);
+        return 1;
+    }
+    bc_observer_update(&observer, &feedback, &airborne, 0.001F);
+    if (observer.velocity_estimator.output.measurement_accepted ||
+        observer.velocity_estimator.output.wheel_velocity_reliable ||
+        !observer.velocity_estimator.measurement_initialized) {
+        fputs("airborne context did not reject wheel observation\n", stderr);
         return 1;
     }
 
@@ -128,7 +172,7 @@ int main() {
     feedback.imu.yaw = 2.8F;
 
     bc_observer_init(&observer, &config);
-    bc_observer_update(&observer, &feedback, 0.01F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.01F);
     if (expect_near("initial s", observer.state.value[BC_STATE_S], 0.0F) ||
         expect_near("initial psi", observer.state.value[BC_STATE_PSI], 0.0F) ||
         expect_near("initial left leg", observer.state.value[BC_STATE_THETA_L], 0.0F) ||
@@ -156,7 +200,7 @@ int main() {
     feedback.leg[BC_R].joint[BC_FRONT].angular_velocity = -0.6F;
     feedback.leg[BC_R].joint[BC_REAR].angular_velocity = -0.6F;
 
-    bc_observer_update(&observer, &feedback, 0.01F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.01F);
     if (expect_near(
             "wheel odometry",
             observer.forward_velocity.wheel_odometry, 0.24F) ||
@@ -184,7 +228,7 @@ int main() {
     feedback.wheel[BC_L].angular_velocity = 2.0F;
     feedback.wheel[BC_R].angular_velocity = -2.0F;
     const float previous_position = observer.state.value[BC_STATE_S];
-    bc_observer_update(&observer, &feedback, 0.01F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.01F);
     if (expect_near(
             "opposite wheel odometry",
             observer.forward_velocity.wheel_odometry, 0.0F) ||
@@ -204,7 +248,7 @@ int main() {
         expect_near("reset s", observer.state.value[BC_STATE_S], 0.0F)) {
         return 1;
     }
-    bc_observer_update(&observer, &feedback, 0.01F, 1U);
+    bc_observer_update(&observer, &feedback, &kGroundContext, 0.01F);
     if (expect_near(
             "first integrated s", observer.state.value[BC_STATE_S],
             0.01F * observer.forward_velocity.estimated_axle) ||
@@ -213,5 +257,6 @@ int main() {
     }
 
     if (test_wheel_measurement_transform()) return 1;
-    return test_estimated_axle_state();
+    if (test_estimated_axle_state()) return 1;
+    return test_observation_context();
 }

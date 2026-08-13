@@ -4,13 +4,14 @@
 
 ## 当前状态
 
-项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。支持力识别、抬升释放和实体平台驶离实验已经建立；ACTIVE 内首版 support phase 已接管离地、空中伸腿、落地收腿和恢复，当前主线转为扩大落地工况验证并继续收紧 ACTIVE 的职责边界。
+项目已经具备可运行的 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。平地 NORMAL 运动的纵向、原地 heading、稳态转弯和开环八字已经形成稳定基线，本轮不再把一般平面运动性能或 LQR Q/R 调参作为默认主线。支持力识别、抬升释放和实体平台驶离实验已经建立；ACTIVE 内首版 support phase 已接管离地、空中伸腿、落地收腿和恢复，当前主线转为扩大斜坡、碰撞和落地工况验证并继续收紧 ACTIVE 的职责边界。
 
-生产 ACTIVE 落地路径已由提交 `0bd19ba` 接入。当前未提交工作删除了 benchmark 侧重复的悬挂控制器，并将历史平台机理矩阵归档精简；精简后完整回归为 `25/25`。
+生产 ACTIVE 落地路径已由提交 `0bd19ba` 接入，benchmark 清理和地形工具已由 `c1ecb5f` 提交。当前又建立了独立 `17 deg` 宽坡回归，修复了碰撞后 support phase 卡死和 KF 轮速失锁自锁；完整回归为 `26/26`。
 
 ## 设计边界
 
 - 控制核心使用纯 C 和 SI 单位，不依赖 MuJoCo、GLFW、CAN、HAL 或线程实现；仿真与未来嵌入式工程通过各自 adapter 接入同一控制核心。
+- 后续产品方案已经决定全面使用 C++，但当前阶段继续维护现有 C 控制核心及其边界，不在功能修复中夹带 C 到 C++ 的迁移。当前架构审查和所有权整理仍然有效，也应为未来迁移保留清晰模块边界。
 - 控制层使用虚拟腿长度/角度和虚拟力 `F/Tp`，plant 保留真实多连杆闭链、偏置质心和惯量；运动学等效不代表动力学等效。
 - 不根据闭环表现随意填写未知 plant 参数。物理参数变化后必须重新验证闭链、符号、运动学/Jacobian、参数提取、LQR 调度和性能基线。
 - `/home/l/SaLT/wheelleg` 是只读历史项目；`references/rm2026cb-balance-chassis/` 和 `references/matlab_scripts/` 是实车架构及算法参考。旧参数不能静默混入当前 plant。
@@ -64,7 +65,7 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 ## 参考、估计与控制律
 
 - forward reference 上限为 `3 m/s`、默认斜坡为 `5 m/s^2`，输出 `DS_ref` 并积分 `S_ref`。yaw reference 从云台反馈重建 `PSI_ref/DPSI_ref`，正式上限为 `+/-1.5*pi rad/s`、加速度为 `10 rad/s^2`。
-- observer 用 IMU 和共同轮速融合 `DS`，再积分得到 `S`。轮速创新使用 NIS 与 `20 ms` 迟滞；AIRBORNE 时生产状态机强制轮速不可靠、KF 只做 IMU 预测，触地后重新经过恢复持续时间。降级不重置状态或 bias。IMU 外参、噪声和阈值仍需实车标定。
+- observer 用 IMU 和共同轮速融合 `DS`，再积分得到 `S`。system 状态机集中导出 `DISABLED/GROUND/CONTACT_TRANSIENT/AIRBORNE` 观测 context；observer 自己持有 `0.5 s` 启动迟滞，并把 context 解释为跳过、正常 NIS、受限重捕获或强制拒绝。KF 不读取 support 状态或散落的 enable bool。GROUND 下的低速重捕获要求轮速不超过 `0.5 m/s`、单帧变化处于 `25 m/s^2` 包络并稳定 `100 ms`，随后最多以 `2 m/s^2` 拉近预测；CONTACT_TRANSIENT 仍允许正常 NIS 恢复，但禁止该强制拉近。原 `NIS <= 9` 和 `20 ms` 恢复持续时间保留，降级不重置状态或 bias。这些阈值仍需实车标定。
 - LQR 状态为 `[s,ds,psi,dpsi,theta_l,dtheta_l,theta_r,dtheta_r,theta_b,dtheta_b]`，输入为 `[T_wheel_l,T_wheel_r,Tp_leg_l,Tp_leg_r]`，调度范围为 `0.160-0.390 m`。
 - 正式基础 `Q=[90,260,40,15,60,1,60,1,900,120]`、`R=[1.6,1.6,0.7,0.7]`。非对角腿块表达共同/差分模态：腿角为 `60/960`，腿角速度为 `1/16`；它允许纵向共同摆腿，同时约束偏航差分劈腿。
 - yaw 加速度前馈为 `u = K(r-x) + 0.9*F_yaw*DDPSI_ref`。关闭它会显著增大 heading 滞后和停转残振，因此保留；其模型基于接近零纵向速度的线性工作点，尚未做速度调度。
@@ -87,6 +88,8 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 - C++ 仿真层由 `MujocoPlant`、`MujocoAdapter`、`SimulationRunner`、`MujocoViewer`、`SimulationUi` 和场景编排组成。GUI 与 performance benchmark 共用 `PerformanceScenario`。
 - GUI 侧栏显示状态机、state/reference、roll、云台反馈、腿运动学和限幅前后输出；`--trace <csv>` 可写交互式 1 kHz trace。
 - `--keyboard` 会在出生点前方显示两处场地：右侧为三角形 `15 deg` 坡接 `2.0 x 2.0 m、200 mm` 高平台，左侧为独立的 `860 mm` 宽、`17 deg` 三角坡，坡顶高 `350 mm` 且不接平台；这些几何默认埋藏，不参与 benchmark 或非 keyboard 仿真。
+- 独立 `mujoco_ramp_climb_recovery` 使用宽 `4 m`、高 `350 mm` 的 `17 deg` 三角坡和 `2.0 m/s` 前进命令。未提前伸腿时，`base_link` 在轮轴约 `x=1.453 m` 处撞坡；约 `44 ms` 后进入 AIRBORNE，车轮重新接触后约 `2 ms` 进入 LANDING_RETRACT。fast-air 混合接触特例现可恢复，不再永久卡在 AIRBORNE；但默认 `0.18 m` 腿长仍会因净空不足物理卡坡，程序不自动判断上坡或替操作手伸腿。
+- 同一宽坡案例复现了撞击后 KF 自锁：旧预测与正确轮速的 `NIS` 长期超门限，导致 wheel reliability 和 forward HOLD 都无法恢复。受限重捕获后，松开命令约 `0.64 s` 恢复轮速可靠，约 `1.49 s` 进入 HOLD；最终真值、估计和轮速为 `-0.00155/-0.00034/-0.00214 m/s`，`S-ref` 误差约 `6.7 mm`，最大 pitch 约 `14.38 deg`。正式 `forward_pos_3` 抽查仍为 `t90=0.784 s`、最大 pitch `2.19 deg` 且无接触或饱和回归。
 - 独立 drop benchmark 保留 6 个手动抬升释放案例、2 个平台空中机理对照和 4 个生产 ACTIVE 落地案例。平台机理只比较 `200 mm、2.0 m/s、0.18 -> 0.38 m` 下的 `length_only/leg_lqr`；历史 36 例净空、速度和扰动矩阵已归档到 `docs/notes/platform-drop-exploration-archive.md`，不再常驻注册表。生产案例覆盖正反向 `200/400 mm`，速度参考跨越空中与落地保持不变。
 - 当前实体平台实验首先测到的是直角边缘通过性，不能直接解释为纯空中控制能力。`0.18 m` 低速驶离时底盘或后腿会持续碰撞平台边缘，碰撞在 pitch 恶化之前发生；`0.24 m` 明显缩短碰撞，并使 200 mm 六例全部恢复，但 400 mm 的 `0.5/1.0 m/s` 仍会碰边发散，两个高度的 `2.0 m/s` 均无边缘碰撞并恢复。KF 空中误差仍需在排除边缘碰撞的独立实验中归因。
 - 200 mm 正常速度下的探索实验表明，离台后将腿从 `0.18 m` 目标快速伸至 `0.38 m`，可把首次触地前机体下降从约 `171-178 mm` 降至 `19-24 mm`，触地 pitch 降至约 `0.22-0.31 deg`，触地竖直速度降至约 `0.67-0.78 m/s`。实际触地腿长约 `0.31-0.35 m`，空中关节峰值请求约 `30-31 N*m` 且没有触发 `40 N*m` 限幅；这只验证快速接地有效，触地顺应和缓慢回收尚未设计。
@@ -106,7 +109,9 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 ## 仍需记住的未决事项
 
 - ACTIVE 接管首采样曾出现约 `9.7 deg` pitch 瞬态，发生在工作腿长拉升前，应作为独立起立接管问题处理。
-- 轮速被拒绝期间没有绝对位置观测，恢复后不能修正累计的 `S` 漂移；停车安全门槛使用速度与可靠性，不声称绝对位置可观。
+- 当前周期仍按 `controller_update(observer/support force) -> controller_calculate(support phase)` 执行，因此 observation context 使用周期开始时的 support 状态。新进入 AIRBORNE 后的立即 reject 能把轮速标为不可靠，却不能撤销本周期已经发生的 KF 校正；这额外的一周期延迟与检测判据本身的确认延迟必须分开看。未来应考虑拆成“基础运动学与支持力 -> support phase -> observation context -> KF -> 其余状态机与控制律”，本轮不重排周期。
+- 轮速被拒绝期间没有绝对位置观测，恢复后不能修正累计的 `S` 漂移；停车安全门槛使用速度与可靠性，进入 HOLD 时重新捕获参考，不声称历史绝对位置可恢复。
+- 上坡腿长变化仍是操作手必须明确选择的工作姿态，不由程序自动识别坡面。后续需要讨论满足底盘净空的最小腿长，以及是否提供提示或互锁。
 - 高横向加速度下的内侧轮卸载仍是物理现象；未来涉及高速转弯、路径控制或 roll 策略时，需要接触观测和实车等效输入，不能只提高 PD/LQR 权重。
 - 当前 plant 只有力矩限幅，没有电机速度、功率、热和电池模型。涉及性能上限的新功能必须先明确是否需要补这些约束。
 - Windows 构建由用户侧复核；本地 Linux 是当前自动验证环境。

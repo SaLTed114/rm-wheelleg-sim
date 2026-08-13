@@ -33,8 +33,65 @@ static void capture_estimate(bc_velocity_estimator_t *estimator) {
         estimator->rejection_elapsed_seconds;
     estimator->output.recovery_elapsed_seconds =
         estimator->recovery_elapsed_seconds;
+    estimator->output.reacquisition_elapsed_seconds =
+        estimator->reacquisition_elapsed_seconds;
     estimator->output.wheel_velocity_reliable =
         estimator->wheel_velocity_reliable;
+    estimator->output.reacquisition_active =
+        estimator->reacquisition_elapsed_seconds > 0.0F &&
+        estimator->reacquisition_elapsed_seconds >=
+            estimator->config.reacquisition_stable_duration;
+}
+
+static void reset_reacquisition(bc_velocity_estimator_t *estimator) {
+    estimator->reacquisition_elapsed_seconds = 0.0F;
+    estimator->previous_wheel_measurement_initialized = 0U;
+}
+
+static void apply_reacquisition(
+    bc_velocity_estimator_t *estimator,
+    const float wheel_velocity_measurement,
+    const uint8_t enabled,
+    const float timestep_seconds
+) {
+    if (!enabled || estimator->wheel_velocity_reliable ||
+        !isfinite(wheel_velocity_measurement) ||
+        fabsf(wheel_velocity_measurement) >
+            estimator->config.reacquisition_max_wheel_speed ||
+        !isfinite(timestep_seconds) || timestep_seconds <= 0.0F) {
+        reset_reacquisition(estimator);
+        return;
+    }
+
+    uint8_t stable = 0U;
+    if (estimator->previous_wheel_measurement_initialized) {
+        const float acceleration = fabsf(
+            wheel_velocity_measurement -
+            estimator->previous_wheel_velocity_measurement) /
+            timestep_seconds;
+        stable = isfinite(acceleration) &&
+            acceleration <=
+                estimator->config.reacquisition_max_wheel_acceleration;
+    }
+    estimator->previous_wheel_velocity_measurement =
+        wheel_velocity_measurement;
+    estimator->previous_wheel_measurement_initialized = 1U;
+    if (!stable) {
+        estimator->reacquisition_elapsed_seconds = 0.0F;
+        return;
+    }
+
+    estimator->reacquisition_elapsed_seconds += timestep_seconds;
+    if (estimator->reacquisition_elapsed_seconds <
+        estimator->config.reacquisition_stable_duration) return;
+
+    const float maximum_step =
+        estimator->config.reacquisition_velocity_rate * timestep_seconds;
+    if (!isfinite(maximum_step) || maximum_step <= 0.0F) return;
+    const float error =
+        wheel_velocity_measurement - estimator->state[VELOCITY_X];
+    estimator->state[VELOCITY_X] += fmaxf(
+        -maximum_step, fminf(error, maximum_step));
 }
 
 static void inflate_recovery_covariance(
@@ -200,6 +257,7 @@ void bc_velocity_estimator_reset(bc_velocity_estimator_t *estimator) {
     reset_covariance(estimator);
     estimator->rejection_elapsed_seconds = 0.0F;
     estimator->recovery_elapsed_seconds = 0.0F;
+    reset_reacquisition(estimator);
     estimator->measurement_initialized = 0U;
     estimator->wheel_velocity_reliable = 0U;
 }
@@ -216,6 +274,7 @@ void bc_velocity_estimator_skip_update(
     estimator->output.measurement_accepted = 0U;
     estimator->rejection_elapsed_seconds = 0.0F;
     estimator->recovery_elapsed_seconds = 0.0F;
+    reset_reacquisition(estimator);
     estimator->measurement_initialized = 0U;
     estimator->wheel_velocity_reliable = 0U;
     capture_estimate(estimator);
@@ -233,6 +292,7 @@ void bc_velocity_estimator_reject_wheel(
     estimator->output.measurement_accepted = 0U;
     estimator->rejection_elapsed_seconds = 0.0F;
     estimator->recovery_elapsed_seconds = 0.0F;
+    reset_reacquisition(estimator);
     estimator->measurement_initialized = 1U;
     if (estimator->wheel_velocity_reliable) {
         inflate_recovery_covariance(estimator);
@@ -244,6 +304,7 @@ void bc_velocity_estimator_reject_wheel(
 void bc_velocity_estimator_update(
     bc_velocity_estimator_t *estimator,
     const float wheel_velocity_measurement,
+    const bc_wheel_update_mode_t mode,
     const float timestep_seconds
 ) {
     if (!estimator->measurement_initialized) {
@@ -268,10 +329,15 @@ void bc_velocity_estimator_update(
         inflate_recovery_covariance(estimator);
     }
     if (!measurement_is_usable) {
+        apply_reacquisition(
+            estimator, wheel_velocity_measurement,
+            mode == BC_WHEEL_UPDATE_REACQUIRE, timestep_seconds);
+        calculate_innovation(estimator, wheel_velocity_measurement);
         capture_estimate(estimator);
         return;
     }
 
+    reset_reacquisition(estimator);
     apply_measurement_update(estimator);
     output->measurement_accepted = 1U;
     capture_estimate(estimator);

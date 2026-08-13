@@ -25,6 +25,7 @@ public:
         const char *name, double x, double y, double z,
         double pitch_radians, bool visible);
     void configure_keyboard_course();
+    void configure_ramp_climb_benchmark();
 
     [[nodiscard]] const mjModel &model() const noexcept { return *model_; }
     [[nodiscard]] mjData &data() noexcept { return *data_; }

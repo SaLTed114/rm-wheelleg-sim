@@ -2,6 +2,8 @@
 #define BALANCE_OBSERVER_H
 
 #include "balance/leg_kinematics.h"
+#include "balance/observation_context.h"
+#include "balance/state_machine/condition_hold.h"
 #include "balance/types.h"
 #include "balance/velocity_estimator.h"
 
@@ -26,6 +28,7 @@ typedef struct {
     bc_body_point_t imu_position;
     bc_body_point_t hip_center_position;
     float wheel_radius;
+    float wheel_velocity_startup_delay;
 } bc_observer_config_t;
 
 typedef struct {
@@ -34,6 +37,7 @@ typedef struct {
     bc_velocity_estimator_t velocity_estimator;
     bc_forward_velocity_output_t forward_velocity;
     bc_state_vector_t state;
+    bc_condition_hold_t wheel_velocity_startup_hold;
     float roll;
     float roll_rate;
     float previous_yaw;
@@ -49,8 +53,8 @@ void bc_observer_reset(bc_observer_t *observer);
 void bc_observer_update(
     bc_observer_t *observer,
     const bc_sensor_feedback_t *feedback,
-    float timestep_seconds,
-    uint8_t wheel_velocity_update_enabled);
+    const bc_observation_context_t *context,
+    float timestep_seconds);
 void bc_observer_reject_wheel_velocity(bc_observer_t *observer);
 
 #ifdef __cplusplus

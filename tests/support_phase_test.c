@@ -101,6 +101,39 @@ int main(void) {
     }
 
     bc_support_phase_reset(&phase);
+    input.specific_force_norm = 3.0F;
+    support[BC_L].state = BC_CONTACT_AIR;
+    support[BC_L].filtered_vertical_force = -17.0F;
+    support[BC_R].state = BC_CONTACT_GROUND;
+    support[BC_R].filtered_vertical_force = 39.0F;
+    update_for(
+        &phase, &input,
+        config.fast_air_confirm_duration + input.timestep_seconds);
+    if (phase.state != BC_SUPPORT_AIRBORNE ||
+        !phase.fast_air_mixed_contact || phase.airborne_unloaded) {
+        fputs("mixed-contact fast air was not diagnosed correctly\n", stderr);
+        return 1;
+    }
+    input.specific_force_norm = 30.0F;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        support[side].state = BC_CONTACT_GROUND;
+        support[side].filtered_vertical_force = 100.0F;
+    }
+    update_for(
+        &phase, &input,
+        config.landing_confirm_duration + input.timestep_seconds);
+    if (phase.state != BC_SUPPORT_LANDING_RETRACT) {
+        fputs("impact after mixed-contact fast air did not trigger landing\n",
+              stderr);
+        return 1;
+    }
+    if (!phase.request.leg[BC_L].contact_latched ||
+        !phase.request.leg[BC_R].contact_latched) {
+        fputs("fast-air landing did not latch both loaded legs\n", stderr);
+        return 1;
+    }
+
+    bc_support_phase_reset(&phase);
     input.specific_force_norm = 9.81F;
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         support[side].state = BC_CONTACT_AIR;

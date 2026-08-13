@@ -114,7 +114,9 @@ static uint8_t bc_support_side_contact(
         !input->support_force[side].valid) return 0U;
     return (phase->side_airborne_diagnosed[side] &&
             input->support_force[side].state == BC_CONTACT_GROUND) ||
-        (phase->airborne_unloaded &&
+        ((phase->airborne_unloaded ||
+          (phase->fast_air_mixed_contact &&
+           !phase->airborne_diagnosed)) &&
          isfinite(input->support_force[side].filtered_vertical_force) &&
          input->support_force[side].filtered_vertical_force >
             phase->config.landing_force_threshold);
@@ -281,6 +283,7 @@ void bc_support_phase_reset(bc_support_phase_t *phase) {
     bc_condition_hold_reset(&phase->landing_hold);
     phase->airborne_unloaded = 0U;
     phase->airborne_diagnosed = 0U;
+    phase->fast_air_mixed_contact = 0U;
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
         phase->side_airborne_diagnosed[side] = 0U;
     }
@@ -306,16 +309,20 @@ void bc_support_phase_update(
             phase->config.fast_air_specific_force_threshold;
 
     switch (phase->state) {
-    case BC_SUPPORT_GROUND:
-        if (all_air || bc_condition_hold_update(
+    case BC_SUPPORT_GROUND: {
+        const uint8_t fast_air_confirmed = bc_condition_hold_update(
                 &phase->fast_air_hold, fast_air,
                 phase->config.fast_air_confirm_duration,
-                input->timestep_seconds)) {
+                input->timestep_seconds);
+        if (all_air || fast_air_confirmed) {
             bc_support_set_state(phase, BC_SUPPORT_AIRBORNE);
             phase->airborne_unloaded = all_air ||
                 bc_support_all_force_below(
                     input, phase->config.unloaded_force_threshold);
             phase->airborne_diagnosed = all_air;
+            phase->fast_air_mixed_contact =
+                !all_air && fast_air_confirmed &&
+                bc_support_any_contact(input, BC_CONTACT_AIR);
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
                 phase->side_airborne_diagnosed[side] =
                     input->support_force != NULL &&
@@ -324,8 +331,9 @@ void bc_support_phase_update(
             }
         }
         break;
+    }
 
-    case BC_SUPPORT_AIRBORNE:
+    case BC_SUPPORT_AIRBORNE: {
         for (int side = 0; side < BC_SIDE_NUM; ++side) {
             phase->side_airborne_diagnosed[side] =
                 phase->side_airborne_diagnosed[side] ||
@@ -338,17 +346,24 @@ void bc_support_phase_update(
         phase->airborne_unloaded = phase->airborne_unloaded || all_air ||
             bc_support_all_force_below(
                 input, phase->config.unloaded_force_threshold);
+        const uint8_t touchdown_after_fast_air =
+            phase->fast_air_mixed_contact && !fast_air &&
+            bc_support_any_force_above(
+                input, phase->config.landing_force_threshold);
+        const uint8_t touchdown_after_contact_air =
+            phase->airborne_unloaded &&
+            ((phase->airborne_diagnosed && any_ground) ||
+             bc_support_any_force_above(
+                input, phase->config.landing_force_threshold));
         if (bc_condition_hold_update(
                 &phase->landing_hold,
-                phase->airborne_unloaded &&
-                    ((phase->airborne_diagnosed && any_ground) ||
-                     bc_support_any_force_above(
-                        input, phase->config.landing_force_threshold)),
+                touchdown_after_contact_air || touchdown_after_fast_air,
                 phase->config.landing_confirm_duration,
                 input->timestep_seconds)) {
             bc_support_set_state(phase, BC_SUPPORT_LANDING_RETRACT);
         }
         break;
+    }
 
     case BC_SUPPORT_LANDING_RETRACT:
         if (all_air && bc_support_all_force_below(
@@ -356,6 +371,7 @@ void bc_support_phase_update(
             bc_support_set_state(phase, BC_SUPPORT_AIRBORNE);
             phase->airborne_unloaded = 1U;
             phase->airborne_diagnosed = 1U;
+            phase->fast_air_mixed_contact = 0U;
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
                 phase->side_airborne_diagnosed[side] = 1U;
             }
@@ -377,6 +393,7 @@ void bc_support_phase_update(
             bc_support_set_state(phase, BC_SUPPORT_AIRBORNE);
             phase->airborne_unloaded = 1U;
             phase->airborne_diagnosed = 1U;
+            phase->fast_air_mixed_contact = 0U;
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
                 phase->side_airborne_diagnosed[side] = 1U;
             }
