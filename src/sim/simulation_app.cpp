@@ -22,6 +22,7 @@
 #include "performance/performance_scenario.hpp"
 #include "simulation_runner.hpp"
 #include "simulation_ui.hpp"
+#include "step/step_dock.hpp"
 
 namespace balance::sim {
 namespace {
@@ -66,6 +67,9 @@ public:
         if (options_.ramp_jump_case != nullptr) {
             ramp_jump_.emplace(*options_.ramp_jump_case, plant_.model());
         }
+        if (options_.step_dock_case != nullptr) {
+            step_dock_.emplace(*options_.step_dock_case, plant_.model());
+        }
         if (options_.trace_path) {
             trace_ = std::make_unique<InteractiveTraceWriter>(
                 *options_.trace_path);
@@ -104,7 +108,8 @@ public:
                 accumulated_time += std::clamp(
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant_.timestep()) {
-                    const bool keep_stepping = jump_impulse_ ?
+                    const bool keep_stepping = step_dock_ ?
+                        step_step_dock() : jump_impulse_ ?
                         step_jump_impulse() : platform_drop_ ?
                         step_platform_drop() : ramp_jump_ ?
                         step_ramp_jump() : ramp_course_ ?
@@ -157,6 +162,10 @@ private:
             config.motion.leg_length = static_cast<float>(
                 options.ramp_jump_case->leg_length);
         }
+        if (options.step_dock_case != nullptr) {
+            config.motion.leg_length = static_cast<float>(
+                options.step_dock_case->leg_length);
+        }
         return config;
     }
 
@@ -171,6 +180,7 @@ private:
         if (platform_drop_) platform_drop_->reset(plant_);
         if (ramp_course_) ramp_course_->reset(plant_);
         if (ramp_jump_) ramp_jump_->reset(plant_);
+        if (step_dock_) step_dock_->reset(plant_);
         interactive_.reset(runner_.snapshot());
         phase_ = bc_system_state_name(
             runner_.snapshot().state_machine.system);
@@ -341,6 +351,22 @@ private:
         return true;
     }
 
+    bool step_step_dock() {
+        step_dock_->step(plant_, runner_, sampler_);
+        phase_ = step_dock_->phase_name();
+        case_balance_engaged_ = step_dock_->balance_engaged();
+        displayed_gimbal_.world_yaw = 0.0F;
+        if (std::string_view(step_dock_->issue()) != "none" &&
+            case_issue_ == "none") {
+            case_issue_ = step_dock_->issue();
+        }
+        if (step_dock_->finished()) {
+            case_finished_ = true;
+            return false;
+        }
+        return true;
+    }
+
     void finish_performance_case() {
         case_finished_ = true;
         if (!case_balance_engaged_) case_issue_ = "balance_not_engaged";
@@ -348,7 +374,8 @@ private:
 
     [[nodiscard]] SimulationUiFrame ui_frame() const {
         const char *case_name = nullptr;
-        if (jump_impulse_) case_name = jump_impulse_->name().c_str();
+        if (step_dock_) case_name = step_dock_->name().c_str();
+        else if (jump_impulse_) case_name = jump_impulse_->name().c_str();
         else if (platform_drop_) case_name = platform_drop_->name().c_str();
         else if (ramp_jump_) case_name = ramp_jump_->name().c_str();
         else if (ramp_course_) case_name = ramp_course_->name().c_str();
@@ -381,6 +408,7 @@ private:
     std::optional<benchmark::PlatformDropScenario> platform_drop_;
     std::optional<benchmark::RampCourseScenario> ramp_course_;
     std::optional<benchmark::RampJumpScenario> ramp_jump_;
+    std::optional<benchmark::StepDockScenario> step_dock_;
     std::optional<benchmark::PerformanceScenario> performance_;
     std::unique_ptr<InteractiveTraceWriter> trace_;
     VirtualGimbalState displayed_gimbal_{};

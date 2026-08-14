@@ -30,6 +30,8 @@ void bc_controller_capture_snapshot(
     snapshot->heading_error = controller->system.motion.heading_error;
     snapshot->forward_velocity =
         controller->control_core.observer.forward_velocity;
+    snapshot->impact_observer =
+        controller->control_core.observer.impact_observer.output;
     snapshot->velocity_estimator =
         controller->control_core.observer.velocity_estimator.output;
     memcpy(

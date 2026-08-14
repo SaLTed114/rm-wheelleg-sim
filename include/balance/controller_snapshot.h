@@ -28,6 +28,7 @@ typedef struct {
     float mapped_forward_velocity;
     float heading_error;
     bc_forward_velocity_output_t forward_velocity;
+    bc_impact_observer_output_t impact_observer;
     bc_velocity_estimator_output_t velocity_estimator;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];
     bc_support_force_output_t support_force[BC_SIDE_NUM];

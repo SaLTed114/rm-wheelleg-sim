@@ -124,6 +124,29 @@ void MujocoPlant::configure_keyboard_course() {
     place_wedge("keyboard_ramp_17deg", 1.0, 0.35, 17.0);
 }
 
+StepDockLayout MujocoPlant::configure_step_dock_benchmark(
+    const double edge_x
+) {
+    constexpr double kGroundHeight = -0.43;
+    constexpr double kPlatformHeight = 0.20;
+    constexpr double kPlatformHalfLength = 1.0;
+    if (!std::isfinite(edge_x)) {
+        throw std::invalid_argument(
+            "step dock platform edge must be finite");
+    }
+    place_mocap_surface(
+        "keyboard_platform_200mm",
+        edge_x + kPlatformHalfLength, 0.0,
+        kGroundHeight + 0.5 * kPlatformHeight, true);
+    return {
+        edge_x,
+        edge_x + 2.0 * kPlatformHalfLength,
+        kGroundHeight,
+        kGroundHeight + kPlatformHeight,
+        kPlatformHeight,
+    };
+}
+
 void MujocoPlant::configure_ramp_climb_benchmark() {
     constexpr double kGroundHeight = -0.43;
     constexpr double kRampStartX = 1.5;

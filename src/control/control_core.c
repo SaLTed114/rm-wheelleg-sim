@@ -11,13 +11,16 @@ _Static_assert(
 
 void bc_control_default_config(bc_control_config_t *config) {
     bc_support_force_config_t support_force_estimator;
+    bc_impact_observer_config_t impact_observer;
     bc_support_force_default_config(&support_force_estimator);
+    bc_impact_observer_default_config(&impact_observer);
     *config = (bc_control_config_t){
         .observer = {
             .leg_geometry = {
                 .hip_link_length   = 0.215F,
                 .wheel_link_length = 0.254F,
             },
+            .impact_observer = impact_observer,
             .velocity_estimator = {
                 .gravity                   = 9.81F,
                 .initial_velocity_variance = 0.0004F,

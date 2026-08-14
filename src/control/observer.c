@@ -43,6 +43,8 @@ void bc_observer_init(
     bc_velocity_estimator_init(
         &observer->velocity_estimator,
         &config->velocity_estimator);
+    bc_impact_observer_init(
+        &observer->impact_observer, &config->impact_observer);
     bc_observer_reset(observer);
 }
 
@@ -53,6 +55,7 @@ void bc_observer_reset(bc_observer_t *observer) {
         sizeof(observer->forward_velocity));
     memset(&observer->state, 0, sizeof(observer->state));
     bc_velocity_estimator_reset(&observer->velocity_estimator);
+    bc_impact_observer_reset(&observer->impact_observer);
     observer->roll = 0.0F;
     observer->roll_rate = 0.0F;
     observer->previous_yaw = 0.0F;
@@ -89,6 +92,9 @@ void bc_observer_update(
     const float velocity_offset = axle_velocity_offset_x(observer, feedback);
     observer->forward_velocity.wheel_odometry =
         observer->config.wheel_radius * common_wheel_rate;
+    bc_impact_observer_update(
+        &observer->impact_observer, &feedback->imu, observer->leg,
+        observer->forward_velocity.wheel_odometry, timestep_seconds);
     const uint8_t wheel_observation_started = bc_condition_hold_update(
         &observer->wheel_velocity_startup_hold,
         context->wheel_velocity != BC_WHEEL_OBSERVATION_DISABLED,

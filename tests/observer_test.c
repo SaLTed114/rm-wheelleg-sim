@@ -17,6 +17,10 @@ static bc_observer_config_t observer_config(void) {
             .hip_link_length   = 0.215F,
             .wheel_link_length = 0.254F,
         },
+        .impact_observer = {
+            .gravity = 9.81F,
+            .window_seconds = {0.005F, 0.010F},
+        },
         .velocity_estimator = {
             .gravity                   = 9.81F,
             .initial_velocity_variance = 0.0004F,

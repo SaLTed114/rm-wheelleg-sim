@@ -161,3 +161,27 @@ Run the isolated `140/180/220 N` baseline and `240 N` hold-time sweep with:
 
 Replay one force level in the GUI with, for example,
 `./build/rm_balance_sim <model.xml> --case jump_impulse_f240_t90ms`.
+
+### Step docking benchmark
+
+Run the isolated `0.38 m` leg, `2.0 m/s` reference, `200 mm` step cases with:
+
+```bash
+./build/rm_balance_step_dock \
+  models/MJCF/COD-2026RoboMaster-Balance.xml \
+  build/step-dock
+```
+
+The permanent case registry keeps only immediate cut and `10 ms` delayed cut.
+The CTest matrix measures the common post-start yaw drift, compensates the
+initial pose, then reaches world-frame collision headings of `0/+/-2 deg`. It
+also runs contact-free straight, hold, stop, and `+/-0.2 rad/s` turn samples at
+the same `0.38 m`, `2.0 m/s`, and `3.0 m/s^2` task envelope. Additional
+positive samples collide after `0.3-1.5 m` of measured acceleration travel,
+rather than treating the initial geometric gap as distance traveled. These
+traces expose the shadow impact observer's `5/10 ms` IMU, pitch-rate, leg-rate,
+and wheel-rate
+features; MuJoCo contact truth is used only to label the positive samples and
+schedule the benchmark-only actuation cut. The observer does not produce a
+collision decision or affect control. Replay the permanent cases in the GUI
+with `--case step_dock_passive` or `--case step_dock_delay_10ms`.

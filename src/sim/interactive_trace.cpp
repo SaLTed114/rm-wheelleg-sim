@@ -48,6 +48,15 @@ InteractiveTraceWriter::InteractiveTraceWriter(
     "support_force_filtered_l", "support_force_filtered_r",
     "support_contact_l", "support_contact_r",
     "roll", "roll_rate",
+    "impact_forward_acceleration", "impact_vertical_acceleration",
+    "impact_5ms_valid", "impact_5ms_forward_dv",
+    "impact_5ms_vertical_dv", "impact_5ms_pitch_rate_delta",
+    "impact_5ms_leg_rate_delta_l", "impact_5ms_leg_rate_delta_r",
+    "impact_5ms_wheel_velocity_delta", "impact_5ms_wheel_imu_mismatch",
+    "impact_10ms_valid", "impact_10ms_forward_dv",
+    "impact_10ms_vertical_dv", "impact_10ms_pitch_rate_delta",
+    "impact_10ms_leg_rate_delta_l", "impact_10ms_leg_rate_delta_r",
+    "impact_10ms_wheel_velocity_delta", "impact_10ms_wheel_imu_mismatch",
 }) {}
 
 void InteractiveTraceWriter::write(
@@ -163,6 +172,20 @@ void InteractiveTraceWriter::write(
         .value(bc_contact_state_name(snapshot.support_force[BC_R].state))
         .value(snapshot.roll)
         .value(snapshot.roll_rate);
+    const bc_impact_observer_output_t &impact = snapshot.impact_observer;
+    csv_.value(impact.forward_acceleration)
+        .value(impact.vertical_acceleration);
+    for (int window = 0; window < BC_IMPACT_WINDOW_NUM; ++window) {
+        const bc_impact_window_output_t &output = impact.window[window];
+        csv_.value(static_cast<int>(output.valid))
+            .value(output.forward_delta_velocity)
+            .value(output.vertical_delta_velocity)
+            .value(output.pitch_rate_delta)
+            .value(output.leg_rate_delta[BC_L])
+            .value(output.leg_rate_delta[BC_R])
+            .value(output.wheel_velocity_delta)
+            .value(output.wheel_imu_delta_mismatch);
+    }
     csv_.end_row();
 
     ++row_count_;

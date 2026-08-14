@@ -2,6 +2,7 @@
 #define BALANCE_OBSERVER_H
 
 #include "balance/leg_kinematics.h"
+#include "balance/impact_observer.h"
 #include "balance/observation_context.h"
 #include "balance/state_machine/condition_hold.h"
 #include "balance/types.h"
@@ -24,6 +25,7 @@ typedef struct {
 
 typedef struct {
     bc_leg_geometry_t leg_geometry;
+    bc_impact_observer_config_t impact_observer;
     bc_velocity_estimator_config_t velocity_estimator;
     bc_body_point_t imu_position;
     bc_body_point_t hip_center_position;
@@ -34,6 +36,7 @@ typedef struct {
 typedef struct {
     bc_observer_config_t config;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];
+    bc_impact_observer_t impact_observer;
     bc_velocity_estimator_t velocity_estimator;
     bc_forward_velocity_output_t forward_velocity;
     bc_state_vector_t state;

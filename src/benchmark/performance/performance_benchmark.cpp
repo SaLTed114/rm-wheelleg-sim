@@ -169,6 +169,17 @@ PerformanceBenchmark::PerformanceBenchmark(
         "support_contact_l", "support_contact_r",
         "contact_wheel_l", "contact_wheel_r", "other_contact",
         "normal_force_l", "normal_force_r",
+        "impact_forward_acceleration", "impact_vertical_acceleration",
+        "impact_5ms_valid", "impact_5ms_forward_dv",
+        "impact_5ms_vertical_dv", "impact_5ms_pitch_rate_delta",
+        "impact_5ms_leg_rate_delta_l", "impact_5ms_leg_rate_delta_r",
+        "impact_5ms_wheel_velocity_delta",
+        "impact_5ms_wheel_imu_mismatch",
+        "impact_10ms_valid", "impact_10ms_forward_dv",
+        "impact_10ms_vertical_dv", "impact_10ms_pitch_rate_delta",
+        "impact_10ms_leg_rate_delta_l", "impact_10ms_leg_rate_delta_r",
+        "impact_10ms_wheel_velocity_delta",
+        "impact_10ms_wheel_imu_mismatch",
     }),
     yaw_acceleration_feedforward_scale_(
         effective_yaw_acceleration_feedforward_scale(
@@ -704,6 +715,20 @@ void PerformanceBenchmark::write_trace(
         .value(sample.contact.other)
         .value(sample.contact.wheel_normal_force[BC_L])
         .value(sample.contact.wheel_normal_force[BC_R]);
+    const bc_impact_observer_output_t &impact = snapshot.impact_observer;
+    trace_.value(impact.forward_acceleration)
+        .value(impact.vertical_acceleration);
+    for (int window = 0; window < BC_IMPACT_WINDOW_NUM; ++window) {
+        const bc_impact_window_output_t &output = impact.window[window];
+        trace_.value(static_cast<int>(output.valid))
+            .value(output.forward_delta_velocity)
+            .value(output.vertical_delta_velocity)
+            .value(output.pitch_rate_delta)
+            .value(output.leg_rate_delta[BC_L])
+            .value(output.leg_rate_delta[BC_R])
+            .value(output.wheel_velocity_delta)
+            .value(output.wheel_imu_delta_mismatch);
+    }
     trace_.end_row();
 }
 

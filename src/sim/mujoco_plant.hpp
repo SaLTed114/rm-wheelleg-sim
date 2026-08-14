@@ -23,6 +23,14 @@ struct RampJumpLayout {
     double angle_radians{};
 };
 
+struct StepDockLayout {
+    double edge_x{};
+    double platform_end_x{};
+    double ground_z{};
+    double top_z{};
+    double height{};
+};
+
 class MujocoPlant {
 public:
     MujocoPlant(
@@ -40,6 +48,8 @@ public:
         const char *name, double x, double y, double z,
         double pitch_radians, bool visible);
     void configure_keyboard_course();
+    [[nodiscard]] StepDockLayout configure_step_dock_benchmark(
+        double edge_x = 4.0);
     void configure_ramp_climb_benchmark();
     [[nodiscard]] RampJumpLayout configure_ramp_jump_benchmark();
     [[nodiscard]] RampCourseLayout configure_ramp_course_benchmark(

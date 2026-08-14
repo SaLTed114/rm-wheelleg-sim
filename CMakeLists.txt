@@ -55,6 +55,7 @@ add_library(balance_control_core STATIC
   src/control/control_core.c
   src/control/controller.c
   src/control/controller_snapshot.c
+  src/control/impact_observer.c
   src/control/reference/forward.c
   src/control/leg_kinematics.c
   src/control/observer.c
@@ -107,6 +108,7 @@ add_library(balance_benchmark_support STATIC
   src/benchmark/performance/forward_velocity_diagnostic.cpp
   src/benchmark/performance/performance_benchmark.cpp
   src/benchmark/performance/performance_scenario.cpp
+  src/benchmark/step/step_dock.cpp
   src/benchmark/trim/trim_scanner.cpp)
 target_include_directories(balance_benchmark_support
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/benchmark")
@@ -145,6 +147,13 @@ target_link_libraries(
   rm_balance_jump_impulse PRIVATE balance_benchmark_support)
 balance_enable_warnings(rm_balance_jump_impulse)
 balance_configure_mujoco_runtime(rm_balance_jump_impulse)
+
+add_executable(rm_balance_step_dock
+  src/benchmark/step/step_dock_main.cpp)
+target_link_libraries(
+  rm_balance_step_dock PRIVATE balance_benchmark_support)
+balance_enable_warnings(rm_balance_step_dock)
+balance_configure_mujoco_runtime(rm_balance_step_dock)
 
 add_executable(rm_balance_trim_scan
   src/benchmark/trim/main.cpp)
@@ -257,6 +266,11 @@ if(BUILD_TESTING)
   target_link_libraries(leg_kinematics_test PRIVATE balance_control_core)
   balance_enable_warnings(leg_kinematics_test)
   add_test(NAME leg_kinematics COMMAND leg_kinematics_test)
+
+  add_executable(impact_observer_test tests/impact_observer_test.c)
+  target_link_libraries(impact_observer_test PRIVATE balance_control_core)
+  balance_enable_warnings(impact_observer_test)
+  add_test(NAME impact_observer COMMAND impact_observer_test)
 
   add_executable(support_force_test tests/support_force_test.c)
   target_link_libraries(support_force_test PRIVATE balance_control_core)
@@ -375,6 +389,28 @@ if(BUILD_TESTING)
     COMMAND mujoco_jump_impulse_test
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/jump-impulse")
+
+  add_executable(mujoco_step_dock_test
+    tests/mujoco_step_dock_test.cpp)
+  target_link_libraries(
+    mujoco_step_dock_test PRIVATE balance_benchmark_support)
+  balance_enable_warnings(mujoco_step_dock_test)
+  balance_configure_mujoco_runtime(mujoco_step_dock_test)
+  add_test(NAME mujoco_step_dock_passive
+    COMMAND mujoco_step_dock_test
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_BINARY_DIR}/test-results/step-dock")
+
+  add_executable(mujoco_impact_observer_matrix_test
+    tests/mujoco_impact_observer_matrix_test.cpp)
+  target_link_libraries(
+    mujoco_impact_observer_matrix_test PRIVATE balance_benchmark_support)
+  balance_enable_warnings(mujoco_impact_observer_matrix_test)
+  balance_configure_mujoco_runtime(mujoco_impact_observer_matrix_test)
+  add_test(NAME mujoco_impact_observer_negative_matrix
+    COMMAND mujoco_impact_observer_matrix_test
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_BINARY_DIR}/test-results/impact-observer-negative")
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_benchmark_support)
