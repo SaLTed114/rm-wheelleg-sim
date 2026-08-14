@@ -247,6 +247,53 @@ int main() {
         return 1;
     }
 
+    command.task = BC_OPERATOR_TASK_STEP_DOCK;
+    command.forward_velocity = 0.5F;
+    controller.gimbal_feedback.relative_yaw = 0.0F;
+    controller.system.motion.support_phase.state = BC_SUPPORT_GROUND;
+    controller.control_core.observer.forward_velocity.wheel_odometry = 0.5F;
+    controller.control_core.observer.velocity_estimator.output.
+        wheel_velocity_reliable = 1U;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        controller.control_core.observer.leg[side].length =
+            config.motion.step_task.prepare_leg_length;
+        controller.control_core.support_force[side].output.state =
+            BC_CONTACT_GROUND;
+        controller.control_core.support_force[side].output.
+            filtered_vertical_force = 70.0F;
+    }
+    controller.control_core.observer.impact_observer.output.valid = 1U;
+    controller.control_core.observer.impact_observer.output.
+        window[BC_IMPACT_WINDOW_SHORT].valid = 1U;
+    controller.control_core.observer.impact_observer.output.
+        window[BC_IMPACT_WINDOW_SHORT].leg_rate_delta[BC_L] = 0.6F;
+    controller.control_core.observer.impact_observer.output.
+        window[BC_IMPACT_WINDOW_SHORT].wheel_imu_delta_mismatch = 0.13F;
+    bc_controller_set_command(&controller, &command);
+    for (int step = 0; step < 3; ++step) {
+        bc_controller_calculate(&controller);
+    }
+    bc_controller_execute(&controller, &actuation);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.step_task !=
+            BC_STEP_TASK_IMPACT_PASSIVE ||
+        snapshot.step_impact_armed ||
+        !actuation_is_zero(&snapshot.actuation_request) ||
+        !actuation_is_zero(&snapshot.actuation)) {
+        fputs("step passive did not clear all controller actuation\n", stderr);
+        return 1;
+    }
+    command.task = BC_OPERATOR_TASK_NORMAL;
+    bc_controller_set_command(&controller, &command);
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+    if (controller.system.motion.step_task.state !=
+            BC_STEP_TASK_IMPACT_PASSIVE ||
+        !actuation_is_zero(&actuation)) {
+        fputs("step passive did not remain latched in controller\n", stderr);
+        return 1;
+    }
+
     controller.system.motion.state = BC_MOTION_IDLE;
     bc_controller_update(&controller, &feedback, 0.001F);
     bc_controller_set_command(&controller, &command);
@@ -261,6 +308,7 @@ int main() {
     }
 
     command.balance_restart = 1U;
+    command.task = BC_OPERATOR_TASK_NORMAL;
     bc_controller_update(&controller, &feedback, 0.001F);
     bc_controller_set_command(&controller, &command);
     bc_controller_calculate(&controller);

@@ -135,6 +135,8 @@ void SimulationRunner::step_with_feedback_and_transform(
         input.state = &controller_.control_core.observer.state;
         input.leg = controller_.control_core.observer.leg;
         input.support_force = support_force;
+        input.impact_observer =
+            &controller_.control_core.observer.impact_observer.output;
         input.length_position_kp =
             controller_.control_core.config.length_controller.kp;
         input.length_position_kd =

@@ -11,6 +11,8 @@ void bc_controller_capture_snapshot(
     snapshot->state_machine.motion = controller->system.motion.state;
     snapshot->state_machine.forward =
         controller->system.motion.forward.state;
+    snapshot->state_machine.step_task =
+        controller->system.motion.step_task.state;
     snapshot->state_machine.support =
         controller->system.motion.support_phase.state;
     snapshot->state_machine.alignment =
@@ -32,6 +34,10 @@ void bc_controller_capture_snapshot(
         controller->control_core.observer.forward_velocity;
     snapshot->impact_observer =
         controller->control_core.observer.impact_observer.output;
+    snapshot->step_impact_armed =
+        controller->system.motion.step_task.impact_armed;
+    snapshot->step_impact_confirm_elapsed =
+        controller->system.motion.step_task.impact_hold.elapsed_seconds;
     snapshot->velocity_estimator =
         controller->control_core.observer.velocity_estimator.output;
     memcpy(

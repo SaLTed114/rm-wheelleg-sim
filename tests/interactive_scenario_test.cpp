@@ -47,16 +47,17 @@ int main() {
     }
 
     snapshot = active_snapshot();
-    const KeyboardDriveInput input{1.0F, 1.0F, false};
+    const KeyboardDriveInput input{1.0F, 1.0F, false, true};
     const auto &moving = keyboard.update(snapshot, input, 3.0, 0.001F);
     if (!near(moving.command.forward_velocity, 2.0F) ||
         !near(moving.gimbal.world_yaw_rate, 0.01F) ||
-        moving.gimbal.world_yaw <= 0.5F) {
+        moving.gimbal.world_yaw <= 0.5F ||
+        moving.command.task != BC_OPERATOR_TASK_STEP_DOCK) {
         std::cerr << "keyboard motion was not mapped through the gimbal\n";
         return 1;
     }
 
-    const KeyboardDriveInput boosted_input{1.0F, 0.0F, true};
+    const KeyboardDriveInput boosted_input{1.0F, 0.0F, true, false};
     const auto &boosted = keyboard.update(
         snapshot, boosted_input, 3.01, 0.001F);
     if (!near(boosted.command.forward_velocity, 2.7F)) {

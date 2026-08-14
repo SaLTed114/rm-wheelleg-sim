@@ -82,7 +82,12 @@ KeyboardDriveInput MujocoViewer::keyboard_drive_input() const {
         static_cast<float>(forward) - static_cast<float>(reverse),
         static_cast<float>(left) - static_cast<float>(right),
         boost,
+        step_task_enabled_,
     };
+}
+
+void MujocoViewer::reset_drive_input() noexcept {
+    step_task_enabled_ = false;
 }
 
 bool MujocoViewer::consume_pause_toggle() {
@@ -210,6 +215,9 @@ void MujocoViewer::handle_key(int key, int action) {
         pause_toggle_requested_ = true;
     } else if (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_R) {
         reset_requested_ = true;
+        reset_drive_input();
+    } else if (key == GLFW_KEY_T) {
+        step_task_enabled_ = !step_task_enabled_;
     }
 }
 

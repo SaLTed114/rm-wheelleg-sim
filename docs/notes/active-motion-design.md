@@ -2,7 +2,7 @@
 
 更新日期：2026-08-12
 
-本文记录 ACTIVE 内部的职责划分、数据流和状态机边界。当前代码已实现 NORMAL 下的纵向 `HOLD/VELOCITY`、云台跟随、front/rear 映射、工作腿长规划和首版 support phase；这些逻辑仍由 `bc_motion_t` 内的 ACTIVE 分支统一合成。SPIN 和独立的 ACTIVE 类型尚未实现。
+本文记录 ACTIVE 内部的职责划分、数据流和状态机边界。当前代码已实现 NORMAL 下的纵向 `HOLD/VELOCITY`、云台跟随、front/rear 映射、工作腿长规划、首版 support phase 和台阶准备 task；这些逻辑仍由 `bc_motion_t` 内的 ACTIVE 分支统一合成。SPIN 和独立的 ACTIVE 类型尚未实现。
 
 ## 为什么 ACTIVE 不能再作为一个单一动作
 
@@ -156,6 +156,14 @@ NORMAL
 
 如果 SPIN 中发生离地，task 与 support 的优先级必须有明确定义。当前没有实验依据决定继续自旋、制动还是直接退出 SPIN，因此第一版架构只保留显式冲突处理入口，不预写行为。
 
+## STEP_DOCK 首版语义
+
+操作手命令现通过 `NORMAL/STEP_DOCK` task 枚举进入 ACTIVE。`STEP_DOCK` 使用独立的 `INACTIVE -> PREPARE -> IMPACT_PASSIVE` 子状态机；keyboard 下按 `T` 切换。PREPARE 将长期工作腿长改为 `0.38 m`，但不把伸腿过程变成运动门禁：若机体正面已经对准云台，纵向和偏航命令与腿长斜坡同时运行。若当前选择了机体反面，task 强制切回 FRONT；偏航误差大于 `5 deg` 时只把纵向目标经现有斜坡拉向零，不等待实际完全停车，对齐后恢复操作手命令。
+
+碰撞确认只属于该 task，不回写 observer。两腿实际长度进入 `0.38 m +/- 20 mm`、正面误差不超过 `5 deg`、可靠正向轮速至少 `0.3 m/s` 且 support 为 GROUND 后，状态机读取 observer 的 `5 ms` 窗口；最大腿世界角速度增量超过 `0.5 rad/s` 且轮速-IMU 增量失配超过 `0.12 m/s`，连续 `2 ms` 后进入 IMPACT_PASSIVE。`20 mm` 包络包含 `0.38 m` 位置支撑在静载下约 `12 mm` 的固有闭合误差；它不是额外放宽碰撞特征阈值。
+
+IMPACT_PASSIVE 是有意保留的调试终点。ACTIVE 在确认当周期跳过纵向、偏航和腿长规划，并输出全部 disabled strategy，因此两轮和四个关节的请求及限幅后输出都为零；observer、支持力和 support phase 仍继续更新。松开 task 命令不会恢复控制，只有系统复位会退出。后续固定搬腿动作应从这里向后扩展，而不是修改 observer 或在仿真层重新增加 control transform。
+
 ## Support phase 的当前边界
 
 候选支撑阶段为：
@@ -239,7 +247,7 @@ F = 76.204 + K * (L_eq - L) - D * dL + F_roll
 ## 仍未确定
 
 - ACTIVE coordinator 的最终 C 类型和文件命名；上述模块名表达职责，不强制一一对应源文件；
-- task sequencer 第一版是否只保留隐式 NORMAL，等 SPIN 实现时再增加枚举；
+- STEP_DOCK 在 IMPACT_PASSIVE 之后的固定搬腿、放腿和重新平衡阶段；
 - support 的整机离地/触地融合条件与本周期/下一周期时序；
 - AIRBORNE 中各参考规划器继续推进、冻结或重捕获的精确定义；
 - 空中腿角参考是否移除地面 trim；

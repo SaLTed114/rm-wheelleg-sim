@@ -1,6 +1,7 @@
 #ifndef BALANCE_STATE_MACHINE_INPUT_H
 #define BALANCE_STATE_MACHINE_INPUT_H
 
+#include "balance/impact_observer.h"
 #include "balance/leg_kinematics.h"
 #include "balance/support_force.h"
 #include "balance/types.h"
@@ -15,6 +16,7 @@ typedef struct {
     const bc_state_vector_t *state;
     const bc_leg_kinematics_t *leg;
     const bc_support_force_output_t *support_force;
+    const bc_impact_observer_output_t *impact_observer;
     float nominal_axial_force[BC_SIDE_NUM];
     float length_position_kp;
     float length_position_kd;

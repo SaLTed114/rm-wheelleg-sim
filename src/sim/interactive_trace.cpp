@@ -15,9 +15,11 @@ InteractiveTraceWriter::InteractiveTraceWriter(
 ) : csv_(path, {
     "reset_index", "simulation_time", "tick_count", "phase",
     "keyboard_forward_axis", "keyboard_yaw_axis", "keyboard_boost",
-    "command_system_enabled", "command_balance_restart", "command_forward",
+    "keyboard_step_task", "command_system_enabled",
+    "command_balance_restart", "command_forward", "command_task",
     "gimbal_world_yaw", "gimbal_world_yaw_rate",
-    "system", "motion", "forward", "support", "alignment",
+    "system", "motion", "forward", "step_task", "step_impact_armed",
+    "step_impact_confirm_elapsed", "support", "alignment",
     "base_x", "base_y", "base_z", "base_forward_velocity",
     "base_vertical_velocity",
     "s", "ds", "ref_s", "ref_ds", "psi", "dpsi", "ref_psi",
@@ -75,6 +77,7 @@ void InteractiveTraceWriter::write(
         (snapshot.state_machine.system != previous_system_ ||
          snapshot.state_machine.motion != previous_motion_ ||
          snapshot.state_machine.forward != previous_forward_ ||
+         snapshot.state_machine.step_task != previous_step_task_ ||
          snapshot.state_machine.support != previous_support_);
 
     csv_.begin_row();
@@ -85,14 +88,19 @@ void InteractiveTraceWriter::write(
         .value(keyboard.forward_axis)
         .value(keyboard.yaw_axis)
         .value(static_cast<int>(keyboard.boost))
+        .value(static_cast<int>(keyboard.step_task))
         .value(static_cast<int>(frame.command.system_enabled))
         .value(static_cast<int>(frame.command.balance_restart))
         .value(frame.command.forward_velocity)
+        .value(static_cast<int>(frame.command.task))
         .value(frame.gimbal.world_yaw)
         .value(frame.gimbal.world_yaw_rate)
         .value(bc_system_state_name(snapshot.state_machine.system))
         .value(bc_motion_state_name(snapshot.state_machine.motion))
         .value(bc_forward_state_name(snapshot.state_machine.forward))
+        .value(bc_step_task_state_name(snapshot.state_machine.step_task))
+        .value(static_cast<int>(snapshot.step_impact_armed))
+        .value(snapshot.step_impact_confirm_elapsed)
         .value(bc_support_phase_state_name(snapshot.state_machine.support))
         .value(bc_chassis_alignment_name(snapshot.state_machine.alignment))
         .value(sample.base.x)
@@ -195,6 +203,7 @@ void InteractiveTraceWriter::write(
     previous_system_ = snapshot.state_machine.system;
     previous_motion_ = snapshot.state_machine.motion;
     previous_forward_ = snapshot.state_machine.forward;
+    previous_step_task_ = snapshot.state_machine.step_task;
     previous_support_ = snapshot.state_machine.support;
     state_initialized_ = true;
 }

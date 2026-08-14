@@ -107,7 +107,7 @@ static void bc_motion_transition(
     }
 }
 
-static void bc_motion_map_normal_command(
+static void bc_motion_map_command(
     bc_motion_t *motion,
     const bc_state_machine_input_t *input
 ) {
@@ -115,6 +115,17 @@ static void bc_motion_map_normal_command(
         input->gimbal_feedback->relative_yaw);
     const float rear_error = bc_wrap_anglef(
         front_error + BC_PI_F);
+
+    if (input->operator_command->task == BC_OPERATOR_TASK_STEP_DOCK ||
+        motion->step_task.state != BC_STEP_TASK_INACTIVE) {
+        motion->alignment = BC_CHASSIS_FRONT;
+        motion->heading_error = front_error;
+        motion->mapped_forward_velocity =
+            fabsf(front_error) <=
+                motion->step_task.config.alignment_tolerance ?
+            input->operator_command->forward_velocity : 0.0F;
+        return;
+    }
 
     if (motion->alignment == BC_CHASSIS_FRONT) {
         if (fabsf(rear_error) + motion->config.alignment_hysteresis <
@@ -218,15 +229,29 @@ static void bc_motion_action(
         break;
 
     case BC_MOTION_ACTIVE:
+        bc_motion_map_command(motion, input);
+        const uint8_t step_requested =
+            input->operator_command->task == BC_OPERATOR_TASK_STEP_DOCK;
+        const float working_leg_length = step_requested ||
+                motion->step_task.state != BC_STEP_TASK_INACTIVE ?
+            motion->step_task.config.prepare_leg_length :
+            motion->config.leg_length;
         bc_support_phase_update(
-            &motion->support_phase, input, motion->config.leg_length);
+            &motion->support_phase, input, working_leg_length);
+        bc_step_task_update(
+            &motion->step_task, input,
+            motion->support_phase.state, motion->heading_error);
+        if (motion->step_task.state ==
+            BC_STEP_TASK_IMPACT_PASSIVE) {
+            motion->mapped_forward_velocity = 0.0F;
+            break;
+        }
         bc_reference_ramp_update(
             &motion->leg_length_reference,
             &motion->config.leg_length_ramp,
-            motion->config.leg_length,
+            working_leg_length,
             input->timestep_seconds);
         bc_motion_set_balance_control(motion, output);
-        bc_motion_map_normal_command(motion, input);
         bc_motion_update_forward(
             motion, input, motion->mapped_forward_velocity, output);
         bc_yaw_reference_update(
@@ -248,10 +273,12 @@ void bc_motion_default_config(bc_motion_config_t *config) {
     bc_forward_mode_config_t forward;
     bc_forward_reference_config_t forward_reference;
     bc_yaw_reference_config_t yaw_reference;
+    bc_step_task_config_t step_task;
     bc_support_phase_config_t support_phase;
     bc_forward_mode_default_config(&forward);
     bc_forward_reference_default_config(&forward_reference);
     bc_yaw_reference_default_config(&yaw_reference);
+    bc_step_task_default_config(&step_task);
     bc_support_phase_default_config(&support_phase);
     *config = (bc_motion_config_t){
         .startup_leg_length         = 0.18F,
@@ -271,6 +298,7 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .forward                    = forward,
         .forward_reference          = forward_reference,
         .yaw_reference              = yaw_reference,
+        .step_task                  = step_task,
         .support_phase              = support_phase,
     };
 }
@@ -286,6 +314,7 @@ void bc_motion_init(
         &config->forward_reference);
     bc_yaw_reference_init(
         &motion->yaw_reference, &config->yaw_reference);
+    bc_step_task_init(&motion->step_task, &config->step_task);
     bc_support_phase_init(
         &motion->support_phase, &config->support_phase);
     bc_motion_reset(motion);
@@ -305,6 +334,7 @@ void bc_motion_reset(bc_motion_t *motion) {
     bc_forward_mode_reset(&motion->forward);
     bc_forward_reference_reset(&motion->forward_reference);
     bc_yaw_reference_reset(&motion->yaw_reference);
+    bc_step_task_reset(&motion->step_task);
     bc_support_phase_reset(&motion->support_phase);
     bc_condition_hold_reset(&motion->leg_stable_hold);
     bc_condition_hold_reset(&motion->engage_hold);

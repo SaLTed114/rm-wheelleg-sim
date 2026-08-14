@@ -19,6 +19,7 @@ public:
 
     [[nodiscard]] bool should_close() const;
     [[nodiscard]] KeyboardDriveInput keyboard_drive_input() const;
+    void reset_drive_input() noexcept;
     [[nodiscard]] GLFWwindow *native_window() const noexcept {
         return window_;
     }
@@ -60,6 +61,7 @@ private:
     bool right_button_{};
     bool pause_toggle_requested_{};
     bool reset_requested_{};
+    bool step_task_enabled_{};
     bool virtual_gimbal_visible_{};
     float virtual_gimbal_yaw_{};
     double cursor_x_{};

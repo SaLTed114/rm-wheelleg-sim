@@ -28,6 +28,7 @@ int main() {
     bc_state_vector_t state = {0};
     bc_leg_kinematics_t leg[BC_SIDE_NUM] = {0};
     bc_support_force_output_t support[BC_SIDE_NUM] = {0};
+    bc_impact_observer_output_t impact = {0};
     bc_control_command_t command;
     bc_state_machine_input_t input = {
         .operator_command = &operator_command,
@@ -35,6 +36,7 @@ int main() {
         .state = &state,
         .leg = leg,
         .support_force = support,
+        .impact_observer = &impact,
         .nominal_axial_force = {80.0F, 72.0F},
         .length_position_kp = 1600.0F,
         .length_position_kd = 75.0F,
@@ -311,9 +313,55 @@ int main() {
         return 1;
     }
     if (bc_system_observation_context(&system).wheel_velocity !=
-        BC_WHEEL_OBSERVATION_CONTACT_TRANSIENT) {
+            BC_WHEEL_OBSERVATION_CONTACT_TRANSIENT) {
         fputs("landing did not expose transient wheel observations\n",
               stderr);
+        return 1;
+    }
+
+    system.motion.support_phase.state = BC_SUPPORT_GROUND;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        support[side].state = BC_CONTACT_GROUND;
+        support[side].filtered_vertical_force = 70.0F;
+        leg[side].length = config.step_task.prepare_leg_length;
+    }
+    input.wheel_odometry_velocity = 0.5F;
+    input.wheel_velocity_reliable = 1U;
+    input.timestep_seconds = 0.001F;
+    input.specific_force_norm = 9.81F;
+    operator_command.task = BC_OPERATOR_TASK_STEP_DOCK;
+    operator_command.forward_velocity = 0.5F;
+    gimbal_feedback.relative_yaw = 90.0F * BC_PI_F / 180.0F;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.step_task.state != BC_STEP_TASK_PREPARE ||
+        system.motion.alignment != BC_CHASSIS_FRONT ||
+        system.motion.mapped_forward_velocity != 0.0F) {
+        fputs("step prepare did not force front alignment and deceleration\n",
+              stderr);
+        return 1;
+    }
+
+    gimbal_feedback.relative_yaw = 0.0F;
+    impact.valid = 1U;
+    impact.window[BC_IMPACT_WINDOW_SHORT].valid = 1U;
+    impact.window[BC_IMPACT_WINDOW_SHORT].leg_rate_delta[BC_L] = 0.6F;
+    impact.window[BC_IMPACT_WINDOW_SHORT].wheel_imu_delta_mismatch = 0.13F;
+    bc_system_update(&system, &input, &command);
+    bc_system_update(&system, &input, &command);
+    if (system.motion.step_task.state != BC_STEP_TASK_IMPACT_PASSIVE ||
+        !control_uses_strategies(
+            &command, BC_LEG_LENGTH_DISABLED, BC_LEG_ANGLE_DISABLED,
+            BC_WHEEL_DISABLED)) {
+        fputs("step impact did not disable all control strategies\n", stderr);
+        return 1;
+    }
+    operator_command.task = BC_OPERATOR_TASK_NORMAL;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.step_task.state != BC_STEP_TASK_IMPACT_PASSIVE ||
+        !control_uses_strategies(
+            &command, BC_LEG_LENGTH_DISABLED, BC_LEG_ANGLE_DISABLED,
+            BC_WHEEL_DISABLED)) {
+        fputs("step passive did not remain latched\n", stderr);
         return 1;
     }
 
@@ -325,6 +373,7 @@ int main() {
         system.motion.forward.state != BC_FORWARD_IDLE ||
         system.motion.forward_reference.velocity_ramp.value != 0.0F ||
         system.motion.yaw_reference.acceleration_reference != 0.0F ||
+        system.motion.step_task.state != BC_STEP_TASK_INACTIVE ||
         system.motion.engage_hold.elapsed_seconds != 0.0F ||
         system.motion.leg_length_reference.value !=
             config.startup_leg_length ||

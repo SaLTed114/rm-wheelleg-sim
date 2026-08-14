@@ -107,12 +107,18 @@ typedef enum {
     BC_WHEEL_LQR
 } bc_wheel_strategy_t;
 
+typedef enum {
+    BC_OPERATOR_TASK_NORMAL,
+    BC_OPERATOR_TASK_STEP_DOCK
+} bc_operator_task_t;
+
 #define BC_STATE_FEEDBACK_MASK(state) ((uint16_t)(1U << (state)))
 
 typedef struct {
     uint8_t system_enabled;
     uint8_t balance_restart;
     float forward_velocity; /* Gimbal-forward coordinates. */
+    bc_operator_task_t task;
 } bc_operator_command_t;
 
 typedef struct {

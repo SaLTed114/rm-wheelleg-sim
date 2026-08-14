@@ -183,6 +183,16 @@ void SimulationUi::draw_motion(const SimulationUiFrame &frame) {
             snapshot.state_machine.motion));
         table_value("Forward", bc_forward_state_name(
             snapshot.state_machine.forward));
+        table_value("Step task", bc_step_task_state_name(
+            snapshot.state_machine.step_task));
+        table_value("Step impact armed",
+            snapshot.step_impact_armed ? "yes" : "no");
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Impact confirm");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%.3f ms",
+            1000.0F * snapshot.step_impact_confirm_elapsed);
         table_value("Support", bc_support_phase_state_name(
             snapshot.state_machine.support));
         table_value("Alignment", bc_chassis_alignment_name(

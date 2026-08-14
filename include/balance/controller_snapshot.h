@@ -11,6 +11,7 @@ typedef struct {
     bc_system_state_t system;
     bc_motion_state_t motion;
     bc_forward_state_t forward;
+    bc_step_task_state_t step_task;
     bc_support_phase_state_t support;
     bc_chassis_alignment_t alignment;
 } bc_state_machine_snapshot_t;
@@ -29,6 +30,8 @@ typedef struct {
     float heading_error;
     bc_forward_velocity_output_t forward_velocity;
     bc_impact_observer_output_t impact_observer;
+    uint8_t step_impact_armed;
+    float step_impact_confirm_elapsed;
     bc_velocity_estimator_output_t velocity_estimator;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];
     bc_support_force_output_t support_force[BC_SIDE_NUM];

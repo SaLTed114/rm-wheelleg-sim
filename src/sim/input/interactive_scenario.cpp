@@ -40,6 +40,9 @@ const InteractiveScenarioFrame &InteractiveScenario::update(
     frame_.command.balance_restart =
         frame_.command.system_enabled &&
         snapshot.state_machine.system == BC_SYSTEM_OFF;
+    frame_.command.task = mode_ == InteractiveMode::keyboard &&
+            keyboard.step_task ?
+        BC_OPERATOR_TASK_STEP_DOCK : BC_OPERATOR_TASK_NORMAL;
 
     if (snapshot.state_machine.motion == BC_MOTION_ACTIVE) {
         if (!virtual_gimbal_initialized_) {

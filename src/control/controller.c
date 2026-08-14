@@ -79,6 +79,8 @@ void bc_controller_calculate(bc_controller_t *controller) {
         .state = &controller->control_core.observer.state,
         .leg = controller->control_core.observer.leg,
         .support_force = support_force,
+        .impact_observer =
+            &controller->control_core.observer.impact_observer.output,
         .nominal_axial_force = {
             nominal_axial_force[BC_L], nominal_axial_force[BC_R],
         },
