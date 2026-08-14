@@ -16,6 +16,13 @@ struct RampCourseLayout {
     double height{};
 };
 
+struct RampJumpLayout {
+    double start_x{};
+    double lip_x{};
+    double height{};
+    double angle_radians{};
+};
+
 class MujocoPlant {
 public:
     MujocoPlant(
@@ -34,6 +41,7 @@ public:
         double pitch_radians, bool visible);
     void configure_keyboard_course();
     void configure_ramp_climb_benchmark();
+    [[nodiscard]] RampJumpLayout configure_ramp_jump_benchmark();
     [[nodiscard]] RampCourseLayout configure_ramp_course_benchmark(
         bool beveled_transition = false);
 

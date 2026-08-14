@@ -7,6 +7,7 @@
 #include "drop/drop_benchmark.hpp"
 #include "drop/platform_drop.hpp"
 #include "drop/ramp_course.hpp"
+#include "drop/ramp_jump.hpp"
 #include "performance/performance_scenario.hpp"
 #include "simulation_app.hpp"
 
@@ -21,7 +22,7 @@ void print_usage() {
            "[--leg-length <metres>] "
            "[--yaw-acceleration-feedforward <scale>]\n"
         << "keyboard mode: W/S forward/reverse, A/D left/right, "
-           "Shift boosts forward speed, "
+           "Shift boosts forward speed to 2.7 m/s, "
            "Space pause, R reset, Esc quit\n"
         << "available performance cases:\n";
     for (const auto &spec :
@@ -55,6 +56,12 @@ void print_usage() {
                   << balance::benchmark::ramp_course_case_name(spec)
                   << '\n';
     }
+    std::cerr << "available ramp jump cases:\n";
+    for (const auto &spec : balance::benchmark::ramp_jump_cases()) {
+        std::cerr << "  "
+                  << balance::benchmark::ramp_jump_case_name(spec)
+                  << '\n';
+    }
 }
 
 bool parse_arguments(
@@ -77,7 +84,8 @@ bool parse_arguments(
         if (option == "--case" && options.performance_case == nullptr &&
             options.drop_case == nullptr &&
             options.platform_drop_case == nullptr &&
-            options.ramp_course_case == nullptr) {
+            options.ramp_course_case == nullptr &&
+            options.ramp_jump_case == nullptr) {
             options.performance_case =
                 balance::benchmark::find_performance_case(value);
             if (options.performance_case == nullptr) {
@@ -99,6 +107,14 @@ bool parse_arguments(
                 options.drop_case == nullptr &&
                 options.platform_drop_case == nullptr &&
                 options.ramp_course_case == nullptr) {
+                options.ramp_jump_case =
+                    balance::benchmark::find_ramp_jump_case(value);
+            }
+            if (options.performance_case == nullptr &&
+                options.drop_case == nullptr &&
+                options.platform_drop_case == nullptr &&
+                options.ramp_course_case == nullptr &&
+                options.ramp_jump_case == nullptr) {
                 std::cerr << "unknown case: " << value << '\n';
                 return false;
             }
@@ -153,7 +169,8 @@ bool parse_arguments(
     const bool case_selected = options.performance_case != nullptr ||
         options.drop_case != nullptr ||
         options.platform_drop_case != nullptr ||
-        options.ramp_course_case != nullptr;
+        options.ramp_course_case != nullptr ||
+        options.ramp_jump_case != nullptr;
     return !(options.keyboard_drive && case_selected) &&
         !(options.trace_path && case_selected) &&
         (!options.drop_wheel_clearance ||

@@ -12,6 +12,7 @@
 #include "drop/drop_scenario.hpp"
 #include "drop/platform_drop.hpp"
 #include "drop/ramp_course.hpp"
+#include "drop/ramp_jump.hpp"
 #include "input/interactive_scenario.hpp"
 #include "interactive_trace.hpp"
 #include "mujoco_adapter.hpp"
@@ -57,6 +58,9 @@ public:
             ramp_course_.emplace(
                 *options_.ramp_course_case, plant_.model());
         }
+        if (options_.ramp_jump_case != nullptr) {
+            ramp_jump_.emplace(*options_.ramp_jump_case, plant_.model());
+        }
         if (options_.trace_path) {
             trace_ = std::make_unique<InteractiveTraceWriter>(
                 *options_.trace_path);
@@ -96,7 +100,8 @@ public:
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant_.timestep()) {
                     const bool keep_stepping = platform_drop_ ?
-                        step_platform_drop() : ramp_course_ ?
+                        step_platform_drop() : ramp_jump_ ?
+                        step_ramp_jump() : ramp_course_ ?
                         step_ramp_course() : drop_ ?
                         step_drop() : performance_ ?
                             step_performance() : step_interactive();
@@ -138,6 +143,10 @@ private:
             config.motion.leg_length = static_cast<float>(
                 options.ramp_course_case->leg_length);
         }
+        if (options.ramp_jump_case != nullptr) {
+            config.motion.leg_length = static_cast<float>(
+                options.ramp_jump_case->leg_length);
+        }
         return config;
     }
 
@@ -150,6 +159,7 @@ private:
         if (drop_) drop_->reset();
         if (platform_drop_) platform_drop_->reset(plant_);
         if (ramp_course_) ramp_course_->reset(plant_);
+        if (ramp_jump_) ramp_jump_->reset(plant_);
         interactive_.reset(runner_.snapshot());
         phase_ = bc_system_state_name(
             runner_.snapshot().state_machine.system);
@@ -289,6 +299,22 @@ private:
         return true;
     }
 
+    bool step_ramp_jump() {
+        ramp_jump_->step(plant_, runner_, sampler_);
+        phase_ = ramp_jump_->phase_name();
+        case_balance_engaged_ = ramp_jump_->balance_engaged();
+        displayed_gimbal_.world_yaw = ramp_jump_->held_heading();
+        if (std::string_view(ramp_jump_->issue()) != "none" &&
+            case_issue_ == "none") {
+            case_issue_ = ramp_jump_->issue();
+        }
+        if (ramp_jump_->finished()) {
+            case_finished_ = true;
+            return false;
+        }
+        return true;
+    }
+
     void finish_performance_case() {
         case_finished_ = true;
         if (!case_balance_engaged_) case_issue_ = "balance_not_engaged";
@@ -297,6 +323,7 @@ private:
     [[nodiscard]] SimulationUiFrame ui_frame() const {
         const char *case_name = nullptr;
         if (platform_drop_) case_name = platform_drop_->name().c_str();
+        else if (ramp_jump_) case_name = ramp_jump_->name().c_str();
         else if (ramp_course_) case_name = ramp_course_->name().c_str();
         else if (drop_) case_name = drop_->name().c_str();
         else if (performance_) {
@@ -325,6 +352,7 @@ private:
     std::optional<benchmark::DropScenario> drop_;
     std::optional<benchmark::PlatformDropScenario> platform_drop_;
     std::optional<benchmark::RampCourseScenario> ramp_course_;
+    std::optional<benchmark::RampJumpScenario> ramp_jump_;
     std::optional<benchmark::PerformanceScenario> performance_;
     std::unique_ptr<InteractiveTraceWriter> trace_;
     VirtualGimbalState displayed_gimbal_{};

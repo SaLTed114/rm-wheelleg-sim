@@ -4,7 +4,7 @@
 
 `rm-balance-sim` is a MuJoCo simulation and control-development project for a wheel-legged balancing robot. It consists of a platform-independent C11 control core and a C++17 simulation layer, with virtual-leg kinematics, gain-scheduled LQR control, an interactive Dear ImGui viewer, automated tests, and headless performance tools.
 
-The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). LQR generation and measured performance results are recorded in [`docs/notes/lqr-validation.md`](docs/notes/lqr-validation.md) and [`docs/notes/performance-baseline.md`](docs/notes/performance-baseline.md).
+The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). LQR generation and measured experiment results are recorded in [`docs/notes/lqr-validation.md`](docs/notes/lqr-validation.md) and [`docs/notes/controller-experiment-log.md`](docs/notes/controller-experiment-log.md).
 
 The robot assets under `models/` are derived from the open-source model released by the Liaoning University of Science and Technology COD RoboMaster team. See [`models/README.md`](models/README.md) for attribution and licensing information.
 
@@ -82,7 +82,7 @@ Linux:
 ./build/rm_balance_sim models/MJCF/COD-2026RoboMaster-Balance.xml
 ```
 
-Append `--keyboard` to drive manually. `W/S` or the up/down arrows command forward motion, Shift raises the speed limit, and `A/D` or the left/right arrows rotate the virtual gimbal. Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
+Append `--keyboard` to drive manually. `W/S` or the up/down arrows command forward motion, Shift raises the speed limit from `2.0 m/s` to `2.7 m/s`, and `A/D` or the left/right arrows rotate the virtual gimbal. Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
 
 Keyboard mode also reveals two terrain features in front of the spawn point. The right-hand lane (`y=-1.5 m`) has a triangular `15 deg` ramp onto a `200 mm`-high, `2.0 x 2.0 m` platform. The left-hand lane (`y=+1.0 m`) is a standalone triangular ramp, `860 mm` wide and `17 deg`, with a `350 mm` summit and no top platform. Both features remain buried and non-visible for benchmark cases and non-keyboard simulation.
 

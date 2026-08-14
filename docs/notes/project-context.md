@@ -81,7 +81,7 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 - 转弯粗包络显示 `0.5*pi rad/s` 在 `1-3 m/s` 范围稳定；`pi rad/s` 在约 `2 m/s` 仍可靠，继续升速开始明显卸载内侧轮；`1.5*pi rad/s` 的实际横向加速度约在 `7.3 m/s^2` 附近封顶。
 - `figure_eight_open_loop` 使用 `2 m/s、+/-pi rad/s`，最大 pitch/roll 约 `2.81/2.90 deg`，路径阶段双轮接触率 `99.68%`，无饱和或非轮触地；参考闭合约 `4 mm`，实际轮轴闭合误差约 `0.307 m`。它是开环运动复现，不应冒充严格路径跟踪。
 - 探索性 `+/-4*pi rad/s @ 10/15 rad/s^2` 在理想力矩模型中均通过；`15 rad/s^2` 的 `t90` 约 `0.763 s`。MJCF 没有电机反电动势或转速-转矩曲线，因此该结果只证明控制稳定性，不能直接作为实车速度能力结论，正式 yaw 上限仍为 `1.5*pi rad/s`。
-- 差分权重从 `1920/32` 降到 `960/16` 后，正式基线不变；`4*pi @ 15 rad/s^2` 的最大腿差分约从 `0.94 deg` 增至 `1.26 deg`，仍双轮接触且无饱和。完整扫描和历史调参记录见 `docs/notes/performance-baseline.md`。
+- 差分权重从 `1920/32` 降到 `960/16` 后，正式基线不变；`4*pi @ 15 rad/s^2` 的最大腿差分约从 `0.94 deg` 增至 `1.26 deg`，仍双轮接触且无饱和。完整扫描和历史调参记录见 `docs/notes/controller-experiment-log.md`。
 
 ## 仿真与实验工具
 
@@ -95,6 +95,7 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 - 矩阵输出每例独立 1 kHz trace 和总 summary，记录非轮碰撞部件/阶段、最小净空、姿态、左右轮接触时差、腾空/落地、KF 失锁恢复、HOLD 恢复及限幅前后力矩。探索性失败使用 `reversed_during_course`、`reversed_while_stopping`、`forward_progress_lost` 或 `attitude_diverged` 明确结束，不再拖到笼统的全局超时。
 - 坡顶发散已定位为 fast-air 与坡面瞬态耦合，而不是单纯缺少倒角：原尖角加正式 fast-air 时，支持力短时低于 `50 N/leg` 且比力低于 `5 m/s^2`，support 在接触诊断仍为 GROUND 时进入 AIRBORNE；轮子和支持力恢复后又因没有 AIR/深度卸载证据而无法进入 LANDING_RETRACT，腿持续伸向 `0.38 m`，最终发散。相同尖角只在隔离 benchmark 禁用 fast-air 后完整通过，最大 pitch 约 `1.37 deg`，无非轮碰撞或饱和。给坡顶增加约 `0.4 m` 的短倒角可避开坡顶误触发，但正式 fast-air 仍在下坡段进入同类链路，最大 pitch 约 `51.4 deg` 后停车倒退。正式控制器没有采用 benchmark 开关或阈值改动；现有支持力、比力模长和接触迟滞不足以无损区分真实跌落与坡面短时卸载，下一步需要补充方向性垂向运动证据或重构 fast-air 候选确认语义。
 - 系统消融确认 fast-air 属于性能预响应而非基本功能。关闭后五个平地运动案例完全不变；`0.24 m` 完整坡道和四个独立下坡从发散/大姿态改善为稳定完成，最大 pitch 分别约 `1.37 deg` 和 `1.18-3.26 deg`。四个生产平台跌落的 AIRBORNE 识别则由 `10-12 ms` 推迟到 `39-40 ms`，`200 mm` 正反两例新增后腿触地且峰值冲击明显增加，但四例仍全部完成恢复。为优先保证单一路径和坡面鲁棒性，fast-air 已从正式控制器及常驻 benchmark 移除；旧实现、消融数据和未来重启边界归档于 `docs/archive/fast-air/`。
+- 独立 `ramp_jump` 用宽 `4 m`、高 `350 mm` 的 `17 deg` 单坡测量冲坡起飞和落地，不设性能合格线。五档 `2.0/2.25/2.5/2.75/3.0 m/s` 在坡前均稳定，保守落距依次约 `0.498/0.574/0.653/0.733/0.508 m`，五例均落地并恢复。`2.75/3.0 m/s` 已出现底盘碰坡；在 `3.0 m/s` 下，有限刚度的腿长控制让名义 `0.24 m` 腿长动态压缩至约 `0.191 m`，前底盘首次撞坡将真实水平速度由约 `2.78 m/s` 降至 `1.65 m/s`，随后才触发双轮离坡、AIRBORNE、假落地和二次碰撞。禁用底盘碰撞的非物理归因对照可恢复约 `2.98 m/s` 的坡顶水平速度及 `0.924 m` 落距，证明高速退化主因是动态净空，不是助跑或平地 LQR 性能。项目不为 `3.0 m/s` 尖锐坡脚专门增加控制复杂度：`2.5 m/s` 作为干净测量档，`2.75 m/s` 作为擦碰边界，`3.0 m/s` 作为压力案例；支持力被快速伸腿反力误触发仍需在无碰撞空中案例中单独验证。
 - 独立 drop benchmark 保留 6 个手动抬升释放案例、2 个平台空中机理对照和 4 个生产 ACTIVE 落地案例。平台机理只比较 `200 mm、2.0 m/s、0.18 -> 0.38 m` 下的 `length_only/leg_lqr`；历史 36 例净空、速度和扰动矩阵已归档到 `docs/notes/platform-drop-exploration-archive.md`，不再常驻注册表。生产案例覆盖正反向 `200/400 mm`，速度参考跨越空中与落地保持不变。
 - 当前实体平台实验首先测到的是直角边缘通过性，不能直接解释为纯空中控制能力。`0.18 m` 低速驶离时底盘或后腿会持续碰撞平台边缘，碰撞在 pitch 恶化之前发生；`0.24 m` 明显缩短碰撞，并使 200 mm 六例全部恢复，但 400 mm 的 `0.5/1.0 m/s` 仍会碰边发散，两个高度的 `2.0 m/s` 均无边缘碰撞并恢复。KF 空中误差仍需在排除边缘碰撞的独立实验中归因。
 - 200 mm 正常速度下的探索实验表明，离台后将腿从 `0.18 m` 目标快速伸至 `0.38 m`，可把首次触地前机体下降从约 `171-178 mm` 降至 `19-24 mm`，触地 pitch 降至约 `0.22-0.31 deg`，触地竖直速度降至约 `0.67-0.78 m/s`。实际触地腿长约 `0.31-0.35 m`，空中关节峰值请求约 `30-31 N*m` 且没有触发 `40 N*m` 限幅；这只验证快速接地有效，触地顺应和缓慢回收尚未设计。
@@ -125,7 +126,7 @@ support: GROUND / AIRBORNE / LANDING_RETRACT / GROUND_RECOVER
 
 1. 本文件：当前事实和边界。
 2. `docs/notes/active-motion-design.md`：ACTIVE 运行期架构、模块所有权、交叉约束和重构顺序。
-3. `docs/notes/performance-baseline.md`：逐轮实验、失败归因和完整数值。
+3. `docs/notes/controller-experiment-log.md`：2026-08-10 起的逐轮实验、失败归因和完整数值；更早记录按时间放在 `docs/archive/experiments/`。
 4. `docs/notes/lqr-validation.md`：当前模型、Q/R 和调度验证。
 5. `docs/notes/platform-drop-exploration-archive.md`：实体平台、空中伸腿和早期悬挂探索归档。
 6. `docs/notes/hardware-bringup.md`：实车逐级部署。

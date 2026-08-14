@@ -101,7 +101,7 @@ conda run -n sim python tools/lqr/forward_weight_sweep.py \
 
 The ranking also records common-leg motion, reverse displacement, velocity overshoot, and predicted wheel/leg torque. The sweep is only an ideal linear prefilter: its A/B/K response is useful for choosing directions and candidate spacing, not for accepting a candidate or requiring the nonlinear plant to match throughout a transient. Shortlisted weights must be accepted using the actual MuJoCo response from a generated schedule and experiment cases.
 
-Historical Q140 and Q_DS/R-only boundary-search results are summarized in `docs/notes/performance-baseline.md`; their one-off candidate configurations are intentionally not kept as active experiment presets. New candidates should be expressed explicitly in a TOML derived from `lqr_schedule_generation_example.toml`, while formal regression always uses `formal_lqr_validation.toml`.
+Historical Q140 and Q_DS/R-only boundary-search results are summarized in `docs/archive/experiments/2026-08-02--2026-08-09.md` and `docs/notes/controller-experiment-log.md`; their one-off candidate configurations are intentionally not kept as active experiment presets. New candidates should be expressed explicitly in a TOML derived from `lqr_schedule_generation_example.toml`, while formal regression always uses `formal_lqr_validation.toml`.
 
 ## Build and output
 

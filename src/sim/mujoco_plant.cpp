@@ -136,6 +136,18 @@ void MujocoPlant::configure_ramp_climb_benchmark() {
         kGroundHeight + 0.5 * kHeight, true);
 }
 
+RampJumpLayout MujocoPlant::configure_ramp_jump_benchmark() {
+    constexpr double kGroundHeight = -0.43;
+    constexpr double kRampStartX = 4.0;
+    constexpr double kHeight = 0.35;
+    constexpr double kAngle = 17.0 * 3.14159265358979323846 / 180.0;
+    const double run = kHeight / std::tan(kAngle);
+    place_mocap_surface(
+        "benchmark_ramp_17deg", kRampStartX + 0.5 * run, 0.0,
+        kGroundHeight + 0.5 * kHeight, true);
+    return {kRampStartX, kRampStartX + run, kHeight, kAngle};
+}
+
 RampCourseLayout MujocoPlant::configure_ramp_course_benchmark(
     const bool beveled_transition
 ) {

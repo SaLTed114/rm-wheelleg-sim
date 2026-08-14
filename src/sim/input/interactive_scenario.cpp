@@ -106,7 +106,7 @@ InteractiveScenario::MotionTarget InteractiveScenario::keyboard_target(
     }
 
     constexpr float kForwardVelocity = 2.0F;
-    constexpr float kBoostForwardVelocity = 3.0F;
+    constexpr float kBoostForwardVelocity = 2.7F;
     constexpr float kGimbalYawRate = BC_PI_F;
     return {
         keyboard.forward_axis * (keyboard.boost ?

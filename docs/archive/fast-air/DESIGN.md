@@ -36,4 +36,4 @@ Fast-air 已于 2026-08-13 从正式 support phase 和常驻 benchmark 中移除
 
 更合理的边界是让快速判据只产生 `AIR_CANDIDATE` 或一次有界的提前伸腿请求。关闭轮输出、拒绝轮速、禁用完整状态反馈和进入正式 AIRBORNE，应继续等待两腿接触诊断或方向性垂向运动等更强证据。候选还必须能在支持力恢复时无扰撤销，并覆盖坡顶、坡底、逐轮卸载、颠簸、强加减速和真实平台跌落的成对回归。
 
-参考判据和 mixed-contact 代码片段保存在 `reference-implementation.c`。完整实验结论仍保留在 `docs/notes/performance-baseline.md` 的历史记录中。
+参考判据和 mixed-contact 代码片段保存在 `reference-implementation.c`。完整实验结论仍保留在 `docs/notes/controller-experiment-log.md` 的历史记录中。

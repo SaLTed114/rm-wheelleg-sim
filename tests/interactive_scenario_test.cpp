@@ -56,6 +56,14 @@ int main() {
         return 1;
     }
 
+    const KeyboardDriveInput boosted_input{1.0F, 0.0F, true};
+    const auto &boosted = keyboard.update(
+        snapshot, boosted_input, 3.01, 0.001F);
+    if (!near(boosted.command.forward_velocity, 2.7F)) {
+        std::cerr << "keyboard boost exceeded its interactive limit\n";
+        return 1;
+    }
+
     snapshot.state_machine.motion = BC_MOTION_LEG_POSITIONING;
     const auto &inactive = keyboard.update(snapshot, input, 3.1, 0.001F);
     if (inactive.command.forward_velocity != 0.0F ||
