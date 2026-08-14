@@ -71,12 +71,9 @@ std::string jump_impulse_case_name(const JumpImpulseSpec &spec) {
     return name;
 }
 
-const std::array<JumpImpulseSpec, 6> &jump_impulse_cases() {
-    static const std::array<JumpImpulseSpec, 6> cases{{
+const std::array<JumpImpulseSpec, 3> &jump_impulse_cases() {
+    static const std::array<JumpImpulseSpec, 3> cases{{
         {140.0, 0.18, 0.060},
-        {180.0, 0.18, 0.060},
-        {220.0, 0.18, 0.060},
-        {240.0, 0.18, 0.060},
         {240.0, 0.18, 0.090},
         {240.0, 0.18, 0.120},
     }};

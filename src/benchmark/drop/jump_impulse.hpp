@@ -22,7 +22,7 @@ struct JumpImpulseSpec {
 
 [[nodiscard]] std::string jump_impulse_case_name(
     const JumpImpulseSpec &spec);
-[[nodiscard]] const std::array<JumpImpulseSpec, 6> &jump_impulse_cases();
+[[nodiscard]] const std::array<JumpImpulseSpec, 3> &jump_impulse_cases();
 [[nodiscard]] const JumpImpulseSpec *find_jump_impulse_case(
     std::string_view name) noexcept;
 

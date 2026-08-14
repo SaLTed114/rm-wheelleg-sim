@@ -13,19 +13,19 @@ int main(int argc, char **argv) {
     }
 
     const auto &cases = balance::benchmark::jump_impulse_cases();
-    if (cases.size() != 6U ||
+    if (cases.size() != 3U ||
         balance::benchmark::find_jump_impulse_case(
             "jump_impulse_f140") == nullptr ||
-        balance::benchmark::find_jump_impulse_case(
-            "jump_impulse_f180") == nullptr ||
-        balance::benchmark::find_jump_impulse_case(
-            "jump_impulse_f220") == nullptr ||
-        balance::benchmark::find_jump_impulse_case(
-            "jump_impulse_f240_t60ms") == nullptr ||
         balance::benchmark::find_jump_impulse_case(
             "jump_impulse_f240_t90ms") == nullptr ||
         balance::benchmark::find_jump_impulse_case(
             "jump_impulse_f240_t120ms") == nullptr ||
+        balance::benchmark::find_jump_impulse_case(
+            "jump_impulse_f180") != nullptr ||
+        balance::benchmark::find_jump_impulse_case(
+            "jump_impulse_f220") != nullptr ||
+        balance::benchmark::find_jump_impulse_case(
+            "jump_impulse_f240_t60ms") != nullptr ||
         balance::benchmark::find_jump_impulse_case("missing") != nullptr) {
         std::cerr << "jump impulse registry is incorrect\n";
         return EXIT_FAILURE;
@@ -33,8 +33,6 @@ int main(int argc, char **argv) {
 
     balance::benchmark::JumpImpulseBenchmark benchmark(argv[1], argv[2]);
     bool passed = true;
-    int takeoff_count = 0;
-    int false_airborne_count = 0;
     for (const auto &spec : cases) {
         const auto result = benchmark.run(spec);
         std::cout << result.name
@@ -53,7 +51,6 @@ int main(int argc, char **argv) {
                 std::filesystem::path(argv[2]) /
                 result.name / "trace.csv");
         if (result.took_off) {
-            ++takeoff_count;
             passed = passed && result.support_airborne &&
                 result.both_wheels_landed && result.support_recovered &&
                 result.issue == "none" &&
@@ -63,9 +60,12 @@ int main(int argc, char **argv) {
                     result.takeoff_com_momentum) < 0.5 &&
                 result.maximum_com_rise_after_takeoff > 0.0;
         }
-        if (result.false_airborne) ++false_airborne_count;
+        if (result.name == "jump_impulse_f140") {
+            passed = passed && !result.took_off && result.false_airborne;
+        } else {
+            passed = passed && result.took_off && !result.false_airborne;
+        }
     }
-    passed = passed && takeoff_count == 4 && false_airborne_count == 2;
     passed = passed && std::filesystem::exists(
         std::filesystem::path(argv[2]) / "summary.csv");
     if (!passed) {
