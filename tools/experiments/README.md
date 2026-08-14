@@ -50,7 +50,8 @@ Use `--wheel-clearance 0.4` with a separate output directory for the
 The benchmark-local landing-suspension exploration has been retired after its
 behavior moved into the production ACTIVE support phase. Its K/D scans,
 MuJoCo-truth switching, plotting tool, results, and removal rationale are
-preserved in `docs/notes/platform-drop-exploration-archive.md` and Git history.
+preserved in `docs/archive/experiments/platform-drop-exploration.md` and Git
+history.
 Run the four production landing cases with:
 
 ```bash

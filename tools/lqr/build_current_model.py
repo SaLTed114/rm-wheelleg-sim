@@ -374,7 +374,7 @@ def emit_report(result: dict[str, object], path: Path) -> None:
     schedule = result["schedule"]
     left_fit = model["fit_diagnostics"]["left"]
     right_fit = model["fit_diagnostics"]["right"]
-    text = f"""# LQR 参数生成与验证
+    text = f"""# LQR 参数生成与验证归档
 
 本文由 `tools/lqr/build_current_model.py` 自动生成。
 
@@ -482,7 +482,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(
         "--report", type=Path,
-        default=Path("docs/notes/lqr-validation.md"))
+        default=Path("docs/archive/validation/lqr-validation.md"))
     parser.add_argument(
         "--reuse-model-parameters", type=Path,
         help="reuse the model section from a prior generated JSON")

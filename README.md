@@ -4,7 +4,7 @@
 
 `rm-balance-sim` is a MuJoCo simulation and control-development project for a wheel-legged balancing robot. It consists of a platform-independent C11 control core and a C++17 simulation layer, with virtual-leg kinematics, gain-scheduled LQR control, an interactive Dear ImGui viewer, automated tests, and headless performance tools.
 
-The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). LQR generation and measured experiment results are recorded in [`docs/notes/lqr-validation.md`](docs/notes/lqr-validation.md) and [`docs/notes/controller-experiment-log.md`](docs/notes/controller-experiment-log.md).
+The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). Current experiments are recorded in [`docs/notes/controller-experiment-log.md`](docs/notes/controller-experiment-log.md); closed experiment cycles and generated LQR validation are under [`docs/archive/`](docs/archive/).
 
 The robot assets under `models/` are derived from the open-source model released by the Liaoning University of Science and Technology COD RoboMaster team. See [`models/README.md`](models/README.md) for attribution and licensing information.
 
@@ -82,7 +82,7 @@ Linux:
 ./build/rm_balance_sim models/MJCF/COD-2026RoboMaster-Balance.xml
 ```
 
-Append `--keyboard` to drive manually. `W/S` or the up/down arrows command forward motion, Shift raises the speed limit from `2.0 m/s` to `2.7 m/s`, and `A/D` or the left/right arrows rotate the virtual gimbal. `T` toggles the step-docking task, Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
+Append `--keyboard` to drive manually. `W/S` or the up/down arrows command forward motion, Shift raises the speed limit from `2.0 m/s` to `2.7 m/s`, and `A/D` or the left/right arrows rotate the virtual gimbal. `T` starts or cancels the step-docking task; successful completion automatically clears its keyboard latch so the next task starts with one press. Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
 
 Keyboard mode reveals three terrain lanes in front of the spawn point. The center lane starts with a `200 mm`-high, `800 mm`-long, `1.0 m`-wide platform, followed immediately by a `300 mm`-high, `2.0 m`-long platform. A full-width curb, `100 mm` long and `50 mm` high, sits on the leading edge of the second platform. The right-hand lane (`y=-1.5 m`) retains a triangular `15 deg` ramp onto a `200 mm`-high, `2.0 x 2.0 m` platform. The left-hand lane (`y=+1.0 m`) retains a standalone triangular ramp, `860 mm` wide and `17 deg`, with a `350 mm` summit and no top platform. All features remain buried and non-visible for benchmark cases and non-keyboard simulation.
 
@@ -136,22 +136,22 @@ Linux:
 
 The benchmark writes `summary.csv` and `trace.csv` into the selected output directory under the ignored build tree.
 
-The fixed cross figure-eight motion case is kept out of the default axis suite.
+The open-loop figure-eight motion case is kept out of the default axis suite.
 Run it explicitly with:
 
 ```bash
 ./build/rm_balance_performance \
   models/MJCF/COD-2026RoboMaster-Balance.xml \
   build/performance/figure-eight \
-  --case figure_eight_cross --trace-stride 1
+  --case figure_eight_open_loop --trace-stride 1
 ```
 
 The same case can be replayed in the GUI with
-`./build/rm_balance_sim <model.xml> --case figure_eight_cross`.
+`./build/rm_balance_sim <model.xml> --case figure_eight_open_loop`.
 
 ### Jump impulse benchmark
 
-Run the isolated `140/180/220 N` baseline and `240 N` hold-time sweep with:
+Run the retained negative, representative jump, and stress cases with:
 
 ```bash
 ./build/rm_balance_jump_impulse \
@@ -161,6 +161,9 @@ Run the isolated `140/180/220 N` baseline and `240 N` hold-time sweep with:
 
 Replay one force level in the GUI with, for example,
 `./build/rm_balance_sim <model.xml> --case jump_impulse_f240_t90ms`.
+The permanent registry contains `jump_impulse_f140`,
+`jump_impulse_f240_t90ms`, and `jump_impulse_f240_t120ms`; the intermediate
+force and hold-time sweep remains documented in the experiment log.
 
 ### Step docking benchmark
 
@@ -172,26 +175,20 @@ Run the `0.38 m` leg, `2.0 m/s` reference, `200 mm` step cases with:
   build/step-dock
 ```
 
-The permanent registry keeps one production `step_dock_passive` case and one
-historical `10 ms` truth-delayed isolation case. The production case sends the
-normal operator task command, extends from the ordinary `0.18 m` working leg
-length while driving, and lets the ACTIVE state machine detect impact and
-disable all six actuators. MuJoCo contact truth only measures its latency and
-checks for false early transitions. The CTest matrix separately keeps the
-calibrated `0/+/-2 deg`, `0.3-1.5 m` acceleration-travel, and contact-free
-negative samples used to validate the observer features. Replay the permanent
-cases in the GUI with `--case step_dock_passive` or
-`--case step_dock_delay_10ms`.
+The permanent registry contains only the production `step_dock_complete` case.
+It sends the ordinary operator STEP_DOCK command and exercises the complete
+pure-C task state machine. MuJoCo contact truth is used only for benchmark
+assertions and never drives a phase transition or modifies the controller
+command. Replay it in the GUI with `--case step_dock_complete`.
 
-In `--keyboard` mode, press `T` to toggle the step-docking preparation task.
-The controller extends the legs while accepting ordinary drive input; if the
-chassis rear is facing the virtual gimbal it first ramps the forward target
-toward zero while turning the chassis front back into alignment. A confirmed
-impact enters the latched passive debug state, which requires a simulation
-reset to leave.
-
-The isolated `step_dock_transfer_preview` GUI case continues from that impact
-with the current fixed leg-position trajectory, then locks its experimental
-hold at `0.18 m` and `-90 deg` relative to the body. Wheel control and leg-angle
-LQR remain disabled throughout; this preview is not part of the production
-task state machine.
+In `--keyboard` mode, press `T` to start or cancel the step-docking task. The
+controller extends the legs while accepting ordinary drive input, aligns the chassis
+front, detects impact, disables all actuators for one control cycle, executes
+the fixed transfer and hold, then recovers attitude with position and heading
+feedback masked. Once stable, it captures the current position and heading and
+verifies the full balance controller before completing. Successful recovery
+automatically returns to normal ACTIVE control and clears the keyboard task
+latch, so the next task starts with one `T` press. The control core still
+requires NORMAL to be observed once before rearming, preventing a held external
+STEP_DOCK command from retriggering; recovery timeout remains latched until
+system reset.

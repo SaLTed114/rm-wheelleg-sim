@@ -1,4 +1,4 @@
-# LQR 参数生成与验证
+# LQR 参数生成与验证归档
 
 本文由 `tools/lqr/build_current_model.py` 自动生成。
 

@@ -33,7 +33,7 @@ conda run -n sim python tools/lqr/build_current_model.py
 
 - `tools/lqr/generated/current_model_schedule.json`
 - `tools/lqr/generated/current_model_schedule.h`
-- `docs/notes/lqr-validation.md`
+- `docs/archive/validation/lqr-validation.md`
 
 当前调度针对 1 ms 仿真控制周期生成，不能与现有 3 ms 实车调度混用。
 左右腿角代价使用共同/差分坐标：共同腿角保持基础权重，差分腿角由
