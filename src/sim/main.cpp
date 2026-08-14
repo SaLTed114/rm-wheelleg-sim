@@ -5,6 +5,7 @@
 #include <string>
 
 #include "drop/drop_benchmark.hpp"
+#include "drop/jump_impulse.hpp"
 #include "drop/platform_drop.hpp"
 #include "drop/ramp_course.hpp"
 #include "drop/ramp_jump.hpp"
@@ -36,6 +37,12 @@ void print_usage() {
     std::cerr << "available drop cases:\n";
     for (const auto &spec : balance::benchmark::drop_exploration_cases()) {
         std::cerr << "  " << balance::benchmark::drop_case_name(spec) << '\n';
+    }
+    std::cerr << "available jump impulse cases:\n";
+    for (const auto &spec : balance::benchmark::jump_impulse_cases()) {
+        std::cerr << "  "
+                  << balance::benchmark::jump_impulse_case_name(spec)
+                  << '\n';
     }
     std::cerr << "available platform drop cases:\n";
     for (const auto &spec : balance::benchmark::platform_drop_cases()) {
@@ -83,6 +90,7 @@ bool parse_arguments(
         const std::string value = argv[index + 1];
         if (option == "--case" && options.performance_case == nullptr &&
             options.drop_case == nullptr &&
+            options.jump_impulse_case == nullptr &&
             options.platform_drop_case == nullptr &&
             options.ramp_course_case == nullptr &&
             options.ramp_jump_case == nullptr) {
@@ -94,17 +102,25 @@ bool parse_arguments(
             }
             if (options.performance_case == nullptr &&
                 options.drop_case == nullptr) {
+                options.jump_impulse_case =
+                    balance::benchmark::find_jump_impulse_case(value);
+            }
+            if (options.performance_case == nullptr &&
+                options.drop_case == nullptr &&
+                options.jump_impulse_case == nullptr) {
                 options.platform_drop_case =
                     balance::benchmark::find_platform_drop_case(value);
             }
             if (options.performance_case == nullptr &&
                 options.drop_case == nullptr &&
+                options.jump_impulse_case == nullptr &&
                 options.platform_drop_case == nullptr) {
                 options.ramp_course_case =
                     balance::benchmark::find_ramp_course_case(value);
             }
             if (options.performance_case == nullptr &&
                 options.drop_case == nullptr &&
+                options.jump_impulse_case == nullptr &&
                 options.platform_drop_case == nullptr &&
                 options.ramp_course_case == nullptr) {
                 options.ramp_jump_case =
@@ -112,6 +128,7 @@ bool parse_arguments(
             }
             if (options.performance_case == nullptr &&
                 options.drop_case == nullptr &&
+                options.jump_impulse_case == nullptr &&
                 options.platform_drop_case == nullptr &&
                 options.ramp_course_case == nullptr &&
                 options.ramp_jump_case == nullptr) {
@@ -168,6 +185,7 @@ bool parse_arguments(
     }
     const bool case_selected = options.performance_case != nullptr ||
         options.drop_case != nullptr ||
+        options.jump_impulse_case != nullptr ||
         options.platform_drop_case != nullptr ||
         options.ramp_course_case != nullptr ||
         options.ramp_jump_case != nullptr;

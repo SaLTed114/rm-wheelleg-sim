@@ -98,6 +98,7 @@ add_library(balance_benchmark_support STATIC
   src/benchmark/drop/drop_benchmark.cpp
   src/benchmark/drop/drop_policy.cpp
   src/benchmark/drop/drop_scenario.cpp
+  src/benchmark/drop/jump_impulse.cpp
   src/benchmark/drop/platform_drop.cpp
   src/benchmark/drop/ramp_climb.cpp
   src/benchmark/drop/ramp_course.cpp
@@ -137,6 +138,13 @@ target_link_libraries(
   rm_balance_ramp_jump PRIVATE balance_benchmark_support)
 balance_enable_warnings(rm_balance_ramp_jump)
 balance_configure_mujoco_runtime(rm_balance_ramp_jump)
+
+add_executable(rm_balance_jump_impulse
+  src/benchmark/drop/jump_impulse_main.cpp)
+target_link_libraries(
+  rm_balance_jump_impulse PRIVATE balance_benchmark_support)
+balance_enable_warnings(rm_balance_jump_impulse)
+balance_configure_mujoco_runtime(rm_balance_jump_impulse)
 
 add_executable(rm_balance_trim_scan
   src/benchmark/trim/main.cpp)
@@ -356,6 +364,17 @@ if(BUILD_TESTING)
     COMMAND mujoco_ramp_jump_test
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/ramp-jump")
+
+  add_executable(mujoco_jump_impulse_test
+    tests/mujoco_jump_impulse_test.cpp)
+  target_link_libraries(
+    mujoco_jump_impulse_test PRIVATE balance_benchmark_support)
+  balance_enable_warnings(mujoco_jump_impulse_test)
+  balance_configure_mujoco_runtime(mujoco_jump_impulse_test)
+  add_test(NAME mujoco_jump_impulse_sweep
+    COMMAND mujoco_jump_impulse_test
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_BINARY_DIR}/test-results/jump-impulse")
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
   target_link_libraries(mujoco_smoke_test PRIVATE balance_benchmark_support)

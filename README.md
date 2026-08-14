@@ -148,3 +148,16 @@ Run it explicitly with:
 
 The same case can be replayed in the GUI with
 `./build/rm_balance_sim <model.xml> --case figure_eight_cross`.
+
+### Jump impulse benchmark
+
+Run the isolated `140/180/220 N` baseline and `240 N` hold-time sweep with:
+
+```bash
+./build/rm_balance_jump_impulse \
+  models/MJCF/COD-2026RoboMaster-Balance.xml \
+  build/jump-impulse
+```
+
+Replay one force level in the GUI with, for example,
+`./build/rm_balance_sim <model.xml> --case jump_impulse_f240_t90ms`.

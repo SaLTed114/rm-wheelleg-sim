@@ -10,6 +10,7 @@
 #include "common/common_diagnostics.hpp"
 #include "common/simulation_sample.hpp"
 #include "drop/drop_scenario.hpp"
+#include "drop/jump_impulse.hpp"
 #include "drop/platform_drop.hpp"
 #include "drop/ramp_course.hpp"
 #include "drop/ramp_jump.hpp"
@@ -49,6 +50,10 @@ public:
                 spec.wheel_clearance = *options_.drop_wheel_clearance;
             }
             drop_.emplace(spec, plant_.model());
+        }
+        if (options_.jump_impulse_case != nullptr) {
+            jump_impulse_.emplace(
+                *options_.jump_impulse_case, plant_.model());
         }
         if (options_.platform_drop_case != nullptr) {
             platform_drop_.emplace(
@@ -99,7 +104,8 @@ public:
                 accumulated_time += std::clamp(
                     frame_time.count(), 0.0, kMaxFrameTimeSeconds);
                 while (accumulated_time >= plant_.timestep()) {
-                    const bool keep_stepping = platform_drop_ ?
+                    const bool keep_stepping = jump_impulse_ ?
+                        step_jump_impulse() : platform_drop_ ?
                         step_platform_drop() : ramp_jump_ ?
                         step_ramp_jump() : ramp_course_ ?
                         step_ramp_course() : drop_ ?
@@ -139,6 +145,10 @@ private:
             config.motion.leg_length = static_cast<float>(
                 options.platform_drop_case->leg_length);
         }
+        if (options.jump_impulse_case != nullptr) {
+            config.motion.leg_length = static_cast<float>(
+                options.jump_impulse_case->leg_length);
+        }
         if (options.ramp_course_case != nullptr) {
             config.motion.leg_length = static_cast<float>(
                 options.ramp_course_case->leg_length);
@@ -157,6 +167,7 @@ private:
         if (options_.keyboard_drive) plant_.configure_keyboard_course();
         if (performance_) performance_->reset(plant_.data().time);
         if (drop_) drop_->reset();
+        if (jump_impulse_) jump_impulse_->reset();
         if (platform_drop_) platform_drop_->reset(plant_);
         if (ramp_course_) ramp_course_->reset(plant_);
         if (ramp_jump_) ramp_jump_->reset(plant_);
@@ -283,6 +294,21 @@ private:
         return true;
     }
 
+    bool step_jump_impulse() {
+        jump_impulse_->step(plant_, runner_, sampler_);
+        phase_ = jump_impulse_->phase_name();
+        case_balance_engaged_ = jump_impulse_->balance_engaged();
+        if (std::string_view(jump_impulse_->issue()) != "none" &&
+            case_issue_ == "none") {
+            case_issue_ = jump_impulse_->issue();
+        }
+        if (jump_impulse_->finished()) {
+            case_finished_ = true;
+            return false;
+        }
+        return true;
+    }
+
     bool step_ramp_course() {
         ramp_course_->step(plant_, runner_, sampler_);
         phase_ = ramp_course_->phase_name();
@@ -322,7 +348,8 @@ private:
 
     [[nodiscard]] SimulationUiFrame ui_frame() const {
         const char *case_name = nullptr;
-        if (platform_drop_) case_name = platform_drop_->name().c_str();
+        if (jump_impulse_) case_name = jump_impulse_->name().c_str();
+        else if (platform_drop_) case_name = platform_drop_->name().c_str();
         else if (ramp_jump_) case_name = ramp_jump_->name().c_str();
         else if (ramp_course_) case_name = ramp_course_->name().c_str();
         else if (drop_) case_name = drop_->name().c_str();
@@ -350,6 +377,7 @@ private:
     benchmark::SimulationSampler sampler_;
     InteractiveScenario interactive_;
     std::optional<benchmark::DropScenario> drop_;
+    std::optional<benchmark::JumpImpulseScenario> jump_impulse_;
     std::optional<benchmark::PlatformDropScenario> platform_drop_;
     std::optional<benchmark::RampCourseScenario> ramp_course_;
     std::optional<benchmark::RampJumpScenario> ramp_jump_;
