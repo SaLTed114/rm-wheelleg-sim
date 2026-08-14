@@ -12,6 +12,11 @@ bool complete_result(
     const balance::benchmark::StepDockResult &result,
     const std::filesystem::path &output_directory
 ) {
+    const bool cut_timing_valid = result.spec.production_task ?
+        result.control_cut_delay >= 0.0 &&
+            result.control_cut_delay <= 0.010 :
+        std::abs(result.control_cut_delay -
+                 result.spec.cut_delay_seconds) <= 1.0e-9;
     const bool collision_complete = result.measurement_complete &&
         result.finite &&
         result.balance_engaged && result.start_ready &&
@@ -19,11 +24,12 @@ bool complete_result(
         !result.body_contact_before_trigger && result.control_cut &&
         result.maximum_post_cut_actuation <= 1.0e-8 &&
         std::isfinite(result.collision_clearance) &&
-        std::abs(result.control_cut_delay -
-                 result.spec.cut_delay_seconds) <= 1.0e-9 &&
+        cut_timing_valid &&
         std::filesystem::exists(
             output_directory / result.name / "trace.csv");
-    return collision_complete && result.speed_stable &&
+    return collision_complete &&
+        (!result.spec.require_speed_stable || result.speed_stable) &&
+        (!result.spec.production_task || result.retained_on_platform) &&
         result.collision_velocity >= 1.0;
 }
 
@@ -78,14 +84,23 @@ int main(int argc, char **argv) {
 
     const std::filesystem::path output_directory = argv[2];
     balance::benchmark::StepDockBenchmark benchmark(argv[1], output_directory);
-    const auto calibration = benchmark.run(cases.front());
+    const auto production = benchmark.run(cases.front());
+    print_result(production);
+    if (!complete_result(production, output_directory) ||
+        std::abs(production.collision_world_heading) >
+            5.0 * BC_PI / 180.0) {
+        std::cerr << "production step dock task failed\n";
+        return EXIT_FAILURE;
+    }
+
+    const auto calibration = benchmark.run(cases.back());
     print_result(calibration);
     if (!complete_result(calibration, output_directory)) {
         std::cerr << "step dock heading calibration failed\n";
         return EXIT_FAILURE;
     }
 
-    constexpr double target_heading_degrees[] = {0.0, 2.0, -2.0};
+    constexpr double target_heading_degrees[] = {2.0, -2.0};
     for (const double target_degrees : target_heading_degrees) {
         auto spec = cases.back();
         spec.approach_heading_radians = target_degrees * BC_PI / 180.0;

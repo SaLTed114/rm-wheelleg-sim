@@ -22,6 +22,8 @@ struct StepDockSpec {
     double leg_length{0.38};
     double platform_height{0.20};
     double cut_delay_seconds{};
+    bool production_task{};
+    bool transfer_preview{};
     double forward_acceleration_rate{3.0};
     double initial_heading_radians{};
     double approach_heading_radians{};
@@ -34,6 +36,7 @@ struct StepDockSpec {
 
 [[nodiscard]] std::string step_dock_case_name(const StepDockSpec &spec);
 [[nodiscard]] const std::array<StepDockSpec, 2> &step_dock_cases();
+[[nodiscard]] const StepDockSpec &step_dock_transfer_preview_case();
 [[nodiscard]] const StepDockSpec *find_step_dock_case(
     std::string_view name) noexcept;
 
@@ -44,15 +47,20 @@ enum class StepDockPhase {
     approach,
     impact_delay,
     passive,
+    transfer,
+    transfer_hold,
     complete,
     failed,
 };
 
 struct StepDockContact {
     bool leg_face{};
+    bool wheel_face{};
+    bool other_leg_face{};
     bool base_face{};
     bool base_top{};
     std::array<bool, BC_SIDE_NUM> side_face{};
+    std::array<bool, BC_SIDE_NUM> side_wheel_top{};
     double total_normal_force{};
     double strongest_normal_force{};
     double strongest_x{std::numeric_limits<double>::quiet_NaN()};
@@ -112,6 +120,7 @@ struct StepDockResult {
     std::array<double, BC_SIDE_NUM> final_wheel_x{};
     std::array<double, BC_SIDE_NUM> final_wheel_z{};
     double final_base_top_contact_ratio{};
+    double final_wheel_top_contact_ratio{};
     double final_maximum_forward_speed{};
     double final_maximum_vertical_speed{};
     double final_maximum_pitch_rate{};
@@ -134,8 +143,11 @@ public:
     [[nodiscard]] const char *phase_name() const noexcept;
     [[nodiscard]] const char *issue() const noexcept { return issue_; }
     [[nodiscard]] bool finished() const noexcept {
-        return phase_ == StepDockPhase::complete ||
+        return observation_complete_ || phase_ == StepDockPhase::complete ||
             phase_ == StepDockPhase::failed;
+    }
+    [[nodiscard]] bool observation_complete() const noexcept {
+        return observation_complete_;
     }
     [[nodiscard]] bool balance_engaged() const noexcept {
         return balance_engaged_;
@@ -180,6 +192,14 @@ public:
     }
     [[nodiscard]] double collision_elapsed(double time) const noexcept;
     [[nodiscard]] double passive_elapsed(double time) const noexcept;
+    [[nodiscard]] const std::array<double, BC_SIDE_NUM> &
+    transfer_length_reference() const noexcept {
+        return transfer_length_reference_;
+    }
+    [[nodiscard]] const std::array<double, BC_SIDE_NUM> &
+    transfer_angle_reference() const noexcept {
+        return transfer_angle_reference_;
+    }
     [[nodiscard]] double commanded_velocity() const noexcept {
         return command_.forward_velocity;
     }
@@ -202,8 +222,20 @@ private:
         double time, double base_x, double velocity, double clearance,
         double world_heading,
         const StepDockContact &contact, bool body_first) noexcept;
-    void enter_passive(double time) noexcept;
+    void enter_passive(
+        double time,
+        const bc_controller_snapshot_t &snapshot) noexcept;
     void step_passive(
+        sim::SimulationRunner &runner,
+        const bc_gimbal_feedback_t &gimbal);
+    void step_transfer_preview(
+        sim::SimulationRunner &runner,
+        const bc_gimbal_feedback_t &gimbal,
+        double time);
+    void step_transfer_hold(
+        sim::SimulationRunner &runner,
+        const bc_gimbal_feedback_t &gimbal);
+    void step_transfer_control(
         sim::SimulationRunner &runner,
         const bc_gimbal_feedback_t &gimbal);
     void fail(const char *issue) noexcept;
@@ -219,6 +251,7 @@ private:
     int base_geom_{};
     std::array<int, BC_SIDE_NUM> leg_root_front_{};
     std::array<int, BC_SIDE_NUM> leg_root_rear_{};
+    std::array<int, BC_SIDE_NUM> wheel_collision_{};
     std::array<int, BC_SIDE_NUM> wheel_axis_{};
     double wheel_radius_{};
     std::array<double, 3> base_bounds_center_{};
@@ -237,12 +270,17 @@ private:
         std::numeric_limits<double>::quiet_NaN()};
     double collision_x_{std::numeric_limits<double>::quiet_NaN()};
     double trigger_contact_force_{};
+    std::array<double, BC_SIDE_NUM> transfer_start_length_{};
+    std::array<double, BC_SIDE_NUM> transfer_start_angle_{};
+    std::array<double, BC_SIDE_NUM> transfer_length_reference_{};
+    std::array<double, BC_SIDE_NUM> transfer_angle_reference_{};
     std::string first_contact_pair_{"none"};
     bool balance_engaged_{};
     bool start_ready_{};
     bool speed_stable_{};
     bool contact_detected_{};
     bool body_contact_before_trigger_{};
+    bool observation_complete_{};
     const char *issue_{"none"};
 };
 

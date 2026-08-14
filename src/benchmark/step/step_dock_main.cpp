@@ -7,15 +7,16 @@
 #include "step_dock.hpp"
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
+    if (argc != 3 && argc != 4) {
         std::cerr << "usage: rm_balance_step_dock "
-                     "<model.xml> <output-directory>\n";
+                     "<model.xml> <output-directory> [case]\n";
         return EXIT_FAILURE;
     }
 
     try {
         balance::benchmark::StepDockBenchmark benchmark(argv[1], argv[2]);
-        for (const auto &spec : balance::benchmark::step_dock_cases()) {
+        auto run = [&benchmark](
+            const balance::benchmark::StepDockSpec &spec) {
             const auto result = benchmark.run(spec);
             std::cout << std::left << std::setw(24) << result.name
                       << " collision_v=" << result.collision_velocity
@@ -43,6 +44,19 @@ int main(int argc, char **argv) {
                       << " zero_peak="
                       << result.maximum_post_cut_actuation
                       << " issue=" << result.issue << '\n';
+        };
+        if (argc == 4) {
+            const auto *spec = balance::benchmark::find_step_dock_case(
+                argv[3]);
+            if (spec == nullptr) {
+                std::cerr << "unknown step dock case: " << argv[3] << '\n';
+                return EXIT_FAILURE;
+            }
+            run(*spec);
+        } else {
+            for (const auto &spec : balance::benchmark::step_dock_cases()) {
+                run(spec);
+            }
         }
     } catch (const std::exception &error) {
         std::cerr << "rm_balance_step_dock: " << error.what() << '\n';

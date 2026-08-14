@@ -82,7 +82,7 @@ Linux:
 ./build/rm_balance_sim models/MJCF/COD-2026RoboMaster-Balance.xml
 ```
 
-Append `--keyboard` to drive manually. `W/S` or the up/down arrows command forward motion, Shift raises the speed limit from `2.0 m/s` to `2.7 m/s`, and `A/D` or the left/right arrows rotate the virtual gimbal. Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
+Append `--keyboard` to drive manually. `W/S` or the up/down arrows command forward motion, Shift raises the speed limit from `2.0 m/s` to `2.7 m/s`, and `A/D` or the left/right arrows rotate the virtual gimbal. `T` toggles the step-docking task, Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
 
 Keyboard mode also reveals two terrain features in front of the spawn point. The right-hand lane (`y=-1.5 m`) has a triangular `15 deg` ramp onto a `200 mm`-high, `2.0 x 2.0 m` platform. The left-hand lane (`y=+1.0 m`) is a standalone triangular ramp, `860 mm` wide and `17 deg`, with a `350 mm` summit and no top platform. Both features remain buried and non-visible for benchmark cases and non-keyboard simulation.
 
@@ -164,7 +164,7 @@ Replay one force level in the GUI with, for example,
 
 ### Step docking benchmark
 
-Run the isolated `0.38 m` leg, `2.0 m/s` reference, `200 mm` step cases with:
+Run the `0.38 m` leg, `2.0 m/s` reference, `200 mm` step cases with:
 
 ```bash
 ./build/rm_balance_step_dock \
@@ -172,16 +172,26 @@ Run the isolated `0.38 m` leg, `2.0 m/s` reference, `200 mm` step cases with:
   build/step-dock
 ```
 
-The permanent case registry keeps only immediate cut and `10 ms` delayed cut.
-The CTest matrix measures the common post-start yaw drift, compensates the
-initial pose, then reaches world-frame collision headings of `0/+/-2 deg`. It
-also runs contact-free straight, hold, stop, and `+/-0.2 rad/s` turn samples at
-the same `0.38 m`, `2.0 m/s`, and `3.0 m/s^2` task envelope. Additional
-positive samples collide after `0.3-1.5 m` of measured acceleration travel,
-rather than treating the initial geometric gap as distance traveled. These
-traces expose the shadow impact observer's `5/10 ms` IMU, pitch-rate, leg-rate,
-and wheel-rate
-features; MuJoCo contact truth is used only to label the positive samples and
-schedule the benchmark-only actuation cut. The observer does not produce a
-collision decision or affect control. Replay the permanent cases in the GUI
-with `--case step_dock_passive` or `--case step_dock_delay_10ms`.
+The permanent registry keeps one production `step_dock_passive` case and one
+historical `10 ms` truth-delayed isolation case. The production case sends the
+normal operator task command, extends from the ordinary `0.18 m` working leg
+length while driving, and lets the ACTIVE state machine detect impact and
+disable all six actuators. MuJoCo contact truth only measures its latency and
+checks for false early transitions. The CTest matrix separately keeps the
+calibrated `0/+/-2 deg`, `0.3-1.5 m` acceleration-travel, and contact-free
+negative samples used to validate the observer features. Replay the permanent
+cases in the GUI with `--case step_dock_passive` or
+`--case step_dock_delay_10ms`.
+
+In `--keyboard` mode, press `T` to toggle the step-docking preparation task.
+The controller extends the legs while accepting ordinary drive input; if the
+chassis rear is facing the virtual gimbal it first ramps the forward target
+toward zero while turning the chassis front back into alignment. A confirmed
+impact enters the latched passive debug state, which requires a simulation
+reset to leave.
+
+The isolated `step_dock_transfer_preview` GUI case continues from that impact
+with the current fixed leg-position trajectory, then locks its experimental
+hold at `0.18 m` and `-90 deg` relative to the body. Wheel control and leg-angle
+LQR remain disabled throughout; this preview is not part of the production
+task state machine.

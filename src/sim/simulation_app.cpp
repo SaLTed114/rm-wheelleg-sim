@@ -162,9 +162,16 @@ private:
             config.motion.leg_length = static_cast<float>(
                 options.ramp_jump_case->leg_length);
         }
-        if (options.step_dock_case != nullptr) {
+        if (options.step_dock_case != nullptr &&
+            !options.step_dock_case->production_task) {
             config.motion.leg_length = static_cast<float>(
                 options.step_dock_case->leg_length);
+        }
+        if (options.step_dock_case != nullptr &&
+            options.step_dock_case->transfer_preview) {
+            config.control.angle_controller.kp = 120.0F;
+            config.control.angle_controller.kd = 10.0F;
+            config.control.angle_controller.output_limit = 60.0F;
         }
         return config;
     }
@@ -173,6 +180,7 @@ private:
         if (trace_) trace_->flush();
         ++reset_index_;
         runner_.reset();
+        viewer_.reset_drive_input();
         if (options_.keyboard_drive) plant_.configure_keyboard_course();
         if (performance_) performance_->reset(plant_.data().time);
         if (drop_) drop_->reset();
