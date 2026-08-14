@@ -23,7 +23,7 @@ struct StepDockSpec {
     double platform_height{0.20};
     double cut_delay_seconds{};
     bool production_task{};
-    bool transfer_preview{};
+    double base_platform_sliding_friction{1.0};
     double forward_acceleration_rate{3.0};
     double initial_heading_radians{};
     double approach_heading_radians{};
@@ -35,8 +35,8 @@ struct StepDockSpec {
 };
 
 [[nodiscard]] std::string step_dock_case_name(const StepDockSpec &spec);
-[[nodiscard]] const std::array<StepDockSpec, 2> &step_dock_cases();
-[[nodiscard]] const StepDockSpec &step_dock_transfer_preview_case();
+[[nodiscard]] const std::array<StepDockSpec, 1> &step_dock_cases();
+[[nodiscard]] const StepDockSpec &step_dock_complete_case();
 [[nodiscard]] const StepDockSpec *find_step_dock_case(
     std::string_view name) noexcept;
 
@@ -49,6 +49,7 @@ enum class StepDockPhase {
     passive,
     transfer,
     transfer_hold,
+    rebalance,
     complete,
     failed,
 };
@@ -83,6 +84,7 @@ struct StepDockResult {
     bool control_cut{};
     bool retained_on_platform{};
     bool passively_supported{};
+    bool final_settled{};
     double collision_time{std::numeric_limits<double>::quiet_NaN()};
     double collision_velocity{std::numeric_limits<double>::quiet_NaN()};
     double collision_clearance{std::numeric_limits<double>::quiet_NaN()};
@@ -97,6 +99,10 @@ struct StepDockResult {
     double strongest_contact_force{};
     double platform_normal_impulse{};
     double maximum_post_cut_actuation{};
+    double maximum_post_impact_joint_request{};
+    double maximum_recovery_wheel_request{};
+    bool post_impact_joint_saturated{};
+    bool recovery_reference_captured{};
     std::array<double, BC_SIDE_NUM> approach_horizontal_force{};
     std::array<double, BC_SIDE_NUM> approach_horizontal_range{};
     double delay_peak_horizontal_residual{};
@@ -121,6 +127,12 @@ struct StepDockResult {
     std::array<double, BC_SIDE_NUM> final_wheel_z{};
     double final_base_top_contact_ratio{};
     double final_wheel_top_contact_ratio{};
+    double hold_window_minimum_wheel_edge_margin{
+        std::numeric_limits<double>::quiet_NaN()};
+    double hold_window_maximum_base_advance{
+        std::numeric_limits<double>::quiet_NaN()};
+    double hold_window_maximum_abs_pitch{};
+    double hold_window_both_wheel_top_contact_ratio{};
     double final_maximum_forward_speed{};
     double final_maximum_vertical_speed{};
     double final_maximum_pitch_rate{};
@@ -225,19 +237,6 @@ private:
     void enter_passive(
         double time,
         const bc_controller_snapshot_t &snapshot) noexcept;
-    void step_passive(
-        sim::SimulationRunner &runner,
-        const bc_gimbal_feedback_t &gimbal);
-    void step_transfer_preview(
-        sim::SimulationRunner &runner,
-        const bc_gimbal_feedback_t &gimbal,
-        double time);
-    void step_transfer_hold(
-        sim::SimulationRunner &runner,
-        const bc_gimbal_feedback_t &gimbal);
-    void step_transfer_control(
-        sim::SimulationRunner &runner,
-        const bc_gimbal_feedback_t &gimbal);
     void fail(const char *issue) noexcept;
 
     StepDockSpec spec_;

@@ -402,7 +402,7 @@ if(BUILD_TESTING)
     mujoco_step_dock_test PRIVATE balance_benchmark_support)
   balance_enable_warnings(mujoco_step_dock_test)
   balance_configure_mujoco_runtime(mujoco_step_dock_test)
-  add_test(NAME mujoco_step_dock_passive
+  add_test(NAME mujoco_step_dock_complete
     COMMAND mujoco_step_dock_test
       "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/step-dock")

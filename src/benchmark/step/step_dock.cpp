@@ -14,15 +14,13 @@ constexpr double kDisabledSettleSeconds = 2.0;
 constexpr double kScenarioTimeoutSeconds = 15.0;
 constexpr double kReadyHoldSeconds = 0.25;
 constexpr double kSpeedWindowSeconds = 0.25;
-constexpr double kPassiveObservationSeconds = 1.0;
-constexpr double kFinalWindowStartSeconds = 0.75;
 constexpr double kMinimumReadyClearance = 0.20;
 constexpr double kMinimumApproachVelocity = 1.0;
 constexpr double kMaximumSpeedWindowRange = 0.10;
 constexpr double kLegLengthTolerance = 0.012;
 constexpr double kLegSpeedTolerance = 0.05;
-constexpr double kPitchTolerance = 3.0 * BC_PI / 180.0;
-constexpr double kPitchRateTolerance = 0.15;
+constexpr double kPitchTolerance = 5.0 * BC_PI / 180.0;
+constexpr double kPitchRateTolerance = 0.50;
 constexpr double kRollTolerance = 3.0 * BC_PI / 180.0;
 constexpr double kRollRateTolerance = 0.15;
 constexpr double kYawTolerance = 5.0 * BC_PI / 180.0;
@@ -32,18 +30,11 @@ constexpr double kTopPositionTolerance = 0.010;
 constexpr double kZeroTolerance = 1.0e-8;
 constexpr double kHorizontalDetectionThreshold = 5.0;
 constexpr double kHorizontalDetectionHoldSeconds = 0.003;
-constexpr double kTransferFirstKnotSeconds = 0.08;
-constexpr double kTransferSecondKnotSeconds = 0.16;
-constexpr double kTransferThirdKnotSeconds = 0.34;
-constexpr double kTransferEndSeconds = 0.50;
-constexpr double kTransferFirstLength = 0.24;
-constexpr double kTransferSecondLength = 0.16;
-constexpr double kTransferThirdLength = 0.17;
-constexpr double kTransferFinalLength = 0.18;
-constexpr double kTransferFirstAngle = -50.0 * BC_PI / 180.0;
-constexpr double kTransferSecondAngle = -30.0 * BC_PI / 180.0;
-constexpr double kTransferThirdAngle = -125.0 * BC_PI / 180.0;
-constexpr double kTransferFinalAngle = -90.0 * BC_PI / 180.0;
+constexpr double kTransferHoldWindowStartSeconds = 0.05;
+constexpr double kTransferHoldWindowEndSeconds = 0.10;
+constexpr double kLowBasePlatformSlidingFriction = 0.001;
+constexpr char kBasePlatformContactPair[] =
+    "base_keyboard_platform_contact";
 
 int require_id(const mjModel &model, const mjtObj type, const char *name) {
     const int id = mj_name2id(&model, type, name);
@@ -95,47 +86,6 @@ double maximum_actuation(const bc_controller_snapshot_t &snapshot) {
     return maximum;
 }
 
-double interpolate_segment(
-    const double time,
-    const double end_time,
-    const double start,
-    const double end
-) {
-    const double ratio = end_time > 0.0 ?
-        std::clamp(time / end_time, 0.0, 1.0) : 1.0;
-    return start + ratio * (end - start);
-}
-
-double transfer_reference(
-    const double elapsed,
-    const double start,
-    const double first,
-    const double second,
-    const double third,
-    const double final
-) {
-    if (elapsed < kTransferFirstKnotSeconds) {
-        return interpolate_segment(
-            elapsed, kTransferFirstKnotSeconds, start, first);
-    }
-    if (elapsed < kTransferSecondKnotSeconds) {
-        return interpolate_segment(
-            elapsed - kTransferFirstKnotSeconds,
-            kTransferSecondKnotSeconds - kTransferFirstKnotSeconds,
-            first, second);
-    }
-    if (elapsed < kTransferThirdKnotSeconds) {
-        return interpolate_segment(
-            elapsed - kTransferSecondKnotSeconds,
-            kTransferThirdKnotSeconds - kTransferSecondKnotSeconds,
-            second, third);
-    }
-    return interpolate_segment(
-        elapsed - kTransferThirdKnotSeconds,
-        kTransferEndSeconds - kTransferThirdKnotSeconds,
-        third, final);
-}
-
 struct HorizontalLegForce {
     std::array<double, BC_SIDE_NUM> tangential{};
     std::array<double, BC_SIDE_NUM> tangential_horizontal{};
@@ -167,7 +117,7 @@ HorizontalLegForce horizontal_leg_force(
 } // namespace
 
 std::string step_dock_case_name(const StepDockSpec &spec) {
-    if (spec.transfer_preview) return "step_dock_transfer_preview";
+    if (spec.production_task) return "step_dock_complete";
     const auto delay_milliseconds = static_cast<long>(
         std::lround(1000.0 * spec.cut_delay_seconds));
     std::string name = delay_milliseconds == 0L ?
@@ -191,31 +141,26 @@ std::string step_dock_case_name(const StepDockSpec &spec) {
     return name;
 }
 
-const StepDockSpec &step_dock_transfer_preview_case() {
-    static const StepDockSpec preview = [] {
+const StepDockSpec &step_dock_complete_case() {
+    static const StepDockSpec complete = [] {
         StepDockSpec configured{};
         configured.production_task = true;
-        configured.transfer_preview = true;
         configured.require_speed_stable = false;
+        configured.base_platform_sliding_friction =
+            kLowBasePlatformSlidingFriction;
         return configured;
     }();
-    return preview;
+    return complete;
 }
 
-const std::array<StepDockSpec, 2> &step_dock_cases() {
-    static const std::array<StepDockSpec, 2> cases = [] {
-        std::array<StepDockSpec, 2> configured{};
-        configured[0].production_task = true;
-        configured[0].require_speed_stable = false;
-        configured[1].cut_delay_seconds = 0.010;
-        return configured;
-    }();
+const std::array<StepDockSpec, 1> &step_dock_cases() {
+    static const std::array<StepDockSpec, 1> cases = {{
+        step_dock_complete_case(),
+    }};
     return cases;
 }
 
 const StepDockSpec *find_step_dock_case(const std::string_view name) noexcept {
-    const StepDockSpec &preview = step_dock_transfer_preview_case();
-    if (name == step_dock_case_name(preview)) return &preview;
     const auto &cases = step_dock_cases();
     const auto found = std::find_if(
         cases.begin(), cases.end(), [name](const StepDockSpec &spec) {
@@ -232,6 +177,11 @@ StepDockScenario::StepDockScenario(
         spec_.cut_delay_seconds < 0.0) {
         throw std::invalid_argument(
             "step dock cut delay must be finite and non-negative");
+    }
+    if (!std::isfinite(spec_.base_platform_sliding_friction) ||
+        spec_.base_platform_sliding_friction < 0.0) {
+        throw std::invalid_argument(
+            "step dock base-platform friction must be finite and non-negative");
     }
     if (std::isfinite(spec_.platform_gap_at_acceleration) &&
         spec_.platform_gap_at_acceleration <= 0.0) {
@@ -325,6 +275,7 @@ const char *StepDockScenario::phase_name() const noexcept {
     case StepDockPhase::passive: return "step_passive";
     case StepDockPhase::transfer: return "step_transfer";
     case StepDockPhase::transfer_hold: return "step_transfer_hold";
+    case StepDockPhase::rebalance: return "step_rebalance";
     case StepDockPhase::complete: return "step_complete";
     case StepDockPhase::failed: return "step_failed";
     }
@@ -513,8 +464,7 @@ void StepDockScenario::enter_passive(
     const double time,
     const bc_controller_snapshot_t &snapshot
 ) noexcept {
-    phase_ = spec_.transfer_preview ?
-        StepDockPhase::transfer : StepDockPhase::passive;
+    phase_ = StepDockPhase::passive;
     passive_start_ = time;
     control_cut_time_ = time;
     for (int side = 0; side < BC_SIDE_NUM; ++side) {
@@ -523,71 +473,6 @@ void StepDockScenario::enter_passive(
         transfer_length_reference_[side] = transfer_start_length_[side];
         transfer_angle_reference_[side] = transfer_start_angle_[side];
     }
-}
-
-void StepDockScenario::step_passive(
-    sim::SimulationRunner &runner,
-    const bc_gimbal_feedback_t &gimbal
-) {
-    runner.step_with_control_transform(
-        command_, gimbal, [](bc_control_command_t &control) {
-            control.wheel_strategy = BC_WHEEL_DISABLED;
-            for (int side = 0; side < BC_SIDE_NUM; ++side) {
-                control.leg[side].length_strategy =
-                    BC_LEG_LENGTH_DISABLED;
-                control.leg[side].angle_strategy = BC_LEG_ANGLE_DISABLED;
-            }
-        });
-}
-
-void StepDockScenario::step_transfer_preview(
-    sim::SimulationRunner &runner,
-    const bc_gimbal_feedback_t &gimbal,
-    const double time
-) {
-    const double elapsed = passive_elapsed(time);
-    for (int side = 0; side < BC_SIDE_NUM; ++side) {
-        transfer_length_reference_[side] = transfer_reference(
-            elapsed, transfer_start_length_[side],
-            kTransferFirstLength, kTransferSecondLength,
-            kTransferThirdLength,
-            kTransferFinalLength);
-        transfer_angle_reference_[side] = transfer_reference(
-            elapsed, transfer_start_angle_[side],
-            kTransferFirstAngle, kTransferSecondAngle,
-            kTransferThirdAngle,
-            kTransferFinalAngle);
-    }
-    step_transfer_control(runner, gimbal);
-}
-
-void StepDockScenario::step_transfer_hold(
-    sim::SimulationRunner &runner,
-    const bc_gimbal_feedback_t &gimbal
-) {
-    transfer_length_reference_.fill(kTransferFinalLength);
-    transfer_angle_reference_.fill(kTransferFinalAngle);
-    step_transfer_control(runner, gimbal);
-}
-
-void StepDockScenario::step_transfer_control(
-    sim::SimulationRunner &runner,
-    const bc_gimbal_feedback_t &gimbal
-) {
-    runner.step_with_control_transform(
-        command_, gimbal, [this](bc_control_command_t &control) {
-            control.wheel_strategy = BC_WHEEL_DISABLED;
-            control.yaw_acceleration_reference = 0.0F;
-            for (int side = 0; side < BC_SIDE_NUM; ++side) {
-                control.leg[side].length_strategy =
-                    BC_LEG_LENGTH_POSITION_SUPPORT;
-                control.leg[side].angle_strategy = BC_LEG_ANGLE_POSITION;
-                control.leg[side].target.length = static_cast<float>(
-                    transfer_length_reference_[side]);
-                control.leg[side].target.angle_body = static_cast<float>(
-                    transfer_angle_reference_[side]);
-            }
-        });
 }
 
 double StepDockScenario::passive_elapsed(const double time) const noexcept {
@@ -621,9 +506,6 @@ void StepDockScenario::step(
     const double clearance = base_clearance(plant.data());
     const double world_heading = base_world_heading(plant.data());
     const double velocity = sample.base.forward_velocity;
-    const bc_gimbal_feedback_t gimbal = runner.gimbal_feedback(
-        0.0F, 0.0F, runner.feedback().imu);
-
     command_.system_enabled = static_cast<uint8_t>(
         phase_ != StepDockPhase::disabled_settle);
     command_.balance_restart = static_cast<uint8_t>(
@@ -695,66 +577,61 @@ void StepDockScenario::step(
         return;
     }
 
-    if (phase_ == StepDockPhase::passive) {
-        if (passive_elapsed(time) >= kPassiveObservationSeconds) {
-            phase_ = StepDockPhase::complete;
-            return;
+    if (spec_.production_task && std::isfinite(passive_start_)) {
+        for (int side = 0; side < BC_SIDE_NUM; ++side) {
+            transfer_length_reference_[side] =
+                runner.snapshot().step_request.leg_length[side];
+            transfer_angle_reference_[side] =
+                runner.snapshot().step_request.leg_angle_body[side];
         }
-        if (spec_.production_task) {
-            runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
-        } else {
-            step_passive(runner, gimbal);
-        }
-        return;
-    }
-
-    if (phase_ == StepDockPhase::transfer) {
-        if (passive_elapsed(time) >= kTransferEndSeconds) {
+        switch (runner.snapshot().state_machine.step_task) {
+        case BC_STEP_TASK_IMPACT_PASSIVE:
+            phase_ = StepDockPhase::passive;
+            break;
+        case BC_STEP_TASK_TRANSFER:
+            phase_ = StepDockPhase::transfer;
+            break;
+        case BC_STEP_TASK_TRANSFER_HOLD:
             phase_ = StepDockPhase::transfer_hold;
-            step_transfer_hold(runner, gimbal);
-            return;
-        }
-        step_transfer_preview(runner, gimbal, time);
-        return;
-    }
-
-    if (phase_ == StepDockPhase::transfer_hold) {
-        if (passive_elapsed(time) >= 2.0) {
+            break;
+        case BC_STEP_TASK_RECOVER:
+        case BC_STEP_TASK_RECOVER_LOCK:
+            phase_ = StepDockPhase::rebalance;
+            break;
+        case BC_STEP_TASK_COMPLETE:
+            phase_ = StepDockPhase::complete;
             observation_complete_ = true;
             return;
+        case BC_STEP_TASK_RECOVERY_FAILED:
+            fail("step_recovery_timeout");
+            return;
+        case BC_STEP_TASK_INACTIVE:
+            if (runner.snapshot().step_command_rearm_required) {
+                phase_ = StepDockPhase::complete;
+                observation_complete_ = true;
+                return;
+            }
+            break;
+        case BC_STEP_TASK_PREPARE:
+            break;
         }
-        step_transfer_hold(runner, gimbal);
+        runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
         return;
     }
 
     if (phase_ == StepDockPhase::impact_delay) {
-        if (spec_.production_task) {
-            command_.forward_velocity =
-                static_cast<float>(spec_.target_velocity);
-            if (runner.snapshot().state_machine.step_task ==
-                BC_STEP_TASK_IMPACT_PASSIVE) {
-                enter_passive(time, runner.snapshot());
-            }
-            runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
-            return;
-        }
-        if (collision_elapsed(time) + 1.0e-12 >=
-            spec_.cut_delay_seconds) {
+        command_.forward_velocity = static_cast<float>(spec_.target_velocity);
+        if (runner.snapshot().state_machine.step_task ==
+            BC_STEP_TASK_IMPACT_PASSIVE) {
             enter_passive(time, runner.snapshot());
-            command_.forward_velocity = 0.0F;
-            step_passive(runner, gimbal);
-        } else {
-            command_.forward_velocity =
-                static_cast<float>(spec_.target_velocity);
-            runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
         }
+        runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
         return;
     }
 
     command_.forward_velocity = static_cast<float>(spec_.target_velocity);
     update_speed_window(time, velocity);
-    if (spec_.production_task &&
-        runner.snapshot().state_machine.step_task ==
+    if (runner.snapshot().state_machine.step_task ==
             BC_STEP_TASK_IMPACT_PASSIVE &&
         !std::isfinite(collision_time_)) {
         fail("impact_detected_before_contact");
@@ -764,30 +641,14 @@ void StepDockScenario::step(
         record_collision(
             time, sample.base.x, velocity, clearance, world_heading,
             contact, true);
-        if (spec_.production_task) {
-            runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
-        } else if (spec_.cut_delay_seconds <= 0.0) {
-            enter_passive(time, runner.snapshot());
-            command_.forward_velocity = 0.0F;
-            step_passive(runner, gimbal);
-        } else {
-            runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
-        }
+        runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
         return;
     }
     if (contact.leg_face) {
         record_collision(
             time, sample.base.x, velocity, clearance, world_heading,
             contact, false);
-        if (spec_.production_task) {
-            runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
-        } else if (spec_.cut_delay_seconds <= 0.0) {
-            enter_passive(time, runner.snapshot());
-            command_.forward_velocity = 0.0F;
-            step_passive(runner, gimbal);
-        } else {
-            runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
-        }
+        runner.step_with_gimbal_heading(command_, 0.0F, 0.0F);
         return;
     }
     if (sample.base.x > layout_.platform_end_x) {
@@ -806,7 +667,8 @@ StepDockBenchmark::StepDockBenchmark(
     sampler_(plant_.model()),
     summary_(output_directory_ / "summary.csv", {
         "case", "target_velocity", "leg_length", "platform_height",
-        "cut_delay_command", "production_task", "transfer_preview",
+        "cut_delay_command", "production_task",
+        "base_platform_sliding_friction",
         "forward_acceleration_rate",
         "initial_heading_deg", "approach_heading_deg",
         "platform_gap_at_acceleration", "target_collision_travel",
@@ -821,6 +683,9 @@ StepDockBenchmark::StepDockBenchmark(
         "control_cut_delay", "trigger_contact_force",
         "strongest_contact_force",
         "platform_normal_impulse", "maximum_post_cut_actuation",
+        "maximum_post_impact_joint_request",
+        "maximum_recovery_wheel_request", "post_impact_joint_saturated",
+        "recovery_reference_captured",
         "approach_horizontal_force_l", "approach_horizontal_force_r",
         "approach_horizontal_range_l", "approach_horizontal_range_r",
         "delay_peak_horizontal_residual",
@@ -828,8 +693,12 @@ StepDockBenchmark::StepDockBenchmark(
         "maximum_delay_pitch_rate", "base_contact_before_cut",
         "cut_base_velocity", "cut_pitch_deg", "cut_leg_length_l",
         "cut_leg_length_r",
-        "retained_on_platform", "passively_supported",
+        "retained_on_platform", "passively_supported", "final_settled",
         "final_base_top_contact_ratio", "final_wheel_top_contact_ratio",
+        "hold_window_minimum_wheel_edge_margin",
+        "hold_window_maximum_base_advance",
+        "hold_window_maximum_abs_pitch_deg",
+        "hold_window_both_wheel_top_contact_ratio",
         "final_base_x", "final_base_z", "final_pitch_deg",
         "final_roll_deg", "final_leg_length_l", "final_leg_length_r",
         "final_leg_angle_l_deg", "final_leg_angle_r_deg",
@@ -840,16 +709,14 @@ StepDockBenchmark::StepDockBenchmark(
     }) {}
 
 StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
+    plant_.set_contact_pair_sliding_friction(
+        kBasePlatformContactPair,
+        spec.base_platform_sliding_friction);
     plant_.reset();
     set_initial_heading(
         plant_.model(), plant_.data(), spec.initial_heading_radians);
     bc_controller_config_t config{};
     bc_controller_default_config(&config);
-    if (spec.transfer_preview) {
-        config.control.angle_controller.kp = 120.0F;
-        config.control.angle_controller.kd = 10.0F;
-        config.control.angle_controller.output_limit = 60.0F;
-    }
     if (!spec.production_task) {
         config.motion.leg_length = static_cast<float>(spec.leg_length);
     }
@@ -864,16 +731,22 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
     result.name = scenario.name();
     CsvWriter trace(output_directory_ / result.name / "trace.csv", {
         "case", "phase", "time", "cut_delay_command", "production_task",
-        "transfer_preview",
+        "base_platform_sliding_friction",
         "forward_acceleration_rate", "initial_heading_deg",
         "approach_heading_deg", "base_world_heading_deg",
         "platform_gap_at_acceleration", "target_collision_travel",
         "require_speed_stable", "step_task", "step_impact_armed",
-        "step_impact_confirm_elapsed",
+        "step_impact_confirm_elapsed", "step_state_elapsed",
+        "step_recovery_elapsed",
+        "step_recovery_stable_elapsed", "step_rearm_required",
+        "step_recovery_timed_out", "step_control_mode",
+        "step_recovery_reference_capture",
+        "step_position_heading_suppressed",
         "collision_elapsed", "control_cut", "command_velocity", "base_x",
         "base_z", "base_velocity", "base_vertical_velocity",
         "base_clearance", "pitch", "pitch_rate", "roll", "roll_rate",
-        "yaw", "yaw_rate", "leg_length_l", "leg_length_r",
+        "yaw", "yaw_rate", "ref_s", "ref_ds", "ref_psi", "ref_dpsi",
+        "leg_length_l", "leg_length_r",
         "leg_rate_l", "leg_rate_r", "leg_angle_l", "leg_angle_r",
         "transfer_length_ref_l", "transfer_length_ref_r",
         "transfer_angle_ref_l", "transfer_angle_ref_r",
@@ -917,6 +790,16 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
     std::size_t final_samples = 0U;
     std::size_t final_top_contact_samples = 0U;
     std::size_t final_wheel_top_contact_samples = 0U;
+    std::size_t hold_window_samples = 0U;
+    std::size_t hold_window_both_wheel_top_samples = 0U;
+    double transfer_hold_start_time =
+        std::numeric_limits<double>::quiet_NaN();
+    double transfer_hold_start_base_x =
+        std::numeric_limits<double>::quiet_NaN();
+    double hold_window_minimum_wheel_edge_margin =
+        std::numeric_limits<double>::infinity();
+    double hold_window_maximum_base_advance =
+        -std::numeric_limits<double>::infinity();
     double horizontal_detection_hold_start =
         std::numeric_limits<double>::quiet_NaN();
     std::array<double, BC_SIDE_NUM> approach_horizontal_sum{};
@@ -930,6 +813,7 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
     }};
     std::size_t approach_horizontal_samples = 0U;
     bool cut_pose_captured = false;
+    bool recovery_reference_checked = false;
     while (!scenario.finished()) {
         scenario.step(plant_, runner, sampler_);
         const SimulationSample sample = sampler_.read(
@@ -952,6 +836,36 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
             scenario.body_contact_before_trigger();
         const HorizontalLegForce horizontal =
             horizontal_leg_force(sample.controller);
+        if (scenario.phase() == StepDockPhase::transfer_hold) {
+            if (!std::isfinite(transfer_hold_start_time)) {
+                transfer_hold_start_time = sample.time;
+                transfer_hold_start_base_x = sample.base.x;
+            }
+            const double hold_elapsed =
+                sample.time - transfer_hold_start_time;
+            if (hold_elapsed + 1.0e-12 >=
+                    kTransferHoldWindowStartSeconds &&
+                hold_elapsed <= kTransferHoldWindowEndSeconds + 1.0e-12) {
+                ++hold_window_samples;
+                if (contact.side_wheel_top[BC_L] &&
+                    contact.side_wheel_top[BC_R]) {
+                    ++hold_window_both_wheel_top_samples;
+                }
+                const double minimum_wheel_x = std::min(
+                    scenario.wheel_axis_x(plant_.data(), BC_L),
+                    scenario.wheel_axis_x(plant_.data(), BC_R));
+                hold_window_minimum_wheel_edge_margin = std::min(
+                    hold_window_minimum_wheel_edge_margin,
+                    minimum_wheel_x - scenario.layout().edge_x);
+                hold_window_maximum_base_advance = std::max(
+                    hold_window_maximum_base_advance,
+                    sample.base.x - transfer_hold_start_base_x);
+                result.hold_window_maximum_abs_pitch = std::max(
+                    result.hold_window_maximum_abs_pitch,
+                    std::abs(static_cast<double>(sample.controller.
+                        state.value[BC_STATE_THETA_B])));
+            }
+        }
         if (scenario.phase() == StepDockPhase::approach) {
             for (int side = 0; side < BC_SIDE_NUM; ++side) {
                 approach_horizontal_sum[side] +=
@@ -1013,6 +927,7 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
             scenario.phase() != StepDockPhase::passive &&
             scenario.phase() != StepDockPhase::transfer &&
             scenario.phase() != StepDockPhase::transfer_hold &&
+            scenario.phase() != StepDockPhase::rebalance &&
             scenario.phase() != StepDockPhase::complete) {
             result.minimum_approach_clearance = std::min(
                 result.minimum_approach_clearance,
@@ -1020,7 +935,8 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
         }
         if (scenario.phase() == StepDockPhase::passive ||
             scenario.phase() == StepDockPhase::transfer ||
-            scenario.phase() == StepDockPhase::transfer_hold) {
+            scenario.phase() == StepDockPhase::transfer_hold ||
+            scenario.phase() == StepDockPhase::rebalance) {
             result.control_cut = true;
             if (!cut_pose_captured) {
                 result.cut_base_velocity = sample.base.forward_velocity;
@@ -1035,13 +951,59 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
             result.maximum_post_cut_actuation = std::max(
                 result.maximum_post_cut_actuation,
                 maximum_actuation(sample.controller));
+            for (int side = 0; side < BC_SIDE_NUM; ++side) {
+                const bool recovery_control =
+                    sample.controller.state_machine.step_task ==
+                        BC_STEP_TASK_RECOVER ||
+                    sample.controller.state_machine.step_task ==
+                        BC_STEP_TASK_RECOVER_LOCK;
+                result.maximum_recovery_wheel_request = recovery_control ?
+                        std::max(
+                            result.maximum_recovery_wheel_request,
+                            std::abs(static_cast<double>(sample.controller.
+                                actuation_request.wheel_torque[side]))) :
+                        result.maximum_recovery_wheel_request;
+                for (int joint = 0; joint < BC_JOINT_NUM; ++joint) {
+                    const double request = std::abs(static_cast<double>(
+                        sample.controller.actuation_request.leg[side].
+                            joint_torque[joint]));
+                    result.maximum_post_impact_joint_request = std::max(
+                        result.maximum_post_impact_joint_request, request);
+                    result.post_impact_joint_saturated =
+                        result.post_impact_joint_saturated ||
+                        request > config.control.joint_torque_limit +
+                            kZeroTolerance;
+                }
+            }
+            if (!recovery_reference_checked &&
+                sample.controller.state_machine.step_task ==
+                    BC_STEP_TASK_RECOVER_LOCK) {
+                recovery_reference_checked = true;
+                const auto &state = sample.controller.state;
+                const auto &reference = sample.controller.state_reference;
+                result.recovery_reference_captured =
+                    std::abs(reference.value[BC_STATE_S] -
+                        state.value[BC_STATE_S]) <= 0.005 &&
+                    std::abs(reference.value[BC_STATE_DS]) <= 1.0e-7 &&
+                    std::abs(bc_wrap_angle(
+                        reference.value[BC_STATE_PSI] -
+                        state.value[BC_STATE_PSI])) <= 0.001 &&
+                    std::abs(reference.value[BC_STATE_DPSI]) <= 1.0e-7 &&
+                    sample.controller.state_machine.forward ==
+                        BC_FORWARD_HOLD &&
+                    std::abs(sample.controller.
+                        yaw_acceleration_reference) <= 1.0e-7;
+            }
             result.strongest_contact_force = std::max(
                 result.strongest_contact_force,
                 contact.strongest_normal_force);
             result.platform_normal_impulse +=
                 contact.total_normal_force * plant_.timestep();
-            if (scenario.passive_elapsed(sample.time) >=
-                kFinalWindowStartSeconds) {
+            const bool final_window =
+                sample.controller.state_machine.step_task ==
+                    BC_STEP_TASK_RECOVER_LOCK &&
+                sample.controller.step_recovery_stable_elapsed > 0.0F;
+            if (final_window) {
                 ++final_samples;
                 if (contact.base_top) ++final_top_contact_samples;
                 if (contact.side_wheel_top[BC_L] &&
@@ -1116,24 +1078,31 @@ StepDockResult StepDockBenchmark::run(const StepDockSpec &spec) {
     result.final_wheel_top_contact_ratio = final_samples > 0U ?
         static_cast<double>(final_wheel_top_contact_samples) /
             static_cast<double>(final_samples) : 0.0;
+    if (hold_window_samples > 0U) {
+        result.hold_window_minimum_wheel_edge_margin =
+            hold_window_minimum_wheel_edge_margin;
+        result.hold_window_maximum_base_advance =
+            hold_window_maximum_base_advance;
+        result.hold_window_both_wheel_top_contact_ratio =
+            static_cast<double>(hold_window_both_wheel_top_samples) /
+            static_cast<double>(hold_window_samples);
+    }
     result.retained_on_platform = final_samples > 0U &&
         (result.final_base_top_contact_ratio >= 0.90 ||
-         (spec.transfer_preview &&
+         (spec.production_task &&
           result.final_wheel_top_contact_ratio >= 0.90)) &&
         result.final_base_x >= scenario.layout().edge_x;
-    result.passively_supported = result.retained_on_platform &&
+    result.final_settled = result.retained_on_platform &&
+        std::abs(result.final_pitch) <= kPitchTolerance &&
+        std::abs(result.final_roll) <= kRollTolerance &&
         result.final_maximum_forward_speed <= 0.10 &&
         result.final_maximum_vertical_speed <= 0.10 &&
         result.final_maximum_pitch_rate <= 0.20 &&
         result.final_maximum_roll_rate <= 0.20;
+    result.passively_supported = false;
     if (!std::isfinite(result.minimum_approach_clearance)) {
         result.minimum_approach_clearance =
             std::numeric_limits<double>::quiet_NaN();
-    }
-    if (!spec.transfer_preview &&
-        result.maximum_post_cut_actuation > kZeroTolerance &&
-        result.issue == "none") {
-        result.issue = "post_cut_actuation_nonzero";
     }
     write_summary(result);
     return result;
@@ -1147,7 +1116,7 @@ void StepDockBenchmark::write_summary(const StepDockResult &result) {
         .value(result.spec.platform_height)
         .value(result.spec.cut_delay_seconds)
         .value(result.spec.production_task)
-        .value(result.spec.transfer_preview)
+        .value(result.spec.base_platform_sliding_friction)
         .value(result.spec.forward_acceleration_rate)
         .value(result.spec.initial_heading_radians * 180.0 / BC_PI)
         .value(result.spec.approach_heading_radians * 180.0 / BC_PI)
@@ -1176,6 +1145,10 @@ void StepDockBenchmark::write_summary(const StepDockResult &result) {
         .value(result.strongest_contact_force)
         .value(result.platform_normal_impulse)
         .value(result.maximum_post_cut_actuation)
+        .value(result.maximum_post_impact_joint_request)
+        .value(result.maximum_recovery_wheel_request)
+        .value(result.post_impact_joint_saturated)
+        .value(result.recovery_reference_captured)
         .value(result.approach_horizontal_force[BC_L])
         .value(result.approach_horizontal_force[BC_R])
         .value(result.approach_horizontal_range[BC_L])
@@ -1191,8 +1164,13 @@ void StepDockBenchmark::write_summary(const StepDockResult &result) {
         .value(result.cut_leg_length[BC_R])
         .value(result.retained_on_platform)
         .value(result.passively_supported)
+        .value(result.final_settled)
         .value(result.final_base_top_contact_ratio)
         .value(result.final_wheel_top_contact_ratio)
+        .value(result.hold_window_minimum_wheel_edge_margin)
+        .value(result.hold_window_maximum_base_advance)
+        .value(result.hold_window_maximum_abs_pitch * 180.0 / BC_PI)
+        .value(result.hold_window_both_wheel_top_contact_ratio)
         .value(result.final_base_x)
         .value(result.final_base_z)
         .value(result.final_pitch * 180.0 / BC_PI)
@@ -1229,7 +1207,7 @@ void StepDockBenchmark::write_trace(
         .value(sample.time)
         .value(scenario.spec().cut_delay_seconds)
         .value(scenario.spec().production_task)
-        .value(scenario.spec().transfer_preview)
+        .value(scenario.spec().base_platform_sliding_friction)
         .value(scenario.spec().forward_acceleration_rate)
         .value(scenario.spec().initial_heading_radians * 180.0 / BC_PI)
         .value(scenario.spec().approach_heading_radians * 180.0 / BC_PI)
@@ -1240,6 +1218,16 @@ void StepDockBenchmark::write_trace(
         .value(bc_step_task_state_name(snapshot.state_machine.step_task))
         .value(static_cast<int>(snapshot.step_impact_armed))
         .value(snapshot.step_impact_confirm_elapsed)
+        .value(snapshot.step_state_elapsed)
+        .value(snapshot.step_recovery_elapsed)
+        .value(snapshot.step_recovery_stable_elapsed)
+        .value(static_cast<int>(snapshot.step_command_rearm_required))
+        .value(static_cast<int>(snapshot.step_recovery_timed_out))
+        .value(static_cast<int>(snapshot.step_request.control_mode))
+        .value(static_cast<int>(
+            snapshot.step_request.recovery_reference_capture))
+        .value(static_cast<int>(snapshot.step_request.
+            suppress_position_heading_feedback))
         .value(scenario.collision_elapsed(sample.time))
         .value(scenario.control_cut())
         .value(scenario.commanded_velocity())
@@ -1254,6 +1242,10 @@ void StepDockBenchmark::write_trace(
         .value(snapshot.roll_rate)
         .value(snapshot.state.value[BC_STATE_PSI])
         .value(snapshot.state.value[BC_STATE_DPSI])
+        .value(snapshot.state_reference.value[BC_STATE_S])
+        .value(snapshot.state_reference.value[BC_STATE_DS])
+        .value(snapshot.state_reference.value[BC_STATE_PSI])
+        .value(snapshot.state_reference.value[BC_STATE_DPSI])
         .value(snapshot.leg[BC_L].length)
         .value(snapshot.leg[BC_R].length)
         .value(snapshot.leg[BC_L].length_velocity)

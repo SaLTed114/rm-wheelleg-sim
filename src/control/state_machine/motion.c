@@ -116,11 +116,11 @@ static void bc_motion_map_command(
     const float rear_error = bc_wrap_anglef(
         front_error + BC_PI_F);
 
-    if (input->operator_command->task == BC_OPERATOR_TASK_STEP_DOCK ||
-        motion->step_task.state != BC_STEP_TASK_INACTIVE) {
+    if (motion->step_task.request.force_front_alignment) {
         motion->alignment = BC_CHASSIS_FRONT;
         motion->heading_error = front_error;
         motion->mapped_forward_velocity =
+            motion->step_task.request.suppress_forward ? 0.0F :
             fabsf(front_error) <=
                 motion->step_task.config.alignment_tolerance ?
             input->operator_command->forward_velocity : 0.0F;
@@ -144,6 +144,52 @@ static void bc_motion_map_command(
         -input->operator_command->forward_velocity :
         input->operator_command->forward_velocity;
     motion->heading_error = rear ? rear_error : front_error;
+}
+
+static void bc_motion_reanchor_hold_reference(
+    bc_motion_t *motion,
+    const bc_state_machine_input_t *input
+) {
+    memset(
+        &motion->state_reference, 0,
+        sizeof(motion->state_reference));
+    bc_forward_mode_start(&motion->forward);
+    bc_forward_reference_start(
+        &motion->forward_reference,
+        input->state->value[BC_STATE_S],
+        &motion->state_reference);
+    bc_yaw_reference_start(
+        &motion->yaw_reference,
+        input->state->value[BC_STATE_PSI],
+        0.0F,
+        &motion->state_reference);
+}
+
+static void bc_motion_start_step_recovery_catch(
+    bc_motion_t *motion
+) {
+    memset(
+        &motion->state_reference, 0,
+        sizeof(motion->state_reference));
+    bc_forward_mode_start(&motion->forward);
+    bc_forward_reference_reset(&motion->forward_reference);
+    bc_yaw_reference_reset(&motion->yaw_reference);
+}
+
+static void bc_motion_set_step_transfer_control(
+    const bc_step_task_request_t *request,
+    bc_control_command_t *output
+) {
+    output->wheel_strategy = BC_WHEEL_DISABLED;
+    output->yaw_acceleration_reference = 0.0F;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        output->leg[side].length_strategy =
+            BC_LEG_LENGTH_POSITION_SUPPORT;
+        output->leg[side].angle_strategy = BC_LEG_ANGLE_POSITION;
+        output->leg[side].target.length = request->leg_length[side];
+        output->leg[side].target.angle_body =
+            request->leg_angle_body[side];
+    }
 }
 
 static void bc_motion_update_forward(
@@ -229,23 +275,65 @@ static void bc_motion_action(
         break;
 
     case BC_MOTION_ACTIVE:
-        bc_motion_map_command(motion, input);
-        const uint8_t step_requested =
-            input->operator_command->task == BC_OPERATOR_TASK_STEP_DOCK;
-        const float working_leg_length = step_requested ||
-                motion->step_task.state != BC_STEP_TASK_INACTIVE ?
-            motion->step_task.config.prepare_leg_length :
-            motion->config.leg_length;
+        const float front_error = bc_wrap_anglef(
+            input->gimbal_feedback->relative_yaw);
+        const uint8_t step_command_eligible =
+            input->operator_command->task == BC_OPERATOR_TASK_STEP_DOCK &&
+            !motion->step_task.command_rearm_required;
+        const float support_working_leg_length =
+            motion->step_task.request.active ?
+                motion->step_task.request.working_leg_length :
+            step_command_eligible ?
+                motion->step_task.config.prepare_leg_length :
+                motion->config.leg_length;
         bc_support_phase_update(
-            &motion->support_phase, input, working_leg_length);
+            &motion->support_phase, input, support_working_leg_length);
         bc_step_task_update(
             &motion->step_task, input,
-            motion->support_phase.state, motion->heading_error);
-        if (motion->step_task.state ==
-            BC_STEP_TASK_IMPACT_PASSIVE) {
+            motion->support_phase.state, front_error);
+        bc_motion_map_command(motion, input);
+
+        const bc_step_task_request_t *step_request =
+            &motion->step_task.request;
+        if (step_request->recovery_entered) {
+            bc_motion_start_step_recovery_catch(motion);
+            motion->leg_length_reference.value =
+                step_request->working_leg_length;
+        }
+        if (step_request->recovery_reference_capture) {
+            bc_motion_reanchor_hold_reference(motion, input);
+            motion->leg_length_reference.value =
+                step_request->working_leg_length;
+        }
+        if (step_request->control_mode == BC_STEP_CONTROL_PASSIVE) {
             motion->mapped_forward_velocity = 0.0F;
             break;
         }
+        if (step_request->control_mode == BC_STEP_CONTROL_TRANSFER) {
+            motion->mapped_forward_velocity = 0.0F;
+            bc_motion_set_step_transfer_control(step_request, output);
+            break;
+        }
+        if (step_request->control_mode == BC_STEP_CONTROL_RECOVER) {
+            motion->mapped_forward_velocity = 0.0F;
+            motion->leg_length_reference.value =
+                step_request->working_leg_length;
+            bc_motion_set_balance_control(motion, output);
+            output->state_reference = motion->state_reference;
+            output->yaw_acceleration_reference = 0.0F;
+            if (step_request->suppress_position_heading_feedback) {
+                output->disabled_state_feedback |=
+                    BC_STATE_FEEDBACK_MASK(BC_STATE_S) |
+                    BC_STATE_FEEDBACK_MASK(BC_STATE_PSI);
+            }
+            if (motion->step_task.state == BC_STEP_TASK_COMPLETE) {
+                bc_support_phase_reset(&motion->support_phase);
+            }
+            break;
+        }
+
+        const float working_leg_length = step_request->active ?
+            step_request->working_leg_length : motion->config.leg_length;
         bc_reference_ramp_update(
             &motion->leg_length_reference,
             &motion->config.leg_length_ramp,
@@ -285,15 +373,15 @@ void bc_motion_default_config(bc_motion_config_t *config) {
         .leg_length                 = 0.18F,
         .leg_length_ramp            = {
             .value_limit = 0.39F,
-            .rate_limit = 0.10F,
+            .rate_limit = 0.40F,
         },
         .leg_angle_body             = -0.5F * BC_PI_F,
         .length_tolerance           = 0.035F,
         .length_velocity_tolerance  = 0.03F,
         .angle_tolerance            = 8.0F * BC_PI_F / 180.0F,
         .angular_velocity_tolerance = 0.15F,
-        .stable_duration            = 0.25F,
-        .engage_duration            = 0.1F,
+        .stable_duration            = 0.10F,
+        .engage_duration            = 0.05F,
         .alignment_hysteresis       = 5.0F * BC_PI_F / 180.0F,
         .forward                    = forward,
         .forward_reference          = forward_reference,

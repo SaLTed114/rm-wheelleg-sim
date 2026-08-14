@@ -19,7 +19,15 @@ InteractiveTraceWriter::InteractiveTraceWriter(
     "command_balance_restart", "command_forward", "command_task",
     "gimbal_world_yaw", "gimbal_world_yaw_rate",
     "system", "motion", "forward", "step_task", "step_impact_armed",
-    "step_impact_confirm_elapsed", "support", "alignment",
+    "step_impact_confirm_elapsed", "step_state_elapsed",
+    "step_recovery_elapsed",
+    "step_recovery_stable_elapsed", "step_rearm_required",
+    "step_recovery_timed_out", "step_control_mode",
+    "step_recovery_reference_capture",
+    "step_position_heading_suppressed",
+    "step_leg_length_ref_l", "step_leg_length_ref_r",
+    "step_leg_angle_ref_l", "step_leg_angle_ref_r",
+    "support", "alignment",
     "base_x", "base_y", "base_z", "base_forward_velocity",
     "base_vertical_velocity",
     "s", "ds", "ref_s", "ref_ds", "psi", "dpsi", "ref_psi",
@@ -101,6 +109,20 @@ void InteractiveTraceWriter::write(
         .value(bc_step_task_state_name(snapshot.state_machine.step_task))
         .value(static_cast<int>(snapshot.step_impact_armed))
         .value(snapshot.step_impact_confirm_elapsed)
+        .value(snapshot.step_state_elapsed)
+        .value(snapshot.step_recovery_elapsed)
+        .value(snapshot.step_recovery_stable_elapsed)
+        .value(static_cast<int>(snapshot.step_command_rearm_required))
+        .value(static_cast<int>(snapshot.step_recovery_timed_out))
+        .value(static_cast<int>(snapshot.step_request.control_mode))
+        .value(static_cast<int>(
+            snapshot.step_request.recovery_reference_capture))
+        .value(static_cast<int>(snapshot.step_request.
+            suppress_position_heading_feedback))
+        .value(snapshot.step_request.leg_length[BC_L])
+        .value(snapshot.step_request.leg_length[BC_R])
+        .value(snapshot.step_request.leg_angle_body[BC_L])
+        .value(snapshot.step_request.leg_angle_body[BC_R])
         .value(bc_support_phase_state_name(snapshot.state_machine.support))
         .value(bc_chassis_alignment_name(snapshot.state_machine.alignment))
         .value(sample.base.x)

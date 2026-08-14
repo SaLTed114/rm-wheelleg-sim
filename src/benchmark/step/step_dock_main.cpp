@@ -36,13 +36,23 @@ int main(int argc, char **argv) {
                       << " delay_pitch_deg="
                       << result.maximum_delay_pitch * 180.0 / BC_PI
                       << " retained=" << result.retained_on_platform
-                      << " settled=" << result.passively_supported
+                      << " settled=" << result.final_settled
                       << " top_contact="
                       << result.final_base_top_contact_ratio
+                      << " hold_margin="
+                      << result.hold_window_minimum_wheel_edge_margin
+                      << " hold_advance="
+                      << result.hold_window_maximum_base_advance
+                      << " hold_pitch_deg="
+                      << result.hold_window_maximum_abs_pitch * 180.0 / BC_PI
+                      << " hold_wheel_contact="
+                      << result.hold_window_both_wheel_top_contact_ratio
                       << " leg=" << result.final_leg_length[BC_L]
                       << '/' << result.final_leg_length[BC_R]
-                      << " zero_peak="
-                      << result.maximum_post_cut_actuation
+                      << " max_joint_request="
+                      << result.maximum_post_impact_joint_request
+                      << " max_recovery_wheel_request="
+                      << result.maximum_recovery_wheel_request
                       << " issue=" << result.issue << '\n';
         };
         if (argc == 4) {

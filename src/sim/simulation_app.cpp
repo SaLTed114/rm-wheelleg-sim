@@ -68,6 +68,9 @@ public:
             ramp_jump_.emplace(*options_.ramp_jump_case, plant_.model());
         }
         if (options_.step_dock_case != nullptr) {
+            plant_.set_contact_pair_sliding_friction(
+                "base_keyboard_platform_contact",
+                options_.step_dock_case->base_platform_sliding_friction);
             step_dock_.emplace(*options_.step_dock_case, plant_.model());
         }
         if (options_.trace_path) {
@@ -167,12 +170,6 @@ private:
             config.motion.leg_length = static_cast<float>(
                 options.step_dock_case->leg_length);
         }
-        if (options.step_dock_case != nullptr &&
-            options.step_dock_case->transfer_preview) {
-            config.control.angle_controller.kp = 120.0F;
-            config.control.angle_controller.kd = 10.0F;
-            config.control.angle_controller.output_limit = 60.0F;
-        }
         return config;
     }
 
@@ -212,6 +209,9 @@ private:
             frame.command,
             frame.gimbal.world_yaw,
             frame.gimbal.world_yaw_rate);
+        if (frame.reset_step_task_latch) {
+            viewer_.reset_drive_input();
+        }
         if (trace_) {
             const auto sample = sampler_.read(
                 plant_.data(), runner_.snapshot());

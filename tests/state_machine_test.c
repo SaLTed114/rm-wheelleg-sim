@@ -55,8 +55,9 @@ int main() {
     if (config.startup_leg_length != 0.18F ||
         config.leg_length != 0.18F ||
         config.leg_length_ramp.value_limit != 0.39F ||
-        config.leg_length_ramp.rate_limit != 0.10F ||
-        config.engage_duration != 0.1F ||
+        config.leg_length_ramp.rate_limit != 0.40F ||
+        config.stable_duration != 0.10F ||
+        config.engage_duration != 0.05F ||
         config.forward_reference.velocity_ramp.rate_limit != 5.0F ||
         fabsf(config.yaw_reference.rate_limit - 1.5F * BC_PI_F) >
             1.0e-6F ||
@@ -118,7 +119,6 @@ int main() {
         leg[side].angle_body = config.leg_angle_body;
     }
 
-    bc_system_update(&system, &input, &command);
     leg[BC_L].length = 0.0F;
     bc_system_update(&system, &input, &command);
     leg[BC_L].length = config.startup_leg_length;
@@ -131,7 +131,9 @@ int main() {
     operator_command.forward_velocity = 0.2F;
     gimbal_feedback.relative_yaw = -0.3F;
     gimbal_feedback.relative_yaw_rate = -0.2F;
-    for (int step = 0; step < 3; ++step) {
+    const int stable_steps = (int)ceilf(
+        config.stable_duration / input.timestep_seconds);
+    for (int step = 0; step < stable_steps; ++step) {
         bc_system_update(&system, &input, &command);
     }
 
@@ -178,8 +180,8 @@ int main() {
     bc_system_update(&system, &input, &command);
     if (system.motion.state != BC_MOTION_ACTIVE ||
         system.motion.forward.state != BC_FORWARD_VELOCITY ||
-        fabsf(command.leg[BC_L].target.length - 0.19F) > 1.0e-6F ||
-        fabsf(command.leg[BC_R].target.length - 0.19F) > 1.0e-6F ||
+        fabsf(command.leg[BC_L].target.length - 0.22F) > 1.0e-6F ||
+        fabsf(command.leg[BC_R].target.length - 0.22F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_S] - 1.05F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_DS] - 0.5F) > 1.0e-6F ||
         fabsf(command.state_reference.value[BC_STATE_PSI] + 0.30F) > 1.0e-6F ||
@@ -357,15 +359,93 @@ int main() {
     }
     operator_command.task = BC_OPERATOR_TASK_NORMAL;
     bc_system_update(&system, &input, &command);
-    if (system.motion.step_task.state != BC_STEP_TASK_IMPACT_PASSIVE ||
+    if (system.motion.step_task.state != BC_STEP_TASK_TRANSFER ||
         !control_uses_strategies(
-            &command, BC_LEG_LENGTH_DISABLED, BC_LEG_ANGLE_DISABLED,
-            BC_WHEEL_DISABLED)) {
-        fputs("step passive did not remain latched\n", stderr);
+            &command, BC_LEG_LENGTH_POSITION_SUPPORT,
+            BC_LEG_ANGLE_POSITION, BC_WHEEL_DISABLED)) {
+        fputs("step passive did not enter transfer control\n", stderr);
+        return 1;
+    }
+
+    system.motion.step_task.state = BC_STEP_TASK_TRANSFER_HOLD;
+    system.motion.step_task.state_elapsed_seconds =
+        config.step_task.transfer_hold_duration - input.timestep_seconds;
+    state.value[BC_STATE_S] = 2.0F;
+    state.value[BC_STATE_DS] = 0.2F;
+    state.value[BC_STATE_PSI] = 1.15F;
+    state.value[BC_STATE_DPSI] = -0.1F;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.step_task.state != BC_STEP_TASK_RECOVER ||
+        command.wheel_strategy != BC_WHEEL_LQR ||
+        command.leg[BC_L].angle_strategy != BC_LEG_ANGLE_LQR ||
+        command.leg[BC_R].angle_strategy != BC_LEG_ANGLE_LQR ||
+        system.motion.forward.state != BC_FORWARD_HOLD ||
+        system.motion.state_reference.value[BC_STATE_S] != 0.0F ||
+        system.motion.state_reference.value[BC_STATE_DS] != 0.0F ||
+        system.motion.state_reference.value[BC_STATE_PSI] != 0.0F ||
+        system.motion.state_reference.value[BC_STATE_DPSI] != 0.0F ||
+        system.motion.yaw_reference.previous_rate != 0.0F ||
+        command.yaw_acceleration_reference != 0.0F ||
+        !(command.disabled_state_feedback &
+            BC_STATE_FEEDBACK_MASK(BC_STATE_S)) ||
+        !(command.disabled_state_feedback &
+            BC_STATE_FEEDBACK_MASK(BC_STATE_PSI))) {
+        fputs("step recovery catch retained position feedback\n", stderr);
+        return 1;
+    }
+
+    state.value[BC_STATE_DS] = 0.0F;
+    state.value[BC_STATE_DPSI] = 0.0F;
+    state.value[BC_STATE_THETA_B] = 0.0F;
+    state.value[BC_STATE_DTHETA_B] = 0.0F;
+    state.value[BC_STATE_DTHETA_L] = 0.0F;
+    state.value[BC_STATE_DTHETA_R] = 0.0F;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        leg[side].length = config.step_task.transfer_final_length;
+        leg[side].length_velocity = 0.0F;
+        leg[side].angle_body = config.step_task.transfer_final_angle_body;
+        leg[side].angular_velocity = 0.0F;
+        support[side].state = BC_CONTACT_GROUND;
+    }
+    system.motion.step_task.recovery_hold.elapsed_seconds =
+        config.step_task.recovery_stable_duration - input.timestep_seconds;
+    operator_command.task = BC_OPERATOR_TASK_STEP_DOCK;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.step_task.state != BC_STEP_TASK_RECOVER_LOCK ||
+        !system.motion.step_task.recovery_reference_captured ||
+        system.motion.state_reference.value[BC_STATE_S] != 2.0F ||
+        system.motion.state_reference.value[BC_STATE_DS] != 0.0F ||
+        system.motion.state_reference.value[BC_STATE_PSI] != 1.15F ||
+        system.motion.state_reference.value[BC_STATE_DPSI] != 0.0F ||
+        system.motion.yaw_reference.previous_rate != 0.0F ||
+        (command.disabled_state_feedback &
+            BC_STATE_FEEDBACK_MASK(BC_STATE_S)) ||
+        (command.disabled_state_feedback &
+            BC_STATE_FEEDBACK_MASK(BC_STATE_PSI))) {
+        fputs("stable recovery catch did not capture references\n", stderr);
+        return 1;
+    }
+    system.motion.step_task.recovery_hold.elapsed_seconds =
+        config.step_task.recovery_stable_duration - input.timestep_seconds;
+    bc_system_update(&system, &input, &command);
+    if (system.motion.step_task.state != BC_STEP_TASK_COMPLETE ||
+        !system.motion.step_task.command_rearm_required ||
+        command.wheel_strategy != BC_WHEEL_LQR ||
+        system.motion.support_phase.state != BC_SUPPORT_GROUND) {
+        fputs("locked step recovery did not complete safely\n", stderr);
+        return 1;
+    }
+    bc_system_update(&system, &input, &command);
+    if (system.motion.step_task.state != BC_STEP_TASK_INACTIVE ||
+        !system.motion.step_task.command_rearm_required ||
+        system.motion.leg_length_reference.value ==
+            config.step_task.prepare_leg_length) {
+        fputs("completed step did not return to disarmed ACTIVE\n", stderr);
         return 1;
     }
 
     operator_command.balance_restart = 1U;
+    operator_command.task = BC_OPERATOR_TASK_NORMAL;
     bc_system_update(&system, &input, &command);
     if (system.motion.state != BC_MOTION_LEG_POSITIONING ||
         system.motion.state_reference.value[BC_STATE_S] != 0.0F ||

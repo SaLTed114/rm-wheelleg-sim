@@ -89,6 +89,8 @@ void bc_controller_calculate(bc_controller_t *controller) {
         .length_position_kd =
             controller->control_core.config.length_controller.kd,
         .specific_force_norm = controller->specific_force_norm,
+        .roll = controller->control_core.observer.roll,
+        .roll_rate = controller->control_core.observer.roll_rate,
         .wheel_odometry_velocity =
             controller->control_core.observer.forward_velocity.
                 wheel_odometry,

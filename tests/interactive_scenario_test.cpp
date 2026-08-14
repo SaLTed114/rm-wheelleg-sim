@@ -57,6 +57,15 @@ int main() {
         return 1;
     }
 
+    snapshot.step_command_rearm_required = 1U;
+    const auto &completed = keyboard.update(snapshot, input, 3.001, 0.001F);
+    if (completed.command.task != BC_OPERATOR_TASK_NORMAL ||
+        !completed.reset_step_task_latch) {
+        std::cerr << "completed step did not reset the keyboard latch\n";
+        return 1;
+    }
+    snapshot.step_command_rearm_required = 0U;
+
     const KeyboardDriveInput boosted_input{1.0F, 0.0F, true, false};
     const auto &boosted = keyboard.update(
         snapshot, boosted_input, 3.01, 0.001F);

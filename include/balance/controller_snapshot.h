@@ -32,6 +32,12 @@ typedef struct {
     bc_impact_observer_output_t impact_observer;
     uint8_t step_impact_armed;
     float step_impact_confirm_elapsed;
+    float step_state_elapsed;
+    float step_recovery_elapsed;
+    float step_recovery_stable_elapsed;
+    uint8_t step_command_rearm_required;
+    uint8_t step_recovery_timed_out;
+    bc_step_task_request_t step_request;
     bc_velocity_estimator_output_t velocity_estimator;
     bc_leg_kinematics_t leg[BC_SIDE_NUM];
     bc_support_force_output_t support_force[BC_SIDE_NUM];

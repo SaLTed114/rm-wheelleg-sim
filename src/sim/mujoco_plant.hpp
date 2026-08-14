@@ -42,6 +42,8 @@ public:
     void reset();
     void step();
     void set_equality_active(const char *name, bool active);
+    void set_contact_pair_sliding_friction(
+        const char *name, double coefficient);
     void place_mocap_surface(
         const char *name, double x, double y, double z, bool visible);
     void place_mocap_surface(

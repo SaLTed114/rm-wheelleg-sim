@@ -287,10 +287,97 @@ int main() {
     bc_controller_set_command(&controller, &command);
     bc_controller_calculate(&controller);
     bc_controller_execute(&controller, &actuation);
-    if (controller.system.motion.step_task.state !=
-            BC_STEP_TASK_IMPACT_PASSIVE ||
-        !actuation_is_zero(&actuation)) {
-        fputs("step passive did not remain latched in controller\n", stderr);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.step_task != BC_STEP_TASK_TRANSFER ||
+        snapshot.step_request.control_mode != BC_STEP_CONTROL_TRANSFER ||
+        snapshot.actuation_request.wheel_torque[BC_L] != 0.0F ||
+        snapshot.actuation_request.wheel_torque[BC_R] != 0.0F) {
+        fputs("step passive did not enter controller transfer\n", stderr);
+        return 1;
+    }
+
+    controller.system.motion.step_task.state =
+        BC_STEP_TASK_TRANSFER_HOLD;
+    controller.system.motion.step_task.state_elapsed_seconds =
+        config.motion.step_task.transfer_hold_duration - 0.001F;
+    controller.control_core.observer.state.value[BC_STATE_S] = 2.0F;
+    controller.control_core.observer.state.value[BC_STATE_DS] = 0.2F;
+    controller.control_core.observer.state.value[BC_STATE_PSI] = 1.15F;
+    controller.control_core.observer.state.value[BC_STATE_DPSI] = -0.1F;
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.step_task != BC_STEP_TASK_RECOVER ||
+        snapshot.state_machine.forward != BC_FORWARD_HOLD ||
+        snapshot.state_reference.value[BC_STATE_S] != 0.0F ||
+        snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
+        snapshot.state_reference.value[BC_STATE_PSI] != 0.0F ||
+        snapshot.state_reference.value[BC_STATE_DPSI] != 0.0F ||
+        snapshot.yaw_acceleration_reference != 0.0F ||
+        snapshot.step_request.control_mode != BC_STEP_CONTROL_RECOVER ||
+        !snapshot.step_request.suppress_position_heading_feedback) {
+        fputs("controller step recovery catch retained position feedback\n",
+              stderr);
+        return 1;
+    }
+
+    controller.control_core.observer.state.value[BC_STATE_DS] = 0.0F;
+    controller.control_core.observer.state.value[BC_STATE_DPSI] = 0.0F;
+    controller.control_core.observer.state.value[BC_STATE_THETA_B] = 0.0F;
+    controller.control_core.observer.state.value[BC_STATE_DTHETA_B] = 0.0F;
+    controller.control_core.observer.state.value[BC_STATE_DTHETA_L] = 0.0F;
+    controller.control_core.observer.state.value[BC_STATE_DTHETA_R] = 0.0F;
+    controller.control_core.observer.roll = 0.0F;
+    controller.control_core.observer.roll_rate = 0.0F;
+    for (int side = 0; side < BC_SIDE_NUM; ++side) {
+        controller.control_core.observer.leg[side].length =
+            config.motion.step_task.transfer_final_length;
+        controller.control_core.observer.leg[side].length_velocity = 0.0F;
+        controller.control_core.observer.leg[side].angle_body =
+            config.motion.step_task.transfer_final_angle_body;
+        controller.control_core.observer.leg[side].angular_velocity = 0.0F;
+        controller.control_core.support_force[side].output.valid = 1U;
+        controller.control_core.support_force[side].output.state =
+            BC_CONTACT_GROUND;
+    }
+    controller.control_core.observer.velocity_estimator.output.
+        wheel_velocity_reliable = 1U;
+    controller.system.motion.step_task.recovery_hold.elapsed_seconds =
+        config.motion.step_task.recovery_stable_duration - 0.001F;
+    command.task = BC_OPERATOR_TASK_STEP_DOCK;
+    bc_controller_set_command(&controller, &command);
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.step_task != BC_STEP_TASK_RECOVER_LOCK ||
+        snapshot.state_reference.value[BC_STATE_S] != 2.0F ||
+        snapshot.state_reference.value[BC_STATE_DS] != 0.0F ||
+        snapshot.state_reference.value[BC_STATE_PSI] != 1.15F ||
+        snapshot.state_reference.value[BC_STATE_DPSI] != 0.0F ||
+        snapshot.step_request.suppress_position_heading_feedback ||
+        !snapshot.step_request.recovery_reference_capture ||
+        !controller.system.motion.step_task.recovery_reference_captured) {
+        fputs("controller recovery catch did not capture references\n",
+              stderr);
+        return 1;
+    }
+    controller.system.motion.step_task.recovery_hold.elapsed_seconds =
+        config.motion.step_task.recovery_stable_duration - 0.001F;
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.step_task != BC_STEP_TASK_COMPLETE ||
+        !snapshot.step_command_rearm_required) {
+        fputs("controller locked recovery did not complete\n", stderr);
+        return 1;
+    }
+    bc_controller_calculate(&controller);
+    bc_controller_execute(&controller, &actuation);
+    bc_controller_capture_snapshot(&controller, &snapshot);
+    if (snapshot.state_machine.step_task != BC_STEP_TASK_INACTIVE ||
+        !snapshot.step_command_rearm_required) {
+        fputs("controller step completion retriggered without NORMAL\n",
+              stderr);
         return 1;
     }
 

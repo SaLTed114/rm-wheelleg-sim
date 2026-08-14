@@ -21,6 +21,8 @@ typedef struct {
     float length_position_kp;
     float length_position_kd;
     float specific_force_norm;
+    float roll;
+    float roll_rate;
     float wheel_odometry_velocity;
     uint8_t wheel_velocity_reliable;
     float timestep_seconds;

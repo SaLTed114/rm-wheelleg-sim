@@ -193,6 +193,28 @@ void SimulationUi::draw_motion(const SimulationUiFrame &frame) {
         ImGui::TableSetColumnIndex(1);
         ImGui::Text("%.3f ms",
             1000.0F * snapshot.step_impact_confirm_elapsed);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Step phase elapsed");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%.3f s", snapshot.step_state_elapsed);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Recovery elapsed");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%.3f s", snapshot.step_recovery_elapsed);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Recovery stable");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%.3f s", snapshot.step_recovery_stable_elapsed);
+        table_value("Step rearm required",
+            snapshot.step_command_rearm_required ? "yes" : "no");
+        table_value("Recovery timeout",
+            snapshot.step_recovery_timed_out ? "yes" : "no");
+        table_value("Position / heading feedback",
+            snapshot.step_request.suppress_position_heading_feedback ?
+                "masked" : "full");
         table_value("Support", bc_support_phase_state_name(
             snapshot.state_machine.support));
         table_value("Alignment", bc_chassis_alignment_name(

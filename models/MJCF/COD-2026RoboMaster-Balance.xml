@@ -49,6 +49,15 @@
     <body name="keyboard_platform_200mm_body" mocap="true" pos="0 0 -2">
       <geom name="keyboard_platform_200mm" type="box" size="1 1 0.1" mass="0" rgba="0.32 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
     </body>
+    <body name="keyboard_course_platform_200mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_course_platform_200mm" type="box" size="0.4 0.5 0.1" mass="0" rgba="0.30 0.52 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="keyboard_course_platform_300mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_course_platform_300mm" type="box" size="1 0.5 0.15" mass="0" rgba="0.34 0.46 0.62 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
+    <body name="keyboard_course_curb_50mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_course_curb_50mm" type="box" size="0.05 0.5 0.025" mass="0" rgba="0.78 0.54 0.20 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
+    </body>
     <body name="keyboard_ramp_15deg_body" mocap="true" pos="0 0 -2">
       <geom name="keyboard_ramp_15deg" type="mesh" mesh="keyboard_wedge_15deg" mass="0" rgba="0.38 0.58 0.40 0" contype="1" conaffinity="0" friction="1 0.005 0.0001"/>
     </body>
@@ -84,7 +93,7 @@
     <body name="base_link">
       <freejoint name="base_free_joint"/>
       <inertial pos="-0.019917 -0.00040396 -0.037" mass="17.65" diaginertia="0.3663415964 0.367565 0.413477"/>
-      <geom type="mesh" rgba="1 1 1 1" mesh="base_link" />
+      <geom name="base_link_collision" type="mesh" rgba="1 1 1 1" mesh="base_link" />
       <!-- Placeholder until the physical IMU extrinsic is measured. -->
       <site name="imu_site" pos="-0.10 0 -0.03" size="0.006" rgba="0 0.8 1 1"/>
       <site name="Left_virtual_hip_site" pos="-0.0193914 -0.20775 -0.05" size="0.005" rgba="0 1 0 1"/>
@@ -191,6 +200,29 @@
     </body>
     </body>
   </worldbody>
+
+  <contact>
+    <pair name="base_keyboard_platform_contact"
+          geom1="base_link_collision"
+          geom2="keyboard_platform_200mm"
+          condim="3"
+          friction="0.001 0.001 0.00001 0.00001 0.00001"/>
+    <pair name="base_keyboard_course_platform_200mm_contact"
+          geom1="base_link_collision"
+          geom2="keyboard_course_platform_200mm"
+          condim="3"
+          friction="0.001 0.001 0.00001 0.00001 0.00001"/>
+    <pair name="base_keyboard_course_platform_300mm_contact"
+          geom1="base_link_collision"
+          geom2="keyboard_course_platform_300mm"
+          condim="3"
+          friction="0.001 0.001 0.00001 0.00001 0.00001"/>
+    <pair name="base_keyboard_course_curb_50mm_contact"
+          geom1="base_link_collision"
+          geom2="keyboard_course_curb_50mm"
+          condim="3"
+          friction="0.001 0.001 0.00001 0.00001 0.00001"/>
+  </contact>
   
   <equality>
       <weld name="base_support_weld" body1="base_link" body2="base_support" active="false" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2"/>

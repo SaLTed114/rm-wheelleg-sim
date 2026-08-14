@@ -42,6 +42,27 @@ int main(int argc, char **argv) {
         balance::sim::MujocoPlant plant(
             std::filesystem::path(argv[1]), kTimestepSeconds);
 
+        const int base_platform_pair = mj_name2id(
+            &plant.model(), mjOBJ_PAIR,
+            "base_keyboard_platform_contact");
+        if (base_platform_pair < 0 ||
+            std::abs(plant.model().pair_friction[
+                5 * base_platform_pair] - 0.001) > 1.0e-12 ||
+            std::abs(plant.model().pair_friction[
+                5 * base_platform_pair + 1] - 0.001) > 1.0e-12) {
+            std::cerr << "base-platform contact pair is incorrect\n";
+            return EXIT_FAILURE;
+        }
+        plant.set_contact_pair_sliding_friction(
+            "base_keyboard_platform_contact", 0.25);
+        if (std::abs(plant.model().pair_friction[
+                5 * base_platform_pair] - 0.25) > 1.0e-12 ||
+            std::abs(plant.model().pair_friction[
+                5 * base_platform_pair + 1] - 0.25) > 1.0e-12) {
+            std::cerr << "base-platform contact pair update failed\n";
+            return EXIT_FAILURE;
+        }
+
         const bool unexpected_model_dimensions =
             plant.model().nq != 21 ||
             plant.model().nv != 20 ||
@@ -157,6 +178,9 @@ int main(int argc, char **argv) {
             &plant.model(), mjOBJ_GEOM, "benchmark_ramp_17deg");
         const char *keyboard_surface_names[] = {
             "keyboard_platform_200mm",
+            "keyboard_course_platform_200mm",
+            "keyboard_course_platform_300mm",
+            "keyboard_course_curb_50mm",
             "keyboard_ramp_15deg",
             "keyboard_ramp_17deg",
         };
@@ -169,7 +193,7 @@ int main(int argc, char **argv) {
             "ramp_course_beveled_platform",
             "ramp_course_beveled_down",
         };
-        std::array<int, 3> keyboard_surfaces{};
+        std::array<int, 6> keyboard_surfaces{};
         std::array<int, 7> ramp_course_surfaces{};
         bool invalid_hidden_surface = platform_200 < 0 || platform_400 < 0 ||
             benchmark_ramp < 0;
@@ -194,6 +218,9 @@ int main(int argc, char **argv) {
             keyboard_surfaces[0],
             keyboard_surfaces[1],
             keyboard_surfaces[2],
+            keyboard_surfaces[3],
+            keyboard_surfaces[4],
+            keyboard_surfaces[5],
             ramp_course_surfaces[0],
             ramp_course_surfaces[1],
             ramp_course_surfaces[2],
@@ -240,6 +267,12 @@ int main(int argc, char **argv) {
         const ExpectedSurface expected_surface[] = {
             {keyboard_surfaces[0], {3.746410162, -1.5, -0.33},
              {1.0, 1.0, 0.1}},
+            {keyboard_surfaces[1], {2.4, 0.0, -0.33},
+             {0.4, 0.5, 0.1}},
+            {keyboard_surfaces[2], {3.8, 0.0, -0.28},
+             {1.0, 0.5, 0.15}},
+            {keyboard_surfaces[3], {2.85, 0.0, -0.105},
+             {0.05, 0.5, 0.025}},
         };
         for (const auto &surface : expected_surface) {
             const int geom = surface.geom;
@@ -269,7 +302,7 @@ int main(int argc, char **argv) {
         const double ramp_widths[] = {2.0, 0.86};
         const double ramp_lanes[] = {-1.5, 1.0};
         const int ramp_geoms[] = {
-            keyboard_surfaces[1], keyboard_surfaces[2],
+            keyboard_surfaces[4], keyboard_surfaces[5],
         };
         for (int index = 0; index < 2; ++index) {
             const int mesh = plant.model().geom_dataid[ramp_geoms[index]];

@@ -38,6 +38,18 @@ void bc_controller_capture_snapshot(
         controller->system.motion.step_task.impact_armed;
     snapshot->step_impact_confirm_elapsed =
         controller->system.motion.step_task.impact_hold.elapsed_seconds;
+    snapshot->step_state_elapsed =
+        controller->system.motion.step_task.state_elapsed_seconds;
+    snapshot->step_recovery_elapsed =
+        controller->system.motion.step_task.recovery_elapsed_seconds;
+    snapshot->step_recovery_stable_elapsed = controller->system.motion.
+        step_task.recovery_hold.elapsed_seconds;
+    snapshot->step_command_rearm_required =
+        controller->system.motion.step_task.command_rearm_required;
+    snapshot->step_recovery_timed_out =
+        controller->system.motion.step_task.recovery_timed_out;
+    snapshot->step_request =
+        controller->system.motion.step_task.request;
     snapshot->velocity_estimator =
         controller->control_core.observer.velocity_estimator.output;
     memcpy(

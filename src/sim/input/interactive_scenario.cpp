@@ -35,14 +35,19 @@ const InteractiveScenarioFrame &InteractiveScenario::update(
         demo_target(snapshot, simulation_time);
 
     frame_.command = {};
+    frame_.reset_step_task_latch = false;
     frame_.command.system_enabled = static_cast<uint8_t>(
         simulation_time >= 2.0);
     frame_.command.balance_restart =
         frame_.command.system_enabled &&
         snapshot.state_machine.system == BC_SYSTEM_OFF;
+    const bool reset_step_task_latch =
+        mode_ == InteractiveMode::keyboard &&
+        snapshot.step_command_rearm_required;
     frame_.command.task = mode_ == InteractiveMode::keyboard &&
-            keyboard.step_task ?
+            keyboard.step_task && !reset_step_task_latch ?
         BC_OPERATOR_TASK_STEP_DOCK : BC_OPERATOR_TASK_NORMAL;
+    frame_.reset_step_task_latch = reset_step_task_latch;
 
     if (snapshot.state_machine.motion == BC_MOTION_ACTIVE) {
         if (!virtual_gimbal_initialized_) {

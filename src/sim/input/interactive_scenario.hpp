@@ -16,6 +16,7 @@ struct InteractiveScenarioFrame {
     bc_operator_command_t command{};
     VirtualGimbalState gimbal{};
     const char *phase{"off"};
+    bool reset_step_task_latch{};
 };
 
 class InteractiveScenario {

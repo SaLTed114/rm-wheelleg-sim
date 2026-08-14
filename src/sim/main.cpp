@@ -25,7 +25,8 @@ void print_usage() {
            "[--yaw-acceleration-feedforward <scale>]\n"
         << "keyboard mode: W/S forward/reverse, A/D left/right, "
            "Shift boosts forward speed to 2.7 m/s, "
-           "T toggles step docking, Space pause, R reset, Esc quit\n"
+           "T starts/cancels step docking (auto-clears on completion), "
+           "Space pause, R reset, Esc quit\n"
         << "available performance cases:\n";
     for (const auto &spec :
          balance::benchmark::formal_performance_cases()) {
@@ -76,8 +77,6 @@ void print_usage() {
                   << balance::benchmark::step_dock_case_name(spec)
                   << '\n';
     }
-    std::cerr << "  " << balance::benchmark::step_dock_case_name(
-        balance::benchmark::step_dock_transfer_preview_case()) << '\n';
 }
 
 bool parse_arguments(

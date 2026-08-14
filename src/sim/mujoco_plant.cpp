@@ -62,6 +62,24 @@ void MujocoPlant::set_equality_active(
     data_->eq_active[equality] = active ? 1 : 0;
 }
 
+void MujocoPlant::set_contact_pair_sliding_friction(
+    const char *name,
+    const double coefficient
+) {
+    if (!std::isfinite(coefficient) || coefficient < 0.0) {
+        throw std::invalid_argument(
+            "contact pair sliding friction must be finite and non-negative");
+    }
+    const int pair = mj_name2id(model_.get(), mjOBJ_PAIR, name);
+    if (pair < 0) {
+        throw std::runtime_error(
+            "MuJoCo model is missing contact pair '" +
+            std::string(name) + "'");
+    }
+    model_->pair_friction[5 * pair] = coefficient;
+    model_->pair_friction[5 * pair + 1] = coefficient;
+}
+
 void MujocoPlant::place_mocap_surface(
     const char *name, const double x, const double y, const double z,
     const bool visible
@@ -100,6 +118,13 @@ void MujocoPlant::place_mocap_surface(
 void MujocoPlant::configure_keyboard_course() {
     constexpr double kGroundHeight = -0.43;
     constexpr double kRampStartX = 2.0;
+    constexpr double kCourseStartX = 2.0;
+    constexpr double kFirstPlatformLength = 0.8;
+    constexpr double kSecondPlatformLength = 2.0;
+    constexpr double kFirstPlatformHeight = 0.2;
+    constexpr double kSecondPlatformHeight = 0.3;
+    constexpr double kCurbLength = 0.10;
+    constexpr double kCurbHeight = 0.05;
     constexpr double kPi = 3.14159265358979323846;
 
     const auto place_wedge = [this](
@@ -115,6 +140,21 @@ void MujocoPlant::configure_keyboard_course() {
             kGroundHeight + 0.5 * height, true);
         return kRampStartX + run;
     };
+
+    const double second_platform_start =
+        kCourseStartX + kFirstPlatformLength;
+    place_mocap_surface(
+        "keyboard_course_platform_200mm",
+        kCourseStartX + 0.5 * kFirstPlatformLength, 0.0,
+        kGroundHeight + 0.5 * kFirstPlatformHeight, true);
+    place_mocap_surface(
+        "keyboard_course_platform_300mm",
+        second_platform_start + 0.5 * kSecondPlatformLength, 0.0,
+        kGroundHeight + 0.5 * kSecondPlatformHeight, true);
+    place_mocap_surface(
+        "keyboard_course_curb_50mm",
+        second_platform_start + 0.5 * kCurbLength, 0.0,
+        kGroundHeight + kSecondPlatformHeight + 0.5 * kCurbHeight, true);
 
     const double platform_start = place_wedge(
         "keyboard_ramp_15deg", -1.5, 0.2, 15.0);
