@@ -1,18 +1,19 @@
 # rm-balance-sim 项目上下文
 
-> 用于新开发会话快速恢复当前事实、设计边界、已验证能力和未决事项。过程性实验留在实验日志，不在此重复。最近整理：2026-08-15。
+> 用于新开发会话快速恢复当前事实、设计边界、已验证能力和未决事项。过程性实验留在实验日志，不在此重复。最近整理：2026-08-18。
 
 ## 当前状态
 
 - 项目包含 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。
+- `c-core-v1` 标记完整 C 核心验证基线；独立 C++20 核心已完成第一阶段纵切片，只覆盖系统启停、初次起立和固定位置/heading 的长期 LQR 平衡。现有完整仿真和交互 GUI 仍使用 C 核心，C++ 核心目前只有 headless MuJoCo 起立入口，实车适配不属于本仓库。
 - NORMAL 平地纵向、heading、稳态转弯和开环八字已有稳定基线；ACTIVE 已接管离地、空中伸腿、落地回收和恢复。
-- 操作手触发的 `STEP_DOCK` 已完整迁入控制核心，生产案例不再使用 C++ control transform。当前主线是继续验证台阶任务的实车适用性，而不是重新扫描平地 LQR 或搬腿轨迹。
+- 操作手触发的 `STEP_DOCK` 已完整迁入 C 控制核心，生产案例不再使用 C++ control transform；它当前等待实车适用性验证，不再是本轮软件修改主线。本轮软件工作转为审查和收敛 C++20 第一阶段核心，而不是扩展运动能力或重新扫描平地 LQR。
 - 跳跃任务暂停。现有 `jump_impulse` 只用于隔离轴向力、冲量和 support 接管；气弹簧模型完成前，当前无气弹簧 plant 的跳跃参数不能升级为实车结论。
 
 ## 不可破坏的边界
 
-- 控制核心使用纯 C 和 SI 单位，不依赖 MuJoCo、GLFW、CAN、HAL 或线程实现；仿真与未来嵌入式工程通过 adapter 接入同一核心。
-- 产品后续计划使用 C++，但当前功能开发不夹带 C 到 C++ 迁移。模块所有权和纯 C 边界仍需保持清楚。
+- 已验证完整控制核心继续使用纯 C 和 SI 单位，不依赖 MuJoCo、GLFW、CAN、HAL 或线程实现；仿真通过 adapter 接入该核心。
+- 平行 C++20 核心同样保持平台无关，不调用旧 C 算法，只以 `c-core-v1` 为行为参考。当前只迁移已明确的起立和平衡纵切片，不把旧 C 核心的完整运动功能顺手带入。
 - MuJoCo 接触真值只用于 benchmark 断言，不能参与生产状态切换、参考更新或命令改写。
 - task 和 support 只输出结构化请求；`motion` 是 ACTIVE 内唯一的参考管理者和 `bc_control_command_t` 组装者。不要依靠调用顺序让多个模块覆盖整份命令。
 - 不根据闭环表现猜填未知 plant 参数。几何、质量、惯量或 joint/site frame 改动后，必须重验闭链、符号、运动学/Jacobian、标定、LQR 调度和性能基线。
@@ -30,7 +31,7 @@
 
 ## 运行时架构
 
-正式数据流：
+完整 C 核心正式数据流：
 
 ```text
 MujocoAdapter::read
@@ -46,6 +47,21 @@ MujocoAdapter::read
 - `bc_controller_t` 是 facade；`update` 更新运动学和 observer，`calculate` 推进状态机、参考和控制律，`execute` 只做 system 硬门控、限幅和最终输出。
 - `bc_controller_snapshot_t` 是调用者持有的诊断快照，供 GUI、benchmark、测试和未来遥测使用，不是控制器内部状态副本或通信协议。
 - C core 的执行器接口为左右腿前/后关节力矩和左右轮力矩。轮/关节软件限幅为 `6.32/40 N*m`。
+
+平行 C++20 第一阶段数据流：
+
+```text
+SensorFrame -> Observer -> Estimate
+            -> SystemStateMachine -> MotionStateMachine -> ControlCommand
+            -> ControlCore (PD + generated LQR) -> ControlOutput
+            -> OutputGate -> Actuation
+```
+
+- C++ system 只有 `OFF/ON`，motion 只有 `IDLE/SELF_RIGHTING/LEG_POSITIONING/BALANCE_ENGAGING/ACTIVE`；没有 `FAULT`。每拍严格先做 transition 再做 action，restart 在 system ON 的任意 motion 状态都重新进入起立流程。
+- C++ `ACTIVE` 捕获并固定位置与 heading，只做原地 LQR 平衡；不接受前进、云台跟随、support/landing、STEP_DOCK、jump 或 SPIN 命令。
+- `ControlCommand` 是状态机到控制律的结构化命令，`MotionStatus/StateMachineStatus` 只用于诊断；不存在平行的 control mode、intent 或从状态反推控制策略。
+- `OutputGate` 是最终执行边界：system 未使能时六路归零，任一路请求为 `NaN/Inf` 时整帧六路归零，其余情况按轮/关节 `6.32/40 N*m` 分通道限幅。fault 记录与恢复策略尚未实现。
+- 模块配置定义在所属模块旁，顶层 `ControllerConfig` 只做 `observer/motion/control/output` 组合；各类只接收实际使用的子配置，没有参数的模块不创建空配置。
 
 状态机分层：
 
@@ -103,24 +119,27 @@ Release `step_dock_complete` 的当前基线：碰撞速度约 `1.99 m/s`，HOLD
 
 ## 未决事项与下一步
 
-1. STEP 碰撞阈值、低摩擦导轮近似和固定 `200 mm` 搬腿轨迹仍只经过理想仿真。下一步应优先补实车噪声、低速顶墙、颠簸、结构柔性和不同接近速度；不要先继续压缩 RECOVER 时间或扫增益。
-2. `base_link` 对其他平面的低摩擦推广仍延期。推广前要明确导轮方向性和碰撞几何，不能把台面专用 contact pair 直接复制到所有接触。
-3. 气弹簧安装几何与等效腿轴向力曲线缺失。约 `350 N` 的端点信息不能直接作为虚拟轴向力；完成模型和基础支撑/落地复测前，暂停 jump task 与跳跃调参。
-4. support 进入 AIRBORNE 现在等待双腿完整 AIR 诊断，真实跌落预判比已删除 fast-air 慢约 `28 ms`；低落差可能增加结构接触。未来若恢复预响应，必须以方向性垂向证据重新设计，不能复活旧的短时卸载阈值。
-5. 当前周期顺序使 observation context 使用周期开始时的 support 状态；新进入 AIRBORNE 后的 reject 不能撤销当拍已经发生的 KF 校正。若要消除这一拍，应重排为“运动学/支持力 -> support -> context -> KF -> 其余状态机”，不要用阈值掩盖。
-6. ACTIVE 接管首采样曾有约 `9.7 deg` pitch 瞬态；高横向加速度内侧轮卸载仍需接触观测与实车等效输入。二者都应独立处理，不要回头盲调已通过的通用 Q/R。
-7. plant 只有力矩限幅，没有电机速度、功率、热和电池模型。任何新的性能上限结论都必须先说明是否受这些缺失约束影响。
-8. SPIN 尚未实现；它应是协调纵向、yaw 和许可的 task，不能由普通 heading 命令幅度隐式触发。
+1. C++20 第一阶段虽然通过模块、C/C++ 起立对照和 MuJoCo 原地平衡测试，但 API 命名、代码组织和码风仍待继续审查；在边界稳定前不扩展前进、support 或 task。
+2. C++ 核心尚无可视化入口。现有 `MujocoViewer` 与 `SimulationUi` 虽分为不同类型，viewer 仍直接读取 ImGui capture 状态并接收 sidebar 宽度，UI 又直接绑定 C snapshot；应先解除这些反向依赖，再组合 `CppStartupRunner + MujocoViewer`，而不是为 C++ 核心复制一套渲染器或强制先适配 UI。
+3. STEP 碰撞阈值、低摩擦导轮近似和固定 `200 mm` 搬腿轨迹仍只经过理想仿真。下一步应优先补实车噪声、低速顶墙、颠簸、结构柔性和不同接近速度；不要先继续压缩 RECOVER 时间或扫增益。
+4. `base_link` 对其他平面的低摩擦推广仍延期。推广前要明确导轮方向性和碰撞几何，不能把台面专用 contact pair 直接复制到所有接触。
+5. 气弹簧安装几何与等效腿轴向力曲线缺失。约 `350 N` 的端点信息不能直接作为虚拟轴向力；完成模型和基础支撑/落地复测前，暂停 jump task 与跳跃调参。
+6. support 进入 AIRBORNE 现在等待双腿完整 AIR 诊断，真实跌落预判比已删除 fast-air 慢约 `28 ms`；低落差可能增加结构接触。未来若恢复预响应，必须以方向性垂向证据重新设计，不能复活旧的短时卸载阈值。
+7. 当前周期顺序使 observation context 使用周期开始时的 support 状态；新进入 AIRBORNE 后的 reject 不能撤销当拍已经发生的 KF 校正。若要消除这一拍，应重排为“运动学/支持力 -> support -> context -> KF -> 其余状态机”，不要用阈值掩盖。
+8. ACTIVE 接管首采样曾有约 `9.7 deg` pitch 瞬态；高横向加速度内侧轮卸载仍需接触观测与实车等效输入。二者都应独立处理，不要回头盲调已通过的通用 Q/R。
+9. plant 只有力矩限幅，没有电机速度、功率、热和电池模型。任何新的性能上限结论都必须先说明是否受这些缺失约束影响。
+10. SPIN 尚未实现；它应是协调纵向、yaw 和许可的 task，不能由普通 heading 命令幅度隐式触发。
 
 ## 恢复与验证顺序
 
 1. 本文件：当前事实、边界和下一步。
-2. `docs/notes/active-motion-design.md`：ACTIVE 所有权与 STEP 生产语义。
-3. `docs/notes/controller-experiment-log.md`：当前实验基线和后续新增结果；完整过程按时间归档在 `docs/archive/experiments/`。
-4. `docs/archive/validation/lqr-validation.md`：当前生成模型、Q/R 和调度验证归档。
-5. `docs/archive/experiments/platform-drop-exploration.md` 与 `docs/archive/fast-air/`：已退出主线的探索归档。
-6. `docs/notes/hardware-bringup.md`：实车逐级部署。
-7. `models/MJCF/COD-2026RoboMaster-Balance.xml` 与 `references/`：当前 plant 和理论/实车来源。
+2. `docs/notes/cpp-control-core.md`：C++20 新核心的边界、起立纵切片和验证策略。
+3. `docs/notes/active-motion-design.md`：完整 C 核心的 ACTIVE 所有权与 STEP 生产语义。
+4. `docs/notes/controller-experiment-log.md`：当前实验基线和后续新增结果；完整过程按时间归档在 `docs/archive/experiments/`。
+5. `docs/archive/validation/lqr-validation.md`：当前生成模型、Q/R 和调度验证归档。
+6. `docs/archive/experiments/platform-drop-exploration.md` 与 `docs/archive/fast-air/`：已退出主线的探索归档。
+7. `docs/notes/hardware-bringup.md`：实车逐级部署。
+8. `models/MJCF/COD-2026RoboMaster-Balance.xml` 与 `references/`：当前 plant 和理论/实车来源。
 
 常用 Release 验证：
 

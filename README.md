@@ -2,9 +2,9 @@
 
 ## Overview
 
-`rm-balance-sim` is a MuJoCo simulation and control-development project for a wheel-legged balancing robot. It consists of a platform-independent C11 control core and a C++17 simulation layer, with virtual-leg kinematics, gain-scheduled LQR control, an interactive Dear ImGui viewer, automated tests, and headless performance tools.
+`rm-balance-sim` is a MuJoCo simulation and control-development project for a wheel-legged balancing robot. It contains the validated platform-independent C11 control core, a parallel C++20 startup-control implementation, and a C++ simulation layer, with virtual-leg kinematics, gain-scheduled LQR control, an interactive Dear ImGui viewer, automated tests, and headless performance tools.
 
-The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). Current experiments are recorded in [`docs/notes/controller-experiment-log.md`](docs/notes/controller-experiment-log.md); closed experiment cycles and generated LQR validation are under [`docs/archive/`](docs/archive/).
+The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). The scope and architecture of the parallel C++20 control core are recorded in [`docs/notes/cpp-control-core.md`](docs/notes/cpp-control-core.md). Current experiments are recorded in [`docs/notes/controller-experiment-log.md`](docs/notes/controller-experiment-log.md); closed experiment cycles and generated LQR validation are under [`docs/archive/`](docs/archive/).
 
 The robot assets under `models/` are derived from the open-source model released by the Liaoning University of Science and Technology COD RoboMaster team. See [`models/README.md`](models/README.md) for attribution and licensing information.
 
@@ -101,6 +101,25 @@ Linux:
 ```bash
 ctest --test-dir build --output-on-failure
 ```
+
+### C++20 startup control
+
+The parallel C++20 control core currently covers system enable/restart, the
+startup sequence, and fixed-position/fixed-heading LQR balance only. It does
+not implement drive commands, gimbal following, support/landing, STEP_DOCK,
+jump, or spin behavior.
+
+Its MuJoCo integration is currently headless. The existing interactive
+`rm_balance_sim` executable still runs the validated C core; there is no C++
+controller viewer mode yet. Run the focused C++ checks with:
+
+```bash
+ctest --test-dir build --output-on-failure \
+  -R "cpp_controller_startup|cpp_control_modules|mujoco_cpp_startup"
+```
+
+The three checks cover C/C++ startup transition parity, isolated C++ modules
+and output safety, and an independent MuJoCo standing run respectively.
 
 ### Leg-adapter calibration
 

@@ -79,6 +79,24 @@ if(NOT MSVC)
 endif()
 balance_enable_warnings(balance_control_core)
 
+add_library(balance_control_cpp STATIC
+  src/control_cpp/control_core.cpp
+  src/control_cpp/control_law/lqr.cpp
+  src/control_cpp/control_law/pd.cpp
+  src/control_cpp/controller.cpp
+  src/control_cpp/observer.cpp
+  src/control_cpp/output_gate.cpp
+  src/control_cpp/snapshot_assembler.cpp
+  src/control_cpp/state_machine/condition_hold.cpp
+  src/control_cpp/state_machine/motion.cpp
+  src/control_cpp/state_machine/system.cpp
+  src/control_cpp/velocity_estimator.cpp)
+target_compile_features(balance_control_cpp PUBLIC cxx_std_20)
+target_include_directories(balance_control_cpp
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  PRIVATE "${BALANCE_LQR_SCHEDULE_DIR}")
+balance_enable_warnings(balance_control_cpp)
+
 add_library(balance_simulation STATIC
   src/sim/input/interactive_scenario.cpp
   src/sim/input/virtual_gimbal.cpp
@@ -92,6 +110,16 @@ target_include_directories(balance_simulation
 target_link_libraries(balance_simulation
   PUBLIC balance_control_core mujoco::mujoco)
 balance_enable_warnings(balance_simulation)
+
+add_library(balance_cpp_simulation STATIC
+  src/sim/cpp_startup_runner.cpp)
+target_include_directories(balance_cpp_simulation
+  PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/sim")
+target_link_libraries(balance_cpp_simulation
+  PUBLIC balance_control_cpp balance_simulation)
+balance_enable_warnings(balance_cpp_simulation)
 
 add_library(balance_benchmark_support STATIC
   src/benchmark/common/common_diagnostics.cpp
@@ -204,6 +232,27 @@ if(BUILD_TESTING)
   target_link_libraries(control_core_test PRIVATE balance_control_core)
   balance_enable_warnings(control_core_test)
   add_test(NAME control_core_zero_output COMMAND control_core_test)
+
+  add_executable(cpp_controller_test tests/cpp_controller_test.cpp)
+  target_link_libraries(cpp_controller_test
+    PRIVATE balance_control_cpp balance_control_core)
+  balance_enable_warnings(cpp_controller_test)
+  add_test(NAME cpp_controller_startup COMMAND cpp_controller_test)
+
+  add_executable(cpp_module_test tests/cpp_module_test.cpp)
+  target_link_libraries(cpp_module_test PRIVATE balance_control_cpp)
+  balance_enable_warnings(cpp_module_test)
+  add_test(NAME cpp_control_modules COMMAND cpp_module_test)
+
+  add_executable(mujoco_cpp_startup_test
+    tests/mujoco_cpp_startup_test.cpp)
+  target_link_libraries(mujoco_cpp_startup_test
+    PRIVATE balance_cpp_simulation)
+  balance_enable_warnings(mujoco_cpp_startup_test)
+  balance_configure_mujoco_runtime(mujoco_cpp_startup_test)
+  add_test(NAME mujoco_cpp_startup
+    COMMAND mujoco_cpp_startup_test
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
 
   add_executable(state_machine_test tests/state_machine_test.c)
   target_link_libraries(state_machine_test PRIVATE balance_control_core)
