@@ -1,4 +1,4 @@
-#include "simulation_ui.hpp"
+#include "gui/simulation_ui.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -131,6 +131,11 @@ void SimulationUi::render() {
 bool SimulationUi::wants_keyboard() const noexcept {
     return ImGui::GetCurrentContext() != nullptr &&
         ImGui::GetIO().WantCaptureKeyboard;
+}
+
+bool SimulationUi::wants_mouse() const noexcept {
+    return ImGui::GetCurrentContext() != nullptr &&
+        ImGui::GetIO().WantCaptureMouse;
 }
 
 void SimulationUi::draw_overview(

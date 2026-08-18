@@ -4,10 +4,9 @@
 namespace balance::sim {
 
 struct KeyboardDriveInput {
-    float forward_axis;
-    float yaw_axis;
-    bool boost;
-    bool step_task;
+    float forward_axis{};
+    float yaw_axis{};
+    bool boost{};
 };
 
 } // namespace balance::sim

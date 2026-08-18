@@ -13,8 +13,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(MuJoCo REQUIRED)
 
-option(BALANCE_BUILD_GUI "Build the interactive MuJoCo viewer" ON)
-if(BALANCE_BUILD_GUI)
+option(BALANCE_BUILD_GUI "Build the Dear ImGui diagnostic simulator" ON)
+option(BALANCE_BUILD_CPP_VIEWER
+  "Build the UI-free C++ startup viewer" ${BALANCE_BUILD_GUI})
+if(BALANCE_BUILD_GUI OR BALANCE_BUILD_CPP_VIEWER)
   find_package(glfw3 3.3 CONFIG QUIET)
   if(NOT TARGET glfw)
     include(FetchContent)
@@ -97,29 +99,56 @@ target_include_directories(balance_control_cpp
   PRIVATE "${BALANCE_LQR_SCHEDULE_DIR}")
 balance_enable_warnings(balance_control_cpp)
 
+add_library(balance_mujoco STATIC
+  src/sim/mujoco_adapter.cpp
+  src/sim/mujoco_plant.cpp)
+target_include_directories(balance_mujoco
+  PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/sim")
+target_link_libraries(balance_mujoco PUBLIC mujoco::mujoco)
+balance_enable_warnings(balance_mujoco)
+
 add_library(balance_simulation STATIC
   src/sim/input/interactive_scenario.cpp
   src/sim/input/virtual_gimbal.cpp
-  src/sim/mujoco_adapter.cpp
-  src/sim/mujoco_plant.cpp
   src/sim/simulation_runner.cpp)
 target_include_directories(balance_simulation
   PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/sim")
 target_link_libraries(balance_simulation
-  PUBLIC balance_control_core mujoco::mujoco)
+  PUBLIC balance_control_core balance_mujoco)
 balance_enable_warnings(balance_simulation)
 
 add_library(balance_cpp_simulation STATIC
-  src/sim/cpp_startup_runner.cpp)
+  src/sim/cpp/simulation_runner.cpp)
 target_include_directories(balance_cpp_simulation
   PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/sim")
 target_link_libraries(balance_cpp_simulation
-  PUBLIC balance_control_cpp balance_simulation)
+  PUBLIC balance_control_cpp balance_mujoco)
 balance_enable_warnings(balance_cpp_simulation)
+
+if(BALANCE_BUILD_GUI OR BALANCE_BUILD_CPP_VIEWER)
+  add_library(balance_mujoco_viewer STATIC
+    src/sim/mujoco_viewer.cpp)
+  target_include_directories(balance_mujoco_viewer
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/sim")
+  target_link_libraries(balance_mujoco_viewer
+    PUBLIC mujoco::mujoco glfw)
+  balance_enable_warnings(balance_mujoco_viewer)
+endif()
+
+if(BALANCE_BUILD_CPP_VIEWER)
+  add_executable(rm_balance_cpp_viewer
+    src/sim/cpp/viewer_main.cpp)
+  target_link_libraries(rm_balance_cpp_viewer
+    PRIVATE balance_cpp_simulation balance_mujoco_viewer)
+  balance_enable_warnings(rm_balance_cpp_viewer)
+  balance_configure_mujoco_runtime(rm_balance_cpp_viewer)
+endif()
 
 add_library(balance_benchmark_support STATIC
   src/benchmark/common/common_diagnostics.cpp
@@ -212,16 +241,16 @@ if(BALANCE_BUILD_GUI)
 
   add_executable(rm_balance_sim
     ${BALANCE_IMGUI_SOURCES}
-    src/sim/interactive_trace.cpp
-    src/sim/main.cpp
-    src/sim/simulation_app.cpp
-    src/sim/simulation_ui.cpp
-    src/sim/mujoco_viewer.cpp)
+    src/sim/gui/interactive_trace.cpp
+    src/sim/gui/main.cpp
+    src/sim/gui/simulation_app.cpp
+    src/sim/gui/simulation_ui.cpp
+    src/sim/input/interactive_keyboard.cpp)
   target_include_directories(rm_balance_sim SYSTEM PRIVATE
     "${BALANCE_IMGUI_DIR}"
     "${BALANCE_IMGUI_DIR}/backends")
   target_link_libraries(rm_balance_sim
-    PRIVATE balance_benchmark_support glfw)
+    PRIVATE balance_benchmark_support balance_mujoco_viewer glfw)
   balance_enable_warnings(rm_balance_sim)
   balance_configure_mujoco_runtime(rm_balance_sim)
 endif()

@@ -7,7 +7,7 @@
 #include <string>
 
 #include "balance_cpp/math.hpp"
-#include "cpp_startup_runner.hpp"
+#include "cpp/simulation_runner.hpp"
 
 namespace {
 
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
         balance::sim::MujocoPlant plant(
             std::filesystem::path(argv[1]), 0.001);
         balance::sim::MujocoAdapter adapter(plant.model());
-        balance::sim::CppStartupRunner runner(plant, adapter);
+        balance::sim::cpp::SimulationRunner runner(plant, adapter);
         const int ground = require_id(plant.model(), mjOBJ_GEOM, "ground");
         const std::array<int, 2> wheel{{
             require_id(

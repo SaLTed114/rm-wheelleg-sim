@@ -1,5 +1,5 @@
-#ifndef BALANCE_SIM_SIMULATION_APP_HPP
-#define BALANCE_SIM_SIMULATION_APP_HPP
+#ifndef BALANCE_SIM_GUI_SIMULATION_APP_HPP
+#define BALANCE_SIM_GUI_SIMULATION_APP_HPP
 
 #include <filesystem>
 #include <optional>

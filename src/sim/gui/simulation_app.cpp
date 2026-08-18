@@ -1,4 +1,4 @@
-#include "simulation_app.hpp"
+#include "gui/simulation_app.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -15,13 +15,14 @@
 #include "drop/ramp_course.hpp"
 #include "drop/ramp_jump.hpp"
 #include "input/interactive_scenario.hpp"
-#include "interactive_trace.hpp"
+#include "input/interactive_keyboard.hpp"
+#include "gui/interactive_trace.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "mujoco_viewer.hpp"
 #include "performance/performance_scenario.hpp"
 #include "simulation_runner.hpp"
-#include "simulation_ui.hpp"
+#include "gui/simulation_ui.hpp"
 #include "step/step_dock.hpp"
 
 namespace balance::sim {
@@ -39,6 +40,7 @@ public:
           runner_(plant_, adapter_, controller_config(options)),
           viewer_(plant_.model()),
           ui_(viewer_.native_window()),
+          keyboard_(viewer_.native_window()),
           sampler_(plant_.model()),
           interactive_(options.keyboard_drive ?
               InteractiveMode::keyboard : InteractiveMode::demo) {
@@ -89,6 +91,7 @@ public:
         double accumulated_time = 0.0;
 
         while (!viewer_.should_close()) {
+            viewer_.set_camera_input_enabled(!ui_.wants_mouse());
             viewer_.poll_events();
             const auto current_time = Clock::now();
             const std::chrono::duration<double> frame_time =
@@ -96,11 +99,12 @@ public:
             previous_time = current_time;
 
             const SimulationUiActions ui_actions = ui_.draw(ui_frame());
+            keyboard_frame_ = keyboard_.sample(ui_.wants_keyboard());
             if (ui_actions.toggle_pause ||
-                viewer_.consume_pause_toggle()) {
+                keyboard_frame_.pause_pressed) {
                 paused_ = !paused_;
             }
-            if (ui_actions.reset || viewer_.consume_reset_request()) {
+            if (ui_actions.reset || keyboard_frame_.reset_pressed) {
                 reset();
                 accumulated_time = 0.0;
             }
@@ -130,7 +134,9 @@ public:
             viewer_.set_virtual_gimbal_heading(
                 displayed_gimbal_.world_yaw,
                 runner_.snapshot().state_machine.motion == BC_MOTION_ACTIVE);
-            viewer_.render_scene(plant_.data(), ui_.sidebar_width());
+            ViewportInsets scene_insets{};
+            scene_insets.right = ui_.sidebar_width();
+            viewer_.render_scene(plant_.data(), scene_insets);
             ui_.render();
             viewer_.present();
         }
@@ -177,7 +183,7 @@ private:
         if (trace_) trace_->flush();
         ++reset_index_;
         runner_.reset();
-        viewer_.reset_drive_input();
+        keyboard_frame_ = {};
         if (options_.keyboard_drive) plant_.configure_keyboard_course();
         if (performance_) performance_->reset(plant_.data().time);
         if (drop_) drop_->reset();
@@ -196,11 +202,12 @@ private:
     }
 
     bool step_interactive() {
-        const KeyboardDriveInput keyboard = ui_.wants_keyboard() ?
-            KeyboardDriveInput{} : viewer_.keyboard_drive_input();
+        const bool step_pressed = keyboard_frame_.step_pressed;
+        keyboard_frame_.step_pressed = false;
         const auto &frame = interactive_.update(
             runner_.snapshot(),
-            keyboard,
+            keyboard_frame_.drive,
+            step_pressed,
             plant_.data().time,
             static_cast<float>(plant_.timestep()));
         phase_ = frame.phase;
@@ -209,14 +216,11 @@ private:
             frame.command,
             frame.gimbal.world_yaw,
             frame.gimbal.world_yaw_rate);
-        if (frame.reset_step_task_latch) {
-            viewer_.reset_drive_input();
-        }
         if (trace_) {
             const auto sample = sampler_.read(
                 plant_.data(), runner_.snapshot());
             trace_->write(
-                reset_index_, phase_, keyboard, frame, sample,
+                reset_index_, phase_, keyboard_frame_.drive, frame, sample,
                 sampler_.read_imu_motion(plant_.data()), runner_.feedback());
         }
         return true;
@@ -409,6 +413,8 @@ private:
     SimulationRunner runner_;
     MujocoViewer viewer_;
     SimulationUi ui_;
+    InteractiveKeyboard keyboard_;
+    InteractiveKeyboardFrame keyboard_frame_{};
     benchmark::SimulationSampler sampler_;
     InteractiveScenario interactive_;
     std::optional<benchmark::DropScenario> drop_;

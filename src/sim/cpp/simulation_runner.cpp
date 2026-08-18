@@ -1,27 +1,27 @@
-#include "cpp_startup_runner.hpp"
+#include "cpp/simulation_runner.hpp"
 
-namespace balance::sim {
+namespace balance::sim::cpp {
 
-CppStartupRunner::CppStartupRunner(
+SimulationRunner::SimulationRunner(
     MujocoPlant &plant,
     const MujocoAdapter &adapter
 )
-    : CppStartupRunner(plant, adapter, control::ControllerConfig{}) {}
+    : SimulationRunner(plant, adapter, control::ControllerConfig{}) {}
 
-CppStartupRunner::CppStartupRunner(
+SimulationRunner::SimulationRunner(
     MujocoPlant &plant,
     const MujocoAdapter &adapter,
     const control::ControllerConfig &config
 )
     : plant_(plant), adapter_(adapter), controller_(config) {}
 
-void CppStartupRunner::reset() {
+void SimulationRunner::reset() {
     plant_.reset();
     controller_.reset();
     output_ = {};
 }
 
-void CppStartupRunner::step(const control::OperatorCommand &command) {
+void SimulationRunner::step(const control::OperatorCommand &command) {
     bc_sensor_feedback_t feedback{};
     adapter_.read(plant_.data(), feedback);
     output_ = controller_.tick(
@@ -32,7 +32,7 @@ void CppStartupRunner::step(const control::OperatorCommand &command) {
     plant_.step();
 }
 
-control::SensorFrame CppStartupRunner::convert_sensor(
+control::SensorFrame SimulationRunner::convert_sensor(
     const bc_sensor_feedback_t &feedback
 ) {
     control::SensorFrame result{};
@@ -61,7 +61,7 @@ control::SensorFrame CppStartupRunner::convert_sensor(
     return result;
 }
 
-bc_actuation_t CppStartupRunner::convert_actuation(
+bc_actuation_t SimulationRunner::convert_actuation(
     const control::Actuation &actuation
 ) {
     bc_actuation_t result{};
@@ -75,4 +75,4 @@ bc_actuation_t CppStartupRunner::convert_actuation(
     return result;
 }
 
-} // namespace balance::sim
+} // namespace balance::sim::cpp

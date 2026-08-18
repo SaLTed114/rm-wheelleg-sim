@@ -5,18 +5,17 @@
 #include <stdexcept>
 
 #include <GLFW/glfw3.h>
-#include <imgui.h>
 
 namespace balance::sim {
 
-MujocoViewer::MujocoViewer(const mjModel &model)
+MujocoViewer::MujocoViewer(const mjModel &model, const char *title)
     : model_(model) {
     if (!glfwInit()) {
         throw std::runtime_error("failed to initialize GLFW");
     }
 
     window_ = glfwCreateWindow(
-        1600, 900, "rm-balance-sim", nullptr, nullptr);
+        1600, 900, title, nullptr, nullptr);
     if (!window_) {
         glfwTerminate();
         throw std::runtime_error("failed to create GLFW window");
@@ -61,45 +60,12 @@ bool MujocoViewer::should_close() const {
     return glfwWindowShouldClose(window_) != 0;
 }
 
-KeyboardDriveInput MujocoViewer::keyboard_drive_input() const {
-    const bool forward =
-        glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS ||
-        glfwGetKey(window_, GLFW_KEY_UP) == GLFW_PRESS;
-    const bool reverse =
-        glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS ||
-        glfwGetKey(window_, GLFW_KEY_DOWN) == GLFW_PRESS;
-    const bool left =
-        glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS ||
-        glfwGetKey(window_, GLFW_KEY_LEFT) == GLFW_PRESS;
-    const bool right =
-        glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS ||
-        glfwGetKey(window_, GLFW_KEY_RIGHT) == GLFW_PRESS;
-    const bool boost =
-        glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-        glfwGetKey(window_, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
-
-    return {
-        static_cast<float>(forward) - static_cast<float>(reverse),
-        static_cast<float>(left) - static_cast<float>(right),
-        boost,
-        step_task_enabled_,
-    };
-}
-
-void MujocoViewer::reset_drive_input() noexcept {
-    step_task_enabled_ = false;
-}
-
-bool MujocoViewer::consume_pause_toggle() {
-    const bool requested = pause_toggle_requested_;
-    pause_toggle_requested_ = false;
-    return requested;
-}
-
-bool MujocoViewer::consume_reset_request() {
-    const bool requested = reset_requested_;
-    reset_requested_ = false;
-    return requested;
+void MujocoViewer::set_camera_input_enabled(const bool enabled) noexcept {
+    camera_input_enabled_ = enabled;
+    if (enabled) return;
+    left_button_ = false;
+    middle_button_ = false;
+    right_button_ = false;
 }
 
 void MujocoViewer::set_virtual_gimbal_heading(
@@ -110,21 +76,31 @@ void MujocoViewer::set_virtual_gimbal_heading(
 }
 
 void MujocoViewer::render_scene(
-    mjData &data, const float sidebar_width) {
+    mjData &data, const ViewportInsets &insets) {
     mjrRect viewport{};
     glfwGetFramebufferSize(window_, &viewport.width, &viewport.height);
     int window_width = 0;
     int window_height = 0;
     glfwGetWindowSize(window_, &window_width, &window_height);
-    (void)window_height;
-    if (window_width > 0) {
-        const float framebuffer_scale =
-            static_cast<float>(viewport.width) /
-            static_cast<float>(window_width);
-        const int reserved_width = static_cast<int>(
-            std::lround(sidebar_width * framebuffer_scale));
-        viewport.width = std::max(0, viewport.width - reserved_width);
-    }
+    if (window_width <= 0 || window_height <= 0) return;
+
+    const float scale_x = static_cast<float>(viewport.width) /
+        static_cast<float>(window_width);
+    const float scale_y = static_cast<float>(viewport.height) /
+        static_cast<float>(window_height);
+    const int left = static_cast<int>(std::lround(
+        std::max(0.0F, insets.left) * scale_x));
+    const int right = static_cast<int>(std::lround(
+        std::max(0.0F, insets.right) * scale_x));
+    const int top = static_cast<int>(std::lround(
+        std::max(0.0F, insets.top) * scale_y));
+    const int bottom = static_cast<int>(std::lround(
+        std::max(0.0F, insets.bottom) * scale_y));
+    viewport.left = std::clamp(left, 0, viewport.width);
+    viewport.bottom = std::clamp(bottom, 0, viewport.height);
+    viewport.width = std::max(0, viewport.width - viewport.left - right);
+    viewport.height = std::max(
+        0, viewport.height - viewport.bottom - top);
     if (viewport.width <= 0 || viewport.height <= 0) return;
     mjv_updateScene(
         &model_, &data, &option_, nullptr,
@@ -207,24 +183,11 @@ void MujocoViewer::handle_key(int key, int action) {
         glfwSetWindowShouldClose(window_, GLFW_TRUE);
         return;
     }
-    if (ImGui::GetCurrentContext() != nullptr &&
-        ImGui::GetIO().WantCaptureKeyboard) {
-        return;
-    }
-    if (key == GLFW_KEY_SPACE) {
-        pause_toggle_requested_ = true;
-    } else if (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_R) {
-        reset_requested_ = true;
-        reset_drive_input();
-    } else if (key == GLFW_KEY_T) {
-        step_task_enabled_ = !step_task_enabled_;
-    }
 }
 
 void MujocoViewer::handle_mouse_button() {
     glfwGetCursorPos(window_, &cursor_x_, &cursor_y_);
-    if (ImGui::GetCurrentContext() != nullptr &&
-        ImGui::GetIO().WantCaptureMouse) {
+    if (!camera_input_enabled_) {
         left_button_ = false;
         middle_button_ = false;
         right_button_ = false;
@@ -239,8 +202,7 @@ void MujocoViewer::handle_mouse_button() {
 }
 
 void MujocoViewer::handle_cursor_position(double x, double y) {
-    if (ImGui::GetCurrentContext() != nullptr &&
-        ImGui::GetIO().WantCaptureMouse) {
+    if (!camera_input_enabled_) {
         cursor_x_ = x;
         cursor_y_ = y;
         return;
@@ -280,10 +242,7 @@ void MujocoViewer::handle_cursor_position(double x, double y) {
 }
 
 void MujocoViewer::handle_scroll(double y_offset) {
-    if (ImGui::GetCurrentContext() != nullptr &&
-        ImGui::GetIO().WantCaptureMouse) {
-        return;
-    }
+    if (!camera_input_enabled_) return;
     mjv_moveCamera(
         &model_, mjMOUSE_ZOOM, 0.0, -0.05 * y_offset,
         &scene_, &camera_);

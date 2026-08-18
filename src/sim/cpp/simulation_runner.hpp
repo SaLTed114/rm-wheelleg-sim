@@ -1,16 +1,16 @@
-#ifndef BALANCE_SIM_CPP_STARTUP_RUNNER_HPP
-#define BALANCE_SIM_CPP_STARTUP_RUNNER_HPP
+#ifndef BALANCE_SIM_CPP_SIMULATION_RUNNER_HPP
+#define BALANCE_SIM_CPP_SIMULATION_RUNNER_HPP
 
 #include "balance_cpp/controller.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 
-namespace balance::sim {
+namespace balance::sim::cpp {
 
-class CppStartupRunner {
+class SimulationRunner {
 public:
-    CppStartupRunner(MujocoPlant &plant, const MujocoAdapter &adapter);
-    CppStartupRunner(
+    SimulationRunner(MujocoPlant &plant, const MujocoAdapter &adapter);
+    SimulationRunner(
         MujocoPlant &plant,
         const MujocoAdapter &adapter,
         const control::ControllerConfig &config
@@ -40,6 +40,6 @@ private:
     control::ControllerOutput output_{};
 };
 
-} // namespace balance::sim
+} // namespace balance::sim::cpp
 
 #endif

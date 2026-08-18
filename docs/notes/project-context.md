@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 项目包含 MuJoCo 闭链 plant、纯 C 控制核心、分层状态机、状态估计、增益调度 LQR、GUI、benchmark 和 TOML 实验工具。
-- `c-core-v1` 标记完整 C 核心验证基线；独立 C++20 核心已完成第一阶段纵切片，只覆盖系统启停、初次起立和固定位置/heading 的长期 LQR 平衡。现有完整仿真和交互 GUI 仍使用 C 核心，C++ 核心目前只有 headless MuJoCo 起立入口，实车适配不属于本仓库。
+- `c-core-v1` 标记完整 C 核心验证基线；独立 C++20 核心已完成第一阶段纵切片，只覆盖系统启停、初次起立和固定位置/heading 的长期 LQR 平衡。现有完整诊断 GUI 仍使用 C 核心；C++ 核心同时提供 headless MuJoCo 门禁和不带 UI 的独立 viewer，实车适配不属于本仓库。
 - NORMAL 平地纵向、heading、稳态转弯和开环八字已有稳定基线；ACTIVE 已接管离地、空中伸腿、落地回收和恢复。
 - 操作手触发的 `STEP_DOCK` 已完整迁入 C 控制核心，生产案例不再使用 C++ control transform；它当前等待实车适用性验证，不再是本轮软件修改主线。本轮软件工作转为审查和收敛 C++20 第一阶段核心，而不是扩展运动能力或重新扫描平地 LQR。
 - 跳跃任务暂停。现有 `jump_impulse` 只用于隔离轴向力、冲量和 support 接管；气弹簧模型完成前，当前无气弹簧 plant 的跳跃参数不能升级为实车结论。
@@ -62,6 +62,7 @@ SensorFrame -> Observer -> Estimate
 - `ControlCommand` 是状态机到控制律的结构化命令，`MotionStatus/StateMachineStatus` 只用于诊断；不存在平行的 control mode、intent 或从状态反推控制策略。
 - `OutputGate` 是最终执行边界：system 未使能时六路归零，任一路请求为 `NaN/Inf` 时整帧六路归零，其余情况按轮/关节 `6.32/40 N*m` 分通道限幅。fault 记录与恢复策略尚未实现。
 - 模块配置定义在所属模块旁，顶层 `ControllerConfig` 只做 `observer/motion/control/output` 组合；各类只接收实际使用的子配置，没有参数的模块不创建空配置。
+- `balance_mujoco` 只提供 plant/adapter，C 和 C++ runner 分别依赖它；完整诊断 GUI 的入口、应用编排、UI 和 trace 集中在 `src/sim/gui/`，C++ 仿真入口集中在 `src/sim/cpp/`。其中 `cpp::SimulationRunner` 只负责一拍 sensor/controller/actuation/MuJoCo 适配，不编排起立。`balance_mujoco_viewer` 只读取 MuJoCo 数据并处理窗口、相机和 viewport，不依赖 ImGui、控制器 snapshot 或交互驾驶命令。`rm_balance_cpp_viewer` 用 `cpp::SimulationRunner + MujocoViewer` 组成无 UI 的 C++ 起立可视化入口，起立命令由 viewer app 生成。
 
 状态机分层：
 
@@ -120,7 +121,7 @@ Release `step_dock_complete` 的当前基线：碰撞速度约 `1.99 m/s`，HOLD
 ## 未决事项与下一步
 
 1. C++20 第一阶段虽然通过模块、C/C++ 起立对照和 MuJoCo 原地平衡测试，但 API 命名、代码组织和码风仍待继续审查；在边界稳定前不扩展前进、support 或 task。
-2. C++ 核心尚无可视化入口。现有 `MujocoViewer` 与 `SimulationUi` 虽分为不同类型，viewer 仍直接读取 ImGui capture 状态并接收 sidebar 宽度，UI 又直接绑定 C snapshot；应先解除这些反向依赖，再组合 `CppStartupRunner + MujocoViewer`，而不是为 C++ 核心复制一套渲染器或强制先适配 UI。
+2. C++ 核心已有无 UI viewer，但还没有诊断面板。现有 `SimulationUi` 仍直接绑定完整 C snapshot；以后若增加 C++ 诊断，应先定义中立 display model 或独立 C++ 面板，由 app 选择性组合，不能让 snapshot/UI 依赖重新进入 `MujocoViewer`。
 3. STEP 碰撞阈值、低摩擦导轮近似和固定 `200 mm` 搬腿轨迹仍只经过理想仿真。下一步应优先补实车噪声、低速顶墙、颠簸、结构柔性和不同接近速度；不要先继续压缩 RECOVER 时间或扫增益。
 4. `base_link` 对其他平面的低摩擦推广仍延期。推广前要明确导轮方向性和碰撞几何，不能把台面专用 contact pair 直接复制到所有接触。
 5. 气弹簧安装几何与等效腿轴向力曲线缺失。约 `350 N` 的端点信息不能直接作为虚拟轴向力；完成模型和基础支撑/落地复测前，暂停 jump task 与跳跃调参。

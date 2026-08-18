@@ -3,32 +3,36 @@
 
 #include <mujoco/mujoco.h>
 
-#include "input/keyboard_drive.hpp"
-
 struct GLFWwindow;
 
 namespace balance::sim {
 
+struct ViewportInsets {
+    float left{};
+    float right{};
+    float top{};
+    float bottom{};
+};
+
 class MujocoViewer {
 public:
-    explicit MujocoViewer(const mjModel &model);
+    explicit MujocoViewer(
+        const mjModel &model, const char *title = "rm-balance-sim");
     ~MujocoViewer();
 
     MujocoViewer(const MujocoViewer &) = delete;
     MujocoViewer &operator=(const MujocoViewer &) = delete;
 
     [[nodiscard]] bool should_close() const;
-    [[nodiscard]] KeyboardDriveInput keyboard_drive_input() const;
-    void reset_drive_input() noexcept;
     [[nodiscard]] GLFWwindow *native_window() const noexcept {
         return window_;
     }
-    bool consume_pause_toggle();
-    bool consume_reset_request();
 
+    void set_camera_input_enabled(bool enabled) noexcept;
     void set_virtual_gimbal_heading(
         float world_yaw, bool visible = true) noexcept;
-    void render_scene(mjData &data, float sidebar_width);
+    void render_scene(
+        mjData &data, const ViewportInsets &insets = {});
     void present();
     void poll_events();
 
@@ -59,9 +63,7 @@ private:
     bool left_button_{};
     bool middle_button_{};
     bool right_button_{};
-    bool pause_toggle_requested_{};
-    bool reset_requested_{};
-    bool step_task_enabled_{};
+    bool camera_input_enabled_{true};
     bool virtual_gimbal_visible_{};
     float virtual_gimbal_yaw_{};
     double cursor_x_{};

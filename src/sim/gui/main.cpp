@@ -10,7 +10,7 @@
 #include "drop/ramp_course.hpp"
 #include "drop/ramp_jump.hpp"
 #include "performance/performance_scenario.hpp"
-#include "simulation_app.hpp"
+#include "gui/simulation_app.hpp"
 #include "step/step_dock.hpp"
 
 namespace {

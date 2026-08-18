@@ -31,7 +31,7 @@ int main() {
     keyboard.reset(snapshot);
 
     const auto &disabled = keyboard.update(
-        snapshot, KeyboardDriveInput{}, 1.0, 0.001F);
+        snapshot, KeyboardDriveInput{}, false, 1.0, 0.001F);
     if (disabled.command.system_enabled ||
         disabled.command.balance_restart) {
         std::cerr << "disabled keyboard scenario produced a command\n";
@@ -39,7 +39,7 @@ int main() {
     }
 
     const auto &engaging = keyboard.update(
-        snapshot, KeyboardDriveInput{}, 2.0, 0.001F);
+        snapshot, KeyboardDriveInput{}, false, 2.0, 0.001F);
     if (!engaging.command.system_enabled ||
         !engaging.command.balance_restart) {
         std::cerr << "keyboard scenario did not request engagement\n";
@@ -47,8 +47,9 @@ int main() {
     }
 
     snapshot = active_snapshot();
-    const KeyboardDriveInput input{1.0F, 1.0F, false, true};
-    const auto &moving = keyboard.update(snapshot, input, 3.0, 0.001F);
+    const KeyboardDriveInput input{1.0F, 1.0F, false};
+    const auto &moving = keyboard.update(
+        snapshot, input, true, 3.0, 0.001F);
     if (!near(moving.command.forward_velocity, 2.0F) ||
         !near(moving.gimbal.world_yaw_rate, 0.01F) ||
         moving.gimbal.world_yaw <= 0.5F ||
@@ -58,24 +59,48 @@ int main() {
     }
 
     snapshot.step_command_rearm_required = 1U;
-    const auto &completed = keyboard.update(snapshot, input, 3.001, 0.001F);
+    const auto &completed = keyboard.update(
+        snapshot, input, false, 3.001, 0.001F);
     if (completed.command.task != BC_OPERATOR_TASK_NORMAL ||
-        !completed.reset_step_task_latch) {
+        completed.step_task_requested) {
         std::cerr << "completed step did not reset the keyboard latch\n";
         return 1;
     }
     snapshot.step_command_rearm_required = 0U;
 
-    const KeyboardDriveInput boosted_input{1.0F, 0.0F, true, false};
+    const auto &restarted = keyboard.update(
+        snapshot, input, true, 3.002, 0.001F);
+    if (restarted.command.task != BC_OPERATOR_TASK_STEP_DOCK ||
+        !restarted.step_task_requested) {
+        std::cerr << "step edge did not start the interactive task\n";
+        return 1;
+    }
+    const auto &held = keyboard.update(
+        snapshot, input, false, 3.003, 0.001F);
+    if (held.command.task != BC_OPERATOR_TASK_STEP_DOCK ||
+        !held.step_task_requested) {
+        std::cerr << "step request was not held by the scenario\n";
+        return 1;
+    }
+    const auto &cancelled = keyboard.update(
+        snapshot, input, true, 3.004, 0.001F);
+    if (cancelled.command.task != BC_OPERATOR_TASK_NORMAL ||
+        cancelled.step_task_requested) {
+        std::cerr << "second step edge did not cancel the task\n";
+        return 1;
+    }
+
+    const KeyboardDriveInput boosted_input{1.0F, 0.0F, true};
     const auto &boosted = keyboard.update(
-        snapshot, boosted_input, 3.01, 0.001F);
+        snapshot, boosted_input, false, 3.01, 0.001F);
     if (!near(boosted.command.forward_velocity, 2.7F)) {
         std::cerr << "keyboard boost exceeded its interactive limit\n";
         return 1;
     }
 
     snapshot.state_machine.motion = BC_MOTION_LEG_POSITIONING;
-    const auto &inactive = keyboard.update(snapshot, input, 3.1, 0.001F);
+    const auto &inactive = keyboard.update(
+        snapshot, input, false, 3.1, 0.001F);
     if (inactive.command.forward_velocity != 0.0F ||
         inactive.gimbal.world_yaw_rate != 0.0F) {
         std::cerr << "inactive motion did not reset interactive input\n";
@@ -86,13 +111,13 @@ int main() {
     snapshot = active_snapshot();
     demo.reset(snapshot);
     const auto &standing = demo.update(
-        snapshot, KeyboardDriveInput{}, 3.0, 0.001F);
+        snapshot, KeyboardDriveInput{}, false, 3.0, 0.001F);
     if (standing.command.forward_velocity != 0.0F) {
         std::cerr << "demo did not begin with a standing phase\n";
         return 1;
     }
     const auto &forward = demo.update(
-        snapshot, KeyboardDriveInput{}, 6.1, 0.001F);
+        snapshot, KeyboardDriveInput{}, false, 6.1, 0.001F);
     if (!near(forward.command.forward_velocity, 0.25F)) {
         std::cerr << "demo timeline did not enter forward phase\n";
         return 1;

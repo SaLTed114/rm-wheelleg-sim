@@ -1,4 +1,4 @@
-#include "interactive_trace.hpp"
+#include "gui/interactive_trace.hpp"
 
 #include "balance/state_machine/motion.h"
 #include "balance/state_machine/system.h"
@@ -15,7 +15,7 @@ InteractiveTraceWriter::InteractiveTraceWriter(
 ) : csv_(path, {
     "reset_index", "simulation_time", "tick_count", "phase",
     "keyboard_forward_axis", "keyboard_yaw_axis", "keyboard_boost",
-    "keyboard_step_task", "command_system_enabled",
+    "interactive_step_task_requested", "command_system_enabled",
     "command_balance_restart", "command_forward", "command_task",
     "gimbal_world_yaw", "gimbal_world_yaw_rate",
     "system", "motion", "forward", "step_task", "step_impact_armed",
@@ -96,7 +96,7 @@ void InteractiveTraceWriter::write(
         .value(keyboard.forward_axis)
         .value(keyboard.yaw_axis)
         .value(static_cast<int>(keyboard.boost))
-        .value(static_cast<int>(keyboard.step_task))
+        .value(static_cast<int>(frame.step_task_requested))
         .value(static_cast<int>(frame.command.system_enabled))
         .value(static_cast<int>(frame.command.balance_restart))
         .value(frame.command.forward_velocity)

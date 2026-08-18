@@ -45,10 +45,12 @@ SensorFrame
 
 ## 验证、仿真与可视化
 
-`CppStartupRunner` 是隔离的 MuJoCo 起立入口，复用现有 plant 和通道标定，但不修改 `SimulationRunner`、GUI 或其他 benchmark。当前闭环门禁要求持续站立 `8 s`，末 `3 s` pitch 小于 `5 deg`、pitch-rate 小于 `0.2 rad/s`、左右腿长差不超过 `2 mm`、双轮接触率至少 `99%` 且没有非轮触地。
+C++ 仿真代码集中在 `src/sim/cpp/`。其中 `balance::sim::cpp::SimulationRunner` 是隔离的 MuJoCo 适配器，复用 `balance_mujoco` 中的平台和通道标定，但不依赖旧 `balance::sim::SimulationRunner` 或 C 控制核心。它每拍只转换 sensor、调用 C++ controller、写回 actuation 并推进 MuJoCo，不拥有 startup 时序；测试和 viewer 分别在外层生成 system enable/restart 命令。当前闭环门禁要求持续站立 `8 s`，末 `3 s` pitch 小于 `5 deg`、pitch-rate 小于 `0.2 rad/s`、左右腿长差不超过 `2 mm`、双轮接触率至少 `99%` 且没有非轮触地。
 
 常驻验证分为三层：`cpp_controller_startup` 对照 C/C++ 的关闭、待机、起立转换、平衡接管、restart 和关闭行为；`cpp_control_modules` 独立检查数学、observer、状态机、PD/LQR、控制核心、完整帧输出安全和 snapshot；`mujoco_cpp_startup` 独立运行 C++ 核心的 MuJoCo 起立与原地保持。2026-08-18 的完整仓库回归为 `36/36` 通过。
 
-当前没有 C++ 控制器的交互可视化模式。`rm_balance_sim` 仍使用完整 C 核心，C++ 路径只有 headless runner。场景 viewer 与诊断 UI 虽是不同类型，但现有 viewer 仍直接读取 ImGui 输入捕获状态并知道 sidebar 宽度，UI 又直接依赖 C snapshot；接入 C++ 可视化前应先把 viewer 收敛为只读取 MuJoCo `mjData` 的可选 UI 无关组件，再由 app 组合 runner、viewer 和可选诊断 UI。
+`rm_balance_cpp_viewer` 使用同一 `cpp::SimulationRunner` 提供无 UI 的交互场景窗口：viewer app 在仿真两秒后自动使能并发出起立命令，鼠标只控制相机。`MujocoViewer` 已独立为 `balance_mujoco_viewer`，只读取 MuJoCo `mjData`，接受通用 viewport insets 和显式相机输入许可；它不包含 ImGui，不读取 sidebar、C/C++ snapshot，也不保存暂停、复位、驾驶或 STEP 状态。完整 C GUI 的入口、应用编排、UI 和 trace 集中在 `src/sim/gui/`；键位现由独立 `InteractiveKeyboard` 采集为按键电平和边沿，暂停/复位由 `SimulationApp` 解释，STEP 请求锁存由 `InteractiveScenario` 持有。
+
+现有 `SimulationUi` 仍是完整 C 核心专用诊断面板，这不妨碍 C++ viewer 独立运行。未来若需要 C++ 诊断，应在 app/UI 边界增加中立 display model 或独立面板，不能重新让 viewer 认识控制器数据。
 
 后续每扩展一项能力，先在 C++ 核心内定义所有权与语义，再增加对应模块测试、C 对照和独立闭环测试；不要为了复用而让新核心调用旧 C 算法，也不要在仿真 runner 中补控制状态。motion action 产生结构化 `ControlCommand`，明确腿长、腿角和轮端策略、目标参考及反馈屏蔽；控制律只消费 `Estimate + ControlCommand`，不根据 motion 状态反推行为。状态机状态和条件保持时间通过独立诊断状态进入 snapshot，输出门只处理使能、有限性和力矩限幅。

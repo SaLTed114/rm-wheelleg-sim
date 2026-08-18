@@ -1,5 +1,5 @@
-#ifndef BALANCE_SIM_SIMULATION_UI_HPP
-#define BALANCE_SIM_SIMULATION_UI_HPP
+#ifndef BALANCE_SIM_GUI_SIMULATION_UI_HPP
+#define BALANCE_SIM_GUI_SIMULATION_UI_HPP
 
 #include "balance/controller_snapshot.h"
 #include "input/virtual_gimbal.hpp"
@@ -37,6 +37,7 @@ public:
     void render();
 
     [[nodiscard]] bool wants_keyboard() const noexcept;
+    [[nodiscard]] bool wants_mouse() const noexcept;
     [[nodiscard]] float sidebar_width() const noexcept {
         return sidebar_width_;
     }

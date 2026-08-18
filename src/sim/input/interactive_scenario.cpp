@@ -17,11 +17,13 @@ void InteractiveScenario::reset(
     previous_motion_ = BC_MOTION_IDLE;
     balance_start_time_ = -1.0;
     virtual_gimbal_initialized_ = false;
+    step_task_requested_ = false;
 }
 
 const InteractiveScenarioFrame &InteractiveScenario::update(
     const bc_controller_snapshot_t &snapshot,
     const KeyboardDriveInput &keyboard,
+    const bool step_pressed,
     const double simulation_time,
     const float timestep_seconds) noexcept {
     if (previous_motion_ != BC_MOTION_ACTIVE &&
@@ -35,19 +37,21 @@ const InteractiveScenarioFrame &InteractiveScenario::update(
         demo_target(snapshot, simulation_time);
 
     frame_.command = {};
-    frame_.reset_step_task_latch = false;
     frame_.command.system_enabled = static_cast<uint8_t>(
         simulation_time >= 2.0);
     frame_.command.balance_restart =
         frame_.command.system_enabled &&
         snapshot.state_machine.system == BC_SYSTEM_OFF;
-    const bool reset_step_task_latch =
-        mode_ == InteractiveMode::keyboard &&
-        snapshot.step_command_rearm_required;
+    if (mode_ == InteractiveMode::keyboard && step_pressed) {
+        step_task_requested_ = !step_task_requested_;
+    }
+    if (snapshot.step_command_rearm_required) {
+        step_task_requested_ = false;
+    }
     frame_.command.task = mode_ == InteractiveMode::keyboard &&
-            keyboard.step_task && !reset_step_task_latch ?
+            step_task_requested_ ?
         BC_OPERATOR_TASK_STEP_DOCK : BC_OPERATOR_TASK_NORMAL;
-    frame_.reset_step_task_latch = reset_step_task_latch;
+    frame_.step_task_requested = step_task_requested_;
 
     if (snapshot.state_machine.motion == BC_MOTION_ACTIVE) {
         if (!virtual_gimbal_initialized_) {

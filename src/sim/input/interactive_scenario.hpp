@@ -16,7 +16,7 @@ struct InteractiveScenarioFrame {
     bc_operator_command_t command{};
     VirtualGimbalState gimbal{};
     const char *phase{"off"};
-    bool reset_step_task_latch{};
+    bool step_task_requested{};
 };
 
 class InteractiveScenario {
@@ -27,6 +27,7 @@ public:
     [[nodiscard]] const InteractiveScenarioFrame &update(
         const bc_controller_snapshot_t &snapshot,
         const KeyboardDriveInput &keyboard,
+        bool step_pressed,
         double simulation_time,
         float timestep_seconds) noexcept;
     [[nodiscard]] const InteractiveScenarioFrame &frame() const noexcept {
@@ -53,6 +54,7 @@ private:
     bc_motion_state_t previous_motion_{BC_MOTION_IDLE};
     double balance_start_time_{-1.0};
     bool virtual_gimbal_initialized_{};
+    bool step_task_requested_{};
 };
 
 } // namespace balance::sim
