@@ -1,0 +1,256 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="Fudan-2026-Balance">
+  <default>
+    <geom contype="0" conaffinity="0" />
+  </default>
+  <compiler angle="radian" />
+  <visual>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.75 0.75 0.75" specular="0.2 0.2 0.2" />
+  </visual>
+  <asset>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.12 0.25 0.42" rgb2="0.55 0.70 0.82" width="512" height="3072" />
+    <texture name="ground_checker" type="2d" builtin="checker" rgb1="0.18 0.20 0.18" rgb2="0.45 0.44 0.39" width="512" height="512" />
+    <material name="ground_material" texture="ground_checker" texrepeat="0.5 0.5" texuniform="true" reflectance="0.05" />
+    <mesh name="keyboard_wedge_15deg" vertex="-0.373205080757 -1 -0.1 -0.373205080757 1 -0.1 0.373205080757 -1 -0.1 0.373205080757 1 -0.1 0.373205080757 -1 0.1 0.373205080757 1 0.1" />
+    <mesh name="keyboard_wedge_17deg" vertex="-0.572399208235 -0.43 -0.175 -0.572399208235 0.43 -0.175 0.572399208235 -0.43 -0.175 0.572399208235 0.43 -0.175 0.572399208235 -0.43 0.175 0.572399208235 0.43 0.175" />
+    <mesh name="benchmark_wide_wedge_17deg" vertex="-0.572399208235 -2 -0.175 -0.572399208235 2 -0.175 0.572399208235 -2 -0.175 0.572399208235 2 -0.175 0.572399208235 -2 0.175 0.572399208235 2 0.175" />
+    <mesh name="benchmark_wide_down_wedge_17deg" vertex="-0.572399208235 -2 -0.175 -0.572399208235 2 -0.175 -0.572399208235 -2 0.175 -0.572399208235 2 0.175 0.572399208235 -2 -0.175 0.572399208235 2 -0.175" />
+    <mesh name="ramp_course_beveled_main" vertex="-0.472399208235 -2 -0.144426931854 -0.472399208235 2 -0.144426931854 0.472399208235 -2 -0.144426931854 0.472399208235 2 -0.144426931854 0.472399208235 -2 0.144426931854 0.472399208235 2 0.144426931854" />
+    <mesh name="ramp_course_bevel" vertex="-0.2 -2 -0.175 -0.2 2 -0.175 0.2 -2 -0.175 0.2 2 -0.175 -0.2 -2 0.113853863708 -0.2 2 0.113853863708 0.2 -2 0.175 0.2 2 0.175" />
+    <mesh name="base_link" content_type="model/stl" file="fudan/fudan_base_link_del.STL" />
+    <mesh name="Left_front_link" content_type="model/stl" file="fudan/r20_Link.STL" />
+    <mesh name="Left_front_child1_link" content_type="model/stl" file="fudan/r21_Link.STL" />
+    <mesh name="Left_front_child2_link" content_type="model/stl" file="fudan/r22_Link.STL" />
+    <mesh name="Left_front_child3_link" content_type="model/stl" file="fudan/r23_Link.STL" />
+    <mesh name="Left_rear_link" content_type="model/stl" file="fudan/rf0_Link.STL" />
+    <mesh name="Left_rear_child1_link" content_type="model/stl" file="fudan/rf1_Link.STL" />
+    <mesh name="Left_Wheel_link" content_type="model/stl" file="ustl/Right_Wheel_link.STL" />
+    <mesh name="Right_front_link" content_type="model/stl" file="fudan/l20_Link.STL" />
+    <mesh name="Right_front_child1_link" content_type="model/stl" file="fudan/l21_Link.STL" />
+    <mesh name="Right_front_child2_link" content_type="model/stl" file="fudan/l22_Link.STL" />
+    <mesh name="Right_front_child3_link" content_type="model/stl" file="fudan/l23_Link.STL" />
+    <mesh name="Right_rear_link" content_type="model/stl" file="fudan/lf0_Link.STL" />
+    <mesh name="Right_rear_child1_link" content_type="model/stl" file="fudan/lf1_Link.STL" />
+    <mesh name="Right_Wheel_link" content_type="model/stl" file="ustl/Left_Wheel_link.STL" />
+    <mesh name="lf0_self_collision_0" content_type="model/stl" file="fudan/lf0_self_collision_0.STL" />
+    <mesh name="lf0_self_collision_1" content_type="model/stl" file="fudan/lf0_self_collision_1.STL" />
+    <mesh name="lf0_self_collision_3" content_type="model/stl" file="fudan/lf0_self_collision_3.STL" />
+    <mesh name="lf0_self_collision_4" content_type="model/stl" file="fudan/lf0_self_collision_4.STL" />
+    <mesh name="lf0_self_collision_5" content_type="model/stl" file="fudan/lf0_self_collision_5.STL" />
+    <mesh name="lf0_self_collision_6" content_type="model/stl" file="fudan/lf0_self_collision_6.STL" />
+    <mesh name="lf0_self_collision_7" content_type="model/stl" file="fudan/lf0_self_collision_7.STL" />
+    <mesh name="l22_self_collision_2" content_type="model/stl" file="fudan/l22_self_collision_2.STL" />
+    <mesh name="l22_self_collision_5" content_type="model/stl" file="fudan/l22_self_collision_5.STL" />
+    <mesh name="l22_self_collision_6" content_type="model/stl" file="fudan/l22_self_collision_6.STL" />
+    <mesh name="rf0_self_collision_0" content_type="model/stl" file="fudan/rf0_self_collision_0.STL" />
+    <mesh name="rf0_self_collision_1" content_type="model/stl" file="fudan/rf0_self_collision_1.STL" />
+    <mesh name="rf0_self_collision_2" content_type="model/stl" file="fudan/rf0_self_collision_2.STL" />
+    <mesh name="rf0_self_collision_3" content_type="model/stl" file="fudan/rf0_self_collision_3.STL" />
+    <mesh name="rf0_self_collision_4" content_type="model/stl" file="fudan/rf0_self_collision_4.STL" />
+    <mesh name="rf0_self_collision_5" content_type="model/stl" file="fudan/rf0_self_collision_5.STL" />
+    <mesh name="rf0_self_collision_7" content_type="model/stl" file="fudan/rf0_self_collision_7.STL" />
+    <mesh name="r22_self_collision_2" content_type="model/stl" file="fudan/r22_self_collision_2.STL" />
+    <mesh name="r22_self_collision_3" content_type="model/stl" file="fudan/r22_self_collision_3.STL" />
+    <mesh name="r22_self_collision_6" content_type="model/stl" file="fudan/r22_self_collision_6.STL" />
+  </asset>
+  <worldbody>
+    <light name="key_light" directional="true" pos="-1 -1 2" dir="0.4 0.3 -1" diffuse="0.8 0.8 0.75" specular="0.2 0.2 0.2" />
+    <light name="fill_light" directional="true" pos="1 1 1" dir="-0.3 -0.2 -1" diffuse="0.35 0.38 0.42" specular="0.05 0.05 0.05" />
+    <geom name="ground" type="plane" pos="0 0 -0.43" size="20 20 0.05" material="ground_material" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    <body name="drop_platform_200mm_body" mocap="true" pos="0.5 0 -2">
+      <geom name="drop_platform_200mm" type="box" size="1.5 1 0.1" mass="0" rgba="0.55 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="drop_platform_400mm_body" mocap="true" pos="0.5 0 -2">
+      <geom name="drop_platform_400mm" type="box" size="1.5 1 0.2" mass="0" rgba="0.55 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="keyboard_platform_200mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_platform_200mm" type="box" size="1 1 0.1" mass="0" rgba="0.32 0.48 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="keyboard_course_platform_200mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_course_platform_200mm" type="box" size="0.4 0.5 0.1" mass="0" rgba="0.30 0.52 0.34 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="keyboard_course_platform_300mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_course_platform_300mm" type="box" size="1 0.5 0.15" mass="0" rgba="0.34 0.46 0.62 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="keyboard_course_curb_50mm_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_course_curb_50mm" type="box" size="0.05 0.5 0.025" mass="0" rgba="0.78 0.54 0.20 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="keyboard_ramp_15deg_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_ramp_15deg" type="mesh" mesh="keyboard_wedge_15deg" mass="0" rgba="0.38 0.58 0.40 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="keyboard_ramp_17deg_body" mocap="true" pos="0 0 -2">
+      <geom name="keyboard_ramp_17deg" type="mesh" mesh="keyboard_wedge_17deg" mass="0" rgba="0.42 0.50 0.70 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="benchmark_ramp_17deg_body" mocap="true" pos="0 0 -2">
+      <geom name="benchmark_ramp_17deg" type="mesh" mesh="benchmark_wide_wedge_17deg" mass="0" rgba="0.72 0.42 0.24 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="ramp_course_up_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_up" type="mesh" mesh="benchmark_wide_wedge_17deg" mass="0" rgba="0.70 0.43 0.22 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="ramp_course_platform_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_platform" type="box" size="1 2 0.175" mass="0" rgba="0.35 0.50 0.28 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="ramp_course_down_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_down" type="mesh" mesh="benchmark_wide_down_wedge_17deg" mass="0" rgba="0.70 0.43 0.22 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="ramp_course_beveled_up_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_beveled_up" type="mesh" mesh="ramp_course_beveled_main" mass="0" rgba="0.67 0.47 0.23 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="ramp_course_bevel_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_bevel" type="mesh" mesh="ramp_course_bevel" mass="0" rgba="0.82 0.61 0.28 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="ramp_course_beveled_platform_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_beveled_platform" type="box" size="1 2 0.175" mass="0" rgba="0.35 0.50 0.28 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="ramp_course_beveled_down_body" mocap="true" pos="0 0 -2">
+      <geom name="ramp_course_beveled_down" type="mesh" mesh="benchmark_wide_down_wedge_17deg" mass="0" rgba="0.67 0.47 0.23 0" contype="1" conaffinity="0" friction="1 0.005 0.0001" />
+    </body>
+    <body name="base_support" mocap="true" />
+    <!-- Keep the source model's 0.5 m body-to-floor placement relative to the
+         shell floor at z=-0.43 m; this lets the wheels touch down before the
+         base collision during the required free-release phase. -->
+    <body name="base_link" pos="0 0 0.07" quat="1 0 0 0">
+      <freejoint name="base_free_joint" />
+      <inertial pos="-0.00406060 0.0008523 0.09714204" mass="16.8775740" fullinertia="0.3595155 0.35249 0.45655 -0.00174358 -0.00825907 -0.00214156" />
+      <site name="imu_site" pos="0 0 0" size="0.005" quat="1 0 0 0" />
+      <geom name="base_link_collision" type="mesh" rgba="1 1 1 1" mesh="base_link" conaffinity="1" />
+      <body name="Left_rear_link" pos="0 -0.1877 0.08725" quat="0.707105 0.707108 0 0">
+        <inertial pos="0.0552763 -0.0165544 -0.00927161" quat="-0.005176 0.693173 0.0544357 0.718694" mass="1.1132" diaginertia="0.00641833 0.00468513 0.00204569" />
+        <joint name="Left_rear_joint" pos="0 0 0" axis="0 0 1" armature="0" damping="0.03" frictionloss="0.015" range="-100 100" actuatorfrcrange="-100 100" />
+        <geom type="mesh" rgba="1 1 1 1" mesh="Left_rear_link" conaffinity="1" name="rf0_collision" />
+        <geom name="rf0_self_collision_0" type="mesh" mesh="rf0_self_collision_0" contype="4" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="rf0_self_collision_1" type="mesh" mesh="rf0_self_collision_1" contype="4" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="rf0_self_collision_2" type="mesh" mesh="rf0_self_collision_2" contype="4" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="rf0_self_collision_3" type="mesh" mesh="rf0_self_collision_3" contype="4" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="rf0_self_collision_4" type="mesh" mesh="rf0_self_collision_4" contype="4" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="rf0_self_collision_5" type="mesh" mesh="rf0_self_collision_5" contype="4" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="rf0_self_collision_7" type="mesh" mesh="rf0_self_collision_7" contype="4" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <site name="Left_rear_site1" pos="0.09435 0 0" size="0.005" rgba="1 0 0 1" />
+        <site name="right_lf0_qitanhuang" pos="0.0155 -0.0445 -0.008" size="0.005" rgba="1 0 0 1" />
+        <body name="Left_rear_child1_link" pos="0.17472 0 0">
+          <inertial pos="-0.00283459 -0.0710676 0.0068255" quat="0.483182 0.50274 -0.490133 0.523027" mass="0.306873" diaginertia="0.0025405 0.00248016 8.5602e-05" />
+          <joint name="Left_rear_child1_joint" pos="0 0 0" axis="0 0 1" armature="0.00" damping="0.03" frictionloss="0.015" limited="true" range="-1.1 0.63" actuatorfrcrange="-100 100" />
+          <geom type="mesh" rgba="1 1 1 1" mesh="Left_rear_child1_link" conaffinity="1" />
+          <site name="Left_rear_site2" pos="-0.0160931 0.0609099 0" size="0.005" rgba="1 0 0 1" />
+          <site name="right_lf1_qitanhuang" pos="0.005 -0.046 -0.005" size="0.01" rgba="1 0 0 1" />
+          <body name="Left_Wheel_link" pos="0 -0.208 0.016">
+            <inertial pos="-0.00017762 -0.00010174 0.0099965" mass="0.71" quat="-0.511946370239 0.487829079253 0.511912146271 0.487728952933" diaginertia="0.00119419026374 0.000629452355249 0.000625332573684" />
+            <joint name="Left_Wheel_joint" pos="0 0 0" axis="0 0 1" damping="0.002" frictionloss="0.001" actuatorfrcrange="-100 100" />
+            <geom type="mesh" size="0.06 0.03075" rgba="0.18 0.18 0.18 1" mesh="Left_Wheel_link" name="Left_Wheel_link_visual" quat="0 0 0.707106781187 0.707106781187" contype="0" conaffinity="0" />
+            <geom name="Left_wheel_collision" type="cylinder" pos="0 0 0.002" size="0.058 0.028" rgba="0 0 0 0" contype="0" conaffinity="1" friction="1 0.005 0.0001" />
+            <site name="Left_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1" />
+          </body>
+        </body>
+      </body>
+      <body name="Right_rear_link" pos="0 0.1877 0.08725" quat="0.707105 -0.707108 0 0">
+        <inertial pos="0.055403 0.016584 -0.0092702" quat="0.00463484 0.693099 -0.0538381 0.718814" mass="1.1128" diaginertia="0.00641157 0.0046755 0.00204815" />
+        <joint name="Right_rear_joint" pos="0 0 0" axis="0 0 1" armature="0" damping="0.03" frictionloss="0.015" range="-100 100" actuatorfrcrange="-100 100" />
+        <geom type="mesh" rgba="1 1 1 1" mesh="Right_rear_link" conaffinity="1" name="lf0_collision" />
+        <geom name="lf0_self_collision_0" type="mesh" mesh="lf0_self_collision_0" contype="2" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="lf0_self_collision_1" type="mesh" mesh="lf0_self_collision_1" contype="2" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="lf0_self_collision_3" type="mesh" mesh="lf0_self_collision_3" contype="2" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="lf0_self_collision_4" type="mesh" mesh="lf0_self_collision_4" contype="2" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="lf0_self_collision_5" type="mesh" mesh="lf0_self_collision_5" contype="2" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="lf0_self_collision_6" type="mesh" mesh="lf0_self_collision_6" contype="2" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <geom name="lf0_self_collision_7" type="mesh" mesh="lf0_self_collision_7" contype="2" conaffinity="0" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+        <site name="Right_rear_site1" pos="0.09435 0 0" size="0.005" rgba="1 0 0 1" />
+        <site name="left_lf0_qitanhuang" pos="0.0155 0.0445 -0.008" size="0.005" rgba="1 0 0 1" />
+        <body name="Right_rear_child1_link" pos="0.17472 0 0">
+          <inertial pos="-0.0028358 0.071068 0.0068255" quat="0.50274 0.483182 -0.523027 0.490133" mass="0.30687" diaginertia="0.0025405 0.00248016 8.5602e-05" />
+          <joint name="Right_rear_child1_joint" pos="0 0 0" axis="0 0 1" armature="0.00" damping="0.03" frictionloss="0.015" limited="true" range="-0.63 1.1" actuatorfrcrange="-100 100" />
+          <geom type="mesh" rgba="1 1 1 1" mesh="Right_rear_child1_link" conaffinity="1" />
+          <site name="Right_rear_site2" pos="-0.0160931 -0.0609099 0" size="0.01" rgba="1 0 0 1" />
+          <site name="left_lf1_qitanhuang" pos="0.005 0.046 -0.005" size="0.01" rgba="1 0 0 1" />
+          <body name="Right_Wheel_link" pos="0 0.208 0.016">
+            <inertial pos="-0.00015229 0.00013677 0.0099965" mass="0.71" quat="0.129231542436 0.695158797905 0.129317809464 -0.695219609088" diaginertia="0.00119419026482 0.00062945508777 0.0006253298423" />
+            <joint name="Right_Wheel_joint" pos="0 0 0" axis="0 0 1" damping="0.002" frictionloss="0.001" actuatorfrcrange="-100 100" />
+            <geom type="mesh" size="0.06 0.03075" rgba="0.18 0.18 0.18 1" mesh="Right_Wheel_link" name="Right_Wheel_link_visual" quat="0 0 0.707106781187 -0.707106781187" contype="0" conaffinity="0" />
+            <geom name="Right_wheel_collision" type="cylinder" pos="0 0 0.002" size="0.058 0.028" rgba="0 0 0 0" contype="0" conaffinity="1" friction="1 0.005 0.0001" />
+            <site name="Right_wheel_axis_site" pos="0 0 0" size="0.005" rgba="0 0 1 1" />
+          </body>
+        </body>
+      </body>
+      <body name="Left_front_link" pos="0 -0.1877 0.08725" quat="0.707105 0.707108 0 0">
+        <inertial pos="-0.0077129 -0.044014 0.0053168" quat="0.54287 0.453598 -0.539995 0.456012" mass="0.058433" diaginertia="0.000101653 9.09634e-05 1.15321e-05" />
+        <joint name="Left_front_joint" pos="0 0 0" axis="0 0 1" armature="0.00" damping="0.03" frictionloss="0.015" actuatorfrcrange="-100 100" />
+        <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_link" conaffinity="1" />
+        <body name="Left_front_child1_link" pos="-0.016285 -0.092933 0.01">
+          <inertial pos="0.05374 -0.013258 -0.01451" quat="0.0690441 0.704772 -0.0560118 0.70384" mass="0.042999" diaginertia="7.83158e-05 7.61359e-05 2.77956e-06" />
+          <joint name="Left_front_child1_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-100 100" />
+          <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_child1_link" conaffinity="1" />
+          <body name="Left_front_child2_link" pos="0.11063 -0.019387 0">
+            <inertial pos="-0.006381 0.08888 -0.0045" quat="0.475753 0.523125 -0.475753 0.523125" mass="0.065877" diaginertia="0.00021104 0.000205523 6.41108e-06" />
+            <joint name="Left_front_child2_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-100 100" />
+            <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_child2_link" conaffinity="1" name="r22_collision" />
+            <geom name="r22_self_collision_2" type="mesh" mesh="r22_self_collision_2" contype="0" conaffinity="4" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+            <geom name="r22_self_collision_3" type="mesh" mesh="r22_self_collision_3" contype="0" conaffinity="4" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+            <geom name="r22_self_collision_6" type="mesh" mesh="r22_self_collision_6" contype="0" conaffinity="4" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+            <site name="Left_front_site1" pos="0.0 0.11232 -0.01" size="0.005" rgba="1 1 0 1" />
+            <body name="Left_front_child3_link" pos="-0.018032 0.17268 0">
+              <inertial pos="0.040186 0 -0.014509" quat="0 0.707107 0 0.707107" mass="0.010945" diaginertia="1.0337e-05 9.8695e-06 6.2034e-07" />
+              <joint name="Left_front_child3_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-100 100" />
+              <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_child3_link" conaffinity="1" />
+              <site name="Left_front_site2" pos="0.08037 0.0 -0.01" size="0.005" rgba="1 1 0 1" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Right_front_link" pos="0 0.1877 0.08725" quat="0.707105 -0.707108 0 0">
+        <inertial pos="-0.0077129 -0.044014 0.0053168" quat="-0.066476 0.705194 0.0534809 0.703863" mass="0.058433" diaginertia="7.83158e-05 7.61355e-05 2.77958e-06" />
+        <joint name="Right_front_joint" pos="0 0 0" axis="0 0 1" armature="0.00" damping="0.03" frictionloss="0.015" actuatorfrcrange="-100 100" />
+        <geom type="mesh" rgba="1 1 1 1" mesh="Right_front_link" conaffinity="1" />
+        <body name="Right_front_child1_link" pos="-0.016285 0.092933 0.01">
+          <inertial pos="0.055588 0.013582 -0.01451" quat="-0.066476 0.705194 0.0534809 0.703863" mass="0.042999" diaginertia="7.83158e-05 7.61355e-05 2.77958e-06" />
+          <joint name="Right_front_child1_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-100 100" />
+          <geom type="mesh" rgba="1 1 1 1" mesh="Right_front_child1_link" conaffinity="1" />
+          <body name="Right_front_child2_link" pos="0.11063 0.019387 0">
+            <inertial pos="-0.006381 -0.08888 -0.0045" quat="0.523125 0.475753 -0.523125 0.475753" mass="0.065877" diaginertia="0.00021104 0.000205523 6.41108e-06" />
+            <joint name="Right_front_child2_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-100 100" />
+            <geom type="mesh" rgba="1 1 1 1" mesh="Right_front_child2_link" conaffinity="1" name="l22_collision" />
+            <geom name="l22_self_collision_2" type="mesh" mesh="l22_self_collision_2" contype="0" conaffinity="2" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+            <geom name="l22_self_collision_5" type="mesh" mesh="l22_self_collision_5" contype="0" conaffinity="2" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+            <geom name="l22_self_collision_6" type="mesh" mesh="l22_self_collision_6" contype="0" conaffinity="2" condim="1" friction="0 0 0" group="3" rgba="1 0.15 0.05 0.3" />
+            <site name="Right_front_site1" pos="0.0 -0.11232 -0.01" size="0.005" rgba="1 1 0 1" />
+            <body name="Right_front_child3_link" pos="-0.018032 -0.17268 0">
+              <inertial pos="0.040186 0 -0.014509" quat="0 0.707107 0 0.707107" mass="0.010945" diaginertia="1.0337e-05 9.8695e-06 6.2034e-07" />
+              <joint name="Right_front_joint3_joint" pos="0 0 0" axis="0 0 1" actuatorfrcrange="-100 100" />
+              <geom type="mesh" rgba="1 1 1 1" mesh="Right_front_child3_link" conaffinity="1" />
+              <site name="Right_front_site2" pos="0.08037 0.0 -0.01" size="0.005" rgba="1 1 0 1" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <site name="control_frame_site" pos="0 0 0" size="0.001" quat="0 0 0 1" rgba="0 0 0 0" />
+      <site name="Left_virtual_hip_site" pos="0 -0.1877 0.08725" size="0.005" rgba="0 1 0 1" />
+      <site name="Right_virtual_hip_site" pos="0 0.1877 0.08725" size="0.005" rgba="0 1 0 1" />
+    </body>
+  </worldbody>
+  <contact>
+    <pair name="base_keyboard_platform_contact" geom1="base_link_collision" geom2="keyboard_platform_200mm" condim="3" friction="0.001 0.001 0.00001 0.00001 0.00001" />
+    <pair name="base_keyboard_course_platform_200mm_contact" geom1="base_link_collision" geom2="keyboard_course_platform_200mm" condim="3" friction="0.001 0.001 0.00001 0.00001 0.00001" />
+    <pair name="base_keyboard_course_platform_300mm_contact" geom1="base_link_collision" geom2="keyboard_course_platform_300mm" condim="3" friction="0.001 0.001 0.00001 0.00001 0.00001" />
+    <pair name="base_keyboard_course_curb_50mm_contact" geom1="base_link_collision" geom2="keyboard_course_curb_50mm" condim="3" friction="0.001 0.001 0.00001 0.00001 0.00001" />
+  </contact>
+  <equality>
+    <weld name="base_support_weld" body1="base_link" body2="base_support" active="false" solref="0.001 1" solimp="0.99 0.99 0.01 0.5 2" />
+    <connect name="Left_loop1" site1="Left_front_site1" site2="Left_rear_site1" solref="0.00005 1" solimp="0.99995 0.9999 0.00001 0.5 2" />
+    <connect name="Left_loop2" site1="Left_front_site2" site2="Left_rear_site2" solref="0.00005 1" solimp="0.99995 0.9999 0.00001 0.5 2" />
+    <connect name="Right_loop1" site1="Right_front_site1" site2="Right_rear_site1" solref="0.00005 1" solimp="0.99995 0.9999 0.00001 0.5 2" />
+    <connect name="Right_loop2" site1="Right_front_site2" site2="Right_rear_site2" solref="0.00005 1" solimp="0.99995 0.9999 0.00001 0.5 2" />
+  </equality>
+  <sensor>
+    <framequat name="imu_attitude_sensor" objtype="site" objname="imu_site" />
+    <gyro name="imu_gyro_sensor" site="imu_site" />
+    <accelerometer name="imu_acceleration_sensor" site="imu_site" />
+    <framepos name="Left_leg_position_sensor" objtype="site" objname="Left_wheel_axis_site" reftype="site" refname="Left_virtual_hip_site" />
+    <framepos name="Right_leg_position_sensor" objtype="site" objname="Right_wheel_axis_site" reftype="site" refname="Right_virtual_hip_site" />
+  </sensor>
+  <actuator>
+    <general name="Left_front_joint_actuator" joint="Left_front_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
+    <general name="Left_rear_joint_actuator" joint="Left_rear_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
+    <general name="Left_Wheel_joint_actuator" joint="Left_Wheel_joint" gainprm="1" ctrllimited="true" ctrlrange="-6.32 6.32" />
+    <general name="Right_front_joint_actuator" joint="Right_front_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
+    <general name="Right_rear_joint_actuator" joint="Right_rear_joint" gainprm="1" ctrllimited="true" ctrlrange="-40 40" />
+    <general name="Right_Wheel_joint_actuator" joint="Right_Wheel_joint" gainprm="1" ctrllimited="true" ctrlrange="-6.32 6.32" />
+  </actuator>
+</mujoco>
