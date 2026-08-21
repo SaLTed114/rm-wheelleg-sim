@@ -18,21 +18,21 @@
     <mesh name="benchmark_wide_down_wedge_17deg" vertex="-0.572399208235 -2 -0.175 -0.572399208235 2 -0.175 -0.572399208235 -2 0.175 -0.572399208235 2 0.175 0.572399208235 -2 -0.175 0.572399208235 2 -0.175"/>
     <mesh name="ramp_course_beveled_main" vertex="-0.472399208235 -2 -0.144426931854 -0.472399208235 2 -0.144426931854 0.472399208235 -2 -0.144426931854 0.472399208235 2 -0.144426931854 0.472399208235 -2 0.144426931854 0.472399208235 2 0.144426931854"/>
     <mesh name="ramp_course_bevel" vertex="-0.2 -2 -0.175 -0.2 2 -0.175 0.2 -2 -0.175 0.2 2 -0.175 -0.2 -2 0.113853863708 -0.2 2 0.113853863708 0.2 -2 0.175 0.2 2 0.175"/>
-    <mesh name="base_link" content_type="model/stl" file="base_link.STL" />
-    <mesh name="Left_front_link" content_type="model/stl" file="Left_front_link.STL" />
-    <mesh name="Left_front_child1_link" content_type="model/stl" file="Left_front_child1_link.STL" />
-    <mesh name="Left_front_child2_link" content_type="model/stl" file="Left_front_child2_link.STL" />
-    <mesh name="Left_front_child3_link" content_type="model/stl" file="Left_front_child3_link.STL" />
-    <mesh name="Left_rear_link" content_type="model/stl" file="Left_rear_link.STL" />
-    <mesh name="Left_rear_child1_link" content_type="model/stl" file="Left_rear_child1_link.STL" />
-    <mesh name="Left_Wheel_link" content_type="model/stl" file="Left_Wheel_link.STL" />
-    <mesh name="Right_front_link" content_type="model/stl" file="Right_front_link.STL" />
-    <mesh name="Right_front_child1_link" content_type="model/stl" file="Right_front_child1_link.STL" />
-    <mesh name="Right_front_child2_link" content_type="model/stl" file="Right_front_child2_link.STL" />
-    <mesh name="Right_front_child3_link" content_type="model/stl" file="Right_front_child3_link.STL" />
-    <mesh name="Right_rear_link" content_type="model/stl" file="Right_rear_link.STL" />
-    <mesh name="Right_rear_child1_link" content_type="model/stl" file="Right_rear_child1_link.STL" />
-    <mesh name="Right_Wheel_link" content_type="model/stl" file="Right_Wheel_link.STL" />
+    <mesh name="base_link" content_type="model/stl" file="ustl/base_link.STL" />
+    <mesh name="Left_front_link" content_type="model/stl" file="ustl/Left_front_link.STL" />
+    <mesh name="Left_front_child1_link" content_type="model/stl" file="ustl/Left_front_child1_link.STL" />
+    <mesh name="Left_front_child2_link" content_type="model/stl" file="ustl/Left_front_child2_link.STL" />
+    <mesh name="Left_front_child3_link" content_type="model/stl" file="ustl/Left_front_child3_link.STL" />
+    <mesh name="Left_rear_link" content_type="model/stl" file="ustl/Left_rear_link.STL" />
+    <mesh name="Left_rear_child1_link" content_type="model/stl" file="ustl/Left_rear_child1_link.STL" />
+    <mesh name="Left_Wheel_link" content_type="model/stl" file="ustl/Left_Wheel_link.STL" />
+    <mesh name="Right_front_link" content_type="model/stl" file="ustl/Right_front_link.STL" />
+    <mesh name="Right_front_child1_link" content_type="model/stl" file="ustl/Right_front_child1_link.STL" />
+    <mesh name="Right_front_child2_link" content_type="model/stl" file="ustl/Right_front_child2_link.STL" />
+    <mesh name="Right_front_child3_link" content_type="model/stl" file="ustl/Right_front_child3_link.STL" />
+    <mesh name="Right_rear_link" content_type="model/stl" file="ustl/Right_rear_link.STL" />
+    <mesh name="Right_rear_child1_link" content_type="model/stl" file="ustl/Right_rear_child1_link.STL" />
+    <mesh name="Right_Wheel_link" content_type="model/stl" file="ustl/Right_Wheel_link.STL" />
   </asset>
   <worldbody>
     <light name="key_light" directional="true" pos="-1 -1 2" dir="0.4 0.3 -1" diffuse="0.8 0.8 0.75" specular="0.2 0.2 0.2"/>
