@@ -56,6 +56,7 @@ int main() {
         config.leg_length != 0.18F ||
         config.leg_length_ramp.value_limit != 0.39F ||
         config.leg_length_ramp.rate_limit != 0.40F ||
+        config.length_tolerance != 0.045F ||
         config.stable_duration != 0.10F ||
         config.engage_duration != 0.05F ||
         config.forward_reference.velocity_ramp.rate_limit != 5.0F ||

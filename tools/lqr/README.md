@@ -35,6 +35,8 @@ conda run -n sim python tools/lqr/build_current_model.py
 - `tools/lqr/generated/current_model_schedule.h`
 - `docs/archive/validation/lqr-validation.md`
 
+`tools/lqr/generated/ustl/` 保留辽科 COD 参数，只供旧 COD 模型的 C 回归案例使用。本分支的 C++20 控制核心是死代码，不读取该参数目录，也不做复旦适配。
+
 当前调度针对 1 ms 仿真控制周期生成，不能与现有 3 ms 实车调度混用。
 左右腿角代价使用共同/差分坐标：共同腿角保持基础权重，差分腿角由
 `--leg-angle-difference-weight` 单独设置；腿角速度也通过
@@ -52,8 +54,9 @@ conda run -n sim python tools/lqr/build_current_model.py
   adapter 保持一致。
 - `body_yaw_inertia_actual` 是参数提取器得到的 `base_link` Izz；它不是 LQR
   方程最终使用的整机惯量。
-- 提取器在 `0.18 m` 默认腿长姿态下，将 base、腿和轮的自身惯量及平行轴项
-  聚合为 `assembly_yaw_inertia_reference`；当前模型的 LQR 固定使用该值。
+- 提取器在模型名义腿长姿态下，将 base、腿和轮的自身惯量及平行轴项聚合为
+  `assembly_yaw_inertia_reference`；复旦默认名义腿长为 `0.24 m`，COD 参数
+  扫描保留原 `0.34 m` nominal 姿态，两者的 yaw 惯量参考腿长均为 `0.18 m`。
 - `assembly_yaw_inertia_diagnostic` 仍记录提取器 nominal 姿态下的整机 Izz，
   用于观察腿长变化，但不作为正式输入。
 - 方程中的 `I_z/(2R_l)` 来自左右差分坐标变换；`I_z` 本身是完整惯量，

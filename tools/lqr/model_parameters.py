@@ -38,28 +38,6 @@ SIDE_SPECS = (
     SideSpec(
         name="left",
         joint_names=(
-            "Right_front_joint", "Right_front_child1_joint",
-            "Right_front_child2_joint", "Right_front_joint3_joint",
-            "Right_rear_joint", "Right_rear_child1_joint",
-        ),
-        loop_sites=(
-            ("Right_front_site1", "Right_rear_site1"),
-            ("Right_front_site2", "Right_rear_site2"),
-        ),
-        hip_site="Right_virtual_hip_site",
-        wheel_site="Right_wheel_axis_site",
-        wheel_body="Right_Wheel_link",
-        wheel_joint="Right_Wheel_joint",
-        wheel_collision="Right_wheel_collision",
-        leg_bodies=(
-            "Right_front_link", "Right_front_child1_link",
-            "Right_front_child2_link", "Right_front_child3_link",
-            "Right_rear_link", "Right_rear_child1_link",
-        ),
-    ),
-    SideSpec(
-        name="right",
-        joint_names=(
             "Left_front_joint", "Left_front_child1_joint",
             "Left_front_child2_joint", "Left_front_child3_joint",
             "Left_rear_joint", "Left_rear_child1_joint",
@@ -77,6 +55,28 @@ SIDE_SPECS = (
             "Left_front_link", "Left_front_child1_link",
             "Left_front_child2_link", "Left_front_child3_link",
             "Left_rear_link", "Left_rear_child1_link",
+        ),
+    ),
+    SideSpec(
+        name="right",
+        joint_names=(
+            "Right_front_joint", "Right_front_child1_joint",
+            "Right_front_child2_joint", "Right_front_joint3_joint",
+            "Right_rear_joint", "Right_rear_child1_joint",
+        ),
+        loop_sites=(
+            ("Right_front_site1", "Right_rear_site1"),
+            ("Right_front_site2", "Right_rear_site2"),
+        ),
+        hip_site="Right_virtual_hip_site",
+        wheel_site="Right_wheel_axis_site",
+        wheel_body="Right_Wheel_link",
+        wheel_joint="Right_Wheel_joint",
+        wheel_collision="Right_wheel_collision",
+        leg_bodies=(
+            "Right_front_link", "Right_front_child1_link",
+            "Right_front_child2_link", "Right_front_child3_link",
+            "Right_rear_link", "Right_rear_child1_link",
         ),
     ),
 )
@@ -328,6 +328,10 @@ class ModelParameterExtractor:
     def _wheel_radius(self, spec: SideSpec) -> float:
         geom = self.require_id(
             mujoco.mjtObj.mjOBJ_GEOM, spec.wheel_collision)
+        if self.model.geom_type[geom] == mujoco.mjtGeom.mjGEOM_CYLINDER:
+            # Cylinder geoms expose their radius directly; unlike mesh wheels
+            # there is no vertex cloud to project around the axle.
+            return float(self.model.geom_size[geom, 0])
         mesh = self.model.geom_dataid[geom]
         start = self.model.mesh_vertadr[mesh]
         count = self.model.mesh_vertnum[mesh]
@@ -516,8 +520,11 @@ class ModelParameterExtractor:
 
         left_mass = sampled_legs["left"][0]["mass"]
         right_mass = sampled_legs["right"][0]["mass"]
-        if abs(left_mass - right_mass) > 1.0e-9:
+        # Fudan's mirrored CAD bodies differ by a small mass rounding error;
+        # use the mean while retaining the spread in the extracted samples.
+        if abs(left_mass - right_mass) > 1.0e-3:
             raise RuntimeError("left and right reduced leg masses differ")
+        left_mass = 0.5 * (left_mass + right_mass)
         represented_mass = (
             rigid["body_mass"] + 2.0 * left_mass
             + 2.0 * rigid["wheel_mass"])

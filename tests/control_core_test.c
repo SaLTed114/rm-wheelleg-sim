@@ -18,15 +18,15 @@ int main() {
 
     bc_control_default_config(&config);
     if (fabsf(
-            config.lqr_compensation.leg_angle_trim -
-            2.42F * BC_PI_F / 180.0F) > 1.0e-7F ||
+        config.lqr_compensation.leg_angle_trim -
+            BC_PI_F / 180.0F) > 1.0e-7F ||
         config.lqr_compensation.yaw_acceleration_feedforward_scale != 0.9F ||
         config.roll_controller.kp != 800.0F ||
         config.roll_controller.kd != 60.0F ||
         config.roll_controller.output_limit != 200.0F ||
         config.roll_force_sign[BC_L] != +1.0F ||
         config.roll_force_sign[BC_R] != -1.0F ||
-        fabsf(config.support_force - 76.204F) > 1.0e-4F) {
+        fabsf(config.support_force - 103.27294F) > 1.0e-4F) {
         fputs("default LQR compensation is incorrect\n", stderr);
         return 1;
     }

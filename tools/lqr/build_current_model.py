@@ -29,13 +29,14 @@ from model_parameters import ModelParameterExtractor
 from verify_lqr import verify_legacy
 
 
-DEFAULT_MODEL = Path("models/MJCF/COD-2026RoboMaster-Balance.xml")
+DEFAULT_MODEL = Path("models/MJCF/Fudan-2026RoboMaster-Balance.xml")
 DEFAULT_OUTPUT = Path("tools/lqr/generated")
 Q_DIAGONAL = (90, 260, 40, 15, 60, 1, 60, 1, 900, 120)
 R_DIAGONAL = (1.6, 1.6, 0.7, 0.7)
 LEG_ANGLE_DIFFERENCE_WEIGHT = 960.0
 LEG_ANGULAR_VELOCITY_DIFFERENCE_WEIGHT = 16.0
 CONTROLLER_LENGTH_MINIMUM = 0.16
+MODEL_NOMINAL_LENGTH = 0.18
 
 
 def make_leg_provider(
@@ -200,6 +201,7 @@ def physical_to_dict(physical: PhysicalParameters) -> dict[str, float]:
 
 def build_result(
     model_path: Path,
+    nominal_length: float = MODEL_NOMINAL_LENGTH,
     q_diagonal: tuple[float, ...] = Q_DIAGONAL,
     r_diagonal: tuple[float, ...] = R_DIAGONAL,
     extracted: dict[str, object] | None = None,
@@ -212,7 +214,8 @@ def build_result(
         Path("references/rm2026cb-balance-chassis/Tasks/balance_chassis/"
              "bc_lqr_schedule.c"))
     if extracted is None:
-        extracted = ModelParameterExtractor(model_path).extract(sample_count=31)
+        extracted = ModelParameterExtractor(model_path).extract(
+            sample_count=31, nominal_length=nominal_length)
     leg_provider = make_leg_provider(extracted)
     extracted_minimum, length_maximum = extracted["safe_length_range"]
     if CONTROLLER_LENGTH_MINIMUM < extracted["scan"]["minimum"]:
@@ -283,8 +286,9 @@ def build_result(
             "sample_count": settings.sample_count,
             "length_range": [settings.length_min, settings.length_max],
             "model_parameter_range": [extracted_minimum, length_maximum],
-            "parameter_extrapolation_range": [
-                settings.length_min, extracted_minimum],
+            "parameter_extrapolation_range": (
+                [settings.length_min, extracted_minimum]
+                if settings.length_min < extracted_minimum else None),
             "physical_parameters": physical_to_dict(physical),
         },
         "schedule": {
@@ -374,6 +378,15 @@ def emit_report(result: dict[str, object], path: Path) -> None:
     schedule = result["schedule"]
     left_fit = model["fit_diagnostics"]["left"]
     right_fit = model["fit_diagnostics"]["right"]
+    extrapolation_range = controller["parameter_extrapolation_range"]
+    model_name = Path(model["model_path"]).stem
+    nominal_length = model["scan"]["nominal_length"]
+    extrapolation_line = (
+        "- 下段模型参数拟合延伸范围："
+        f"`{extrapolation_range[0]:.3f}` 至 "
+        f"`{extrapolation_range[1]:.3f} m`。"
+        if extrapolation_range is not None else
+        "- 控制范围全部落在模型直接参数范围内，无需下段拟合外推。")
     text = f"""# LQR 参数生成与验证归档
 
 本文由 `tools/lqr/build_current_model.py` 自动生成。
@@ -412,8 +425,7 @@ def emit_report(result: dict[str, object], path: Path) -> None:
   `{controller['length_range'][1]:.3f} m`。
 - 模型可直接提取参数的机械范围：`{controller['model_parameter_range'][0]:.3f}` 至
   `{controller['model_parameter_range'][1]:.3f} m`。
-- 下段模型参数拟合延伸范围：`{controller['parameter_extrapolation_range'][0]:.3f}` 至
-  `{controller['parameter_extrapolation_range'][1]:.3f} m`。
+{extrapolation_line}
 - 控制周期：`{1000.0 * controller['timestep']:.1f} ms`。
 - 机体质量：`{rigid['body_mass']:.6f} kg`。
 - 机体俯仰惯量：`{rigid['body_pitch_inertia']:.9f} kg*m^2`。
@@ -428,10 +440,10 @@ def emit_report(result: dict[str, object], path: Path) -> None:
   `{rigid['body_com_height']:.9f} m`，前向偏移为
   `{rigid['body_com_forward_offset']:.9f} m`。
 
-源 XML 中物理右腿的闭链连接点存在约 1.95 mm 的固定横向错位。因此可行性
-判断采用每侧固有闭合误差加 0.5 mm，而不是统一使用 0.5 mm 绝对阈值；采样
-得到的最大闭合误差为
-`{1000.0 * model['scan']['maximum_closure_error']:.6f} mm`。
+当前生成 plant 在参数扫描中的最大闭合误差为
+`{1000.0 * model['scan']['maximum_closure_error']:.6f} mm`。可行性判断仍按
+每侧名义姿态固有闭合误差加 `0.5 mm` 设置上限，以兼容后续保留固定装配偏差的
+闭链模型。
 
 实际腿部质心明显偏离髋关节到轮轴的连线：
 
@@ -468,10 +480,10 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 - float Horner 求值最大误差：
   `{current['maximum_float_horner_error']:.6e}`。
 
-当前 Q/R 由 MuJoCo 正反向加速、原地旋转和跨腿长覆盖选定，`0.18 m` 是
-主工作点，`0.24 m` 和降额的 `0.38 m` 用于覆盖验证；旧实车权重仅保留为
-生成器 golden test。调度按照 1 ms 仿真控制周期生成，不能直接用于现有
-3 ms 实车控制循环。
+当前模型 `{model_name}` 以 `{nominal_length:.3f} m` 为名义工作点，增益覆盖
+生成器报告的完整控制腿长范围；
+旧实车权重仅保留为生成器 golden test。调度按照 1 ms 仿真控制周期生成，
+不能直接用于现有 3 ms 实车控制循环。
 """
     path.write_text(text, encoding="utf-8")
 
@@ -479,6 +491,8 @@ def emit_report(result: dict[str, object], path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--nominal-length", type=float, default=MODEL_NOMINAL_LENGTH)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(
         "--report", type=Path,
@@ -509,6 +523,7 @@ def main() -> int:
         extracted = cached["model"] if "model" in cached else cached
     result = build_result(
         model_path=arguments.model,
+        nominal_length=arguments.nominal_length,
         q_diagonal=tuple(arguments.q_diagonal),
         r_diagonal=tuple(arguments.r_diagonal),
         extracted=extracted,

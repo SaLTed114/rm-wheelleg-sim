@@ -17,8 +17,8 @@ void bc_control_default_config(bc_control_config_t *config) {
     *config = (bc_control_config_t){
         .observer = {
             .leg_geometry = {
-                .hip_link_length   = 0.215F,
-                .wheel_link_length = 0.254F,
+                .hip_link_length   = 0.175F,
+                .wheel_link_length = 0.208F,
             },
             .impact_observer = impact_observer,
             .velocity_estimator = {
@@ -38,16 +38,16 @@ void bc_control_default_config(bc_control_config_t *config) {
                 .reacquisition_velocity_rate = 2.0F,
             },
             .imu_position = {
-                .x = -0.10F,
+                .x = 0.0F,
                 .y = 0.0F,
-                .z = -0.03F,
+                .z = 0.0F,
             },
             .hip_center_position = {
-                .x = -0.0193914F,
+                .x = 0.0F,
                 .y = 0.0F,
-                .z = -0.05F,
+                .z = 0.08725F,
             },
-            .wheel_radius = 0.05806F,
+            .wheel_radius = 0.06F,
             .wheel_velocity_startup_delay = 0.5F,
         },
         .length_controller = {
@@ -67,11 +67,11 @@ void bc_control_default_config(bc_control_config_t *config) {
         },
         .roll_force_sign = {+1.0F, -1.0F},
         .lqr_compensation = {
-            .leg_angle_trim = 2.42F * BC_PI_F / 180.0F,
+            .leg_angle_trim = BC_PI_F / 180.0F,
             .yaw_acceleration_feedforward_scale = 0.9F,
         },
         .support_force_estimator = support_force_estimator,
-        .support_force      = 76.204F,
+        .support_force      = 103.27294F,
         .wheel_torque_limit = 6.32F,
         .joint_torque_limit = 40.0F,
     };

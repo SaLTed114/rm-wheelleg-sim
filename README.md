@@ -2,11 +2,11 @@
 
 ## Overview
 
-`rm-balance-sim` is a MuJoCo simulation and control-development project for a wheel-legged balancing robot. It contains the validated platform-independent C11 control core, a parallel C++20 implementation for startup and fixed-position/fixed-heading LQR balance, interactive visualization, automated tests, and headless benchmark tools.
+`rm-balance-sim` is a MuJoCo simulation and control-development project for a wheel-legged balancing robot. It contains the validated platform-independent C11 control core, interactive visualization, automated tests, and headless benchmark tools. The preserved C++20 control implementation is dead code on the Fudan adaptation branch and is excluded from builds and tests.
 
-The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). The scope and architecture of the C++20 control core are recorded in [`docs/notes/cpp-control-core.md`](docs/notes/cpp-control-core.md). Current experiments are recorded in [`docs/notes/controller-experiment-log.md`](docs/notes/controller-experiment-log.md), with closed experiment cycles and generated LQR validation under [`docs/archive/`](docs/archive/).
+The current development state and unresolved problems are recorded in [`docs/notes/project-context.md`](docs/notes/project-context.md). The historical C++20 implementation is recorded in [`docs/notes/cpp-control-core.md`](docs/notes/cpp-control-core.md). Current experiments are recorded in [`docs/notes/controller-experiment-log.md`](docs/notes/controller-experiment-log.md), with closed experiment cycles and generated LQR validation under [`docs/archive/`](docs/archive/).
 
-The robot assets under `models/` are derived from the open-source model released by the Liaoning University of Science and Technology COD RoboMaster team. See [`models/README.md`](models/README.md) for attribution and licensing information.
+The robot assets under `models/` are derived from open-source models released by the Liaoning University of Science and Technology COD RoboMaster team and the Fudan wheel-legged robot project. See [`models/README.md`](models/README.md) for attribution and licensing information.
 
 ## Build
 
@@ -50,7 +50,6 @@ The control tests and benchmark tools can be built without GLFW or ImGui:
 ```bash
 cmake -S . -B build \
   -DBALANCE_BUILD_GUI=OFF \
-  -DBALANCE_BUILD_CPP_VIEWER=OFF \
   -DMUJOCO_ROOT=/path/to/mujoco
 cmake --build build -j
 ```
@@ -65,31 +64,22 @@ Windows:
 
 ```powershell
 .\build\Release\rm_balance_sim.exe `
-  .\models\MJCF\COD-2026RoboMaster-Balance.xml
+  .\models\MJCF\Fudan-2026RoboMaster-Balance.xml
 ```
 
 Linux:
 
 ```bash
-./build/rm_balance_sim models/MJCF/COD-2026RoboMaster-Balance.xml
+./build/rm_balance_sim models/MJCF/Fudan-2026RoboMaster-Balance.xml
 ```
 
 Add `--keyboard` for manual control. `W/S` or Up/Down command forward motion, Shift raises the speed limit, `A/D` or Left/Right rotate the virtual gimbal, `T` starts or cancels STEP_DOCK, Space pauses, `R` or Backspace resets, Escape exits, and the mouse controls the camera when the UI is not capturing input.
 
 Add `--trace <csv-path>` together with `--keyboard` to record control commands, controller states, estimator diagnostics, MuJoCo truth, contacts, IMU feedback, and wheel torques. The trace is flushed every 0.1 seconds.
 
-### C++20 Viewer
+### C++20 Historical Source
 
-The C++20 core currently covers system enable/restart, the startup sequence, and fixed-position/fixed-heading LQR balance only. It intentionally excludes drive commands, gimbal following, support/landing, STEP_DOCK, jump, and spin behavior. Its standalone viewer depends on MuJoCo and GLFW, but not Dear ImGui or the C controller snapshot. The normal build enables this viewer alongside the diagnostic GUI.
-
-```bash
-cmake --build build --target rm_balance_cpp_viewer -j
-
-./build/rm_balance_cpp_viewer \
-  models/MJCF/COD-2026RoboMaster-Balance.xml
-```
-
-The viewer enables the system after two seconds and starts the fixed-balance sequence automatically. The mouse controls the camera, Escape closes the window, and there is intentionally no C++ diagnostic UI yet.
+`src/control_cpp/` and `src/sim/cpp/` are retained only as historical source on this branch. CMake does not expose a C++ control library, runner, viewer, or test target, and the code is not adapted to the Fudan model.
 
 ## Tests
 
@@ -103,15 +93,6 @@ ctest --test-dir build -C Release --output-on-failure
 ctest --test-dir build --output-on-failure
 ```
 
-Run only the C++20 control checks with:
-
-```bash
-ctest --test-dir build --output-on-failure \
-  -R "cpp_controller_startup|cpp_control_modules|mujoco_cpp_startup"
-```
-
-These checks cover C/C++ startup-transition parity, isolated C++ modules and output safety, and an independent MuJoCo standing run.
-
 ## Benchmarks
 
 The build provides dedicated executables for performance, drop, ramp-course, ramp-jump, jump-impulse, step-docking, and trim-scan scenarios. Benchmark outputs belong under the ignored build tree; most runs write a summary and optional trace to the selected output directory.
@@ -120,7 +101,7 @@ A representative performance run is:
 
 ```bash
 ./build/rm_balance_performance \
-  models/MJCF/COD-2026RoboMaster-Balance.xml \
+  models/MJCF/Fudan-2026RoboMaster-Balance.xml \
   build/performance/baseline
 ```
 
@@ -128,11 +109,11 @@ Dedicated jump-impulse and step-docking runs use the same model/output pattern:
 
 ```bash
 ./build/rm_balance_jump_impulse \
-  models/MJCF/COD-2026RoboMaster-Balance.xml \
+  models/MJCF/Fudan-2026RoboMaster-Balance.xml \
   build/jump-impulse
 
 ./build/rm_balance_step_dock \
-  models/MJCF/COD-2026RoboMaster-Balance.xml \
+  models/MJCF/Fudan-2026RoboMaster-Balance.xml \
   build/step-dock
 ```
 
@@ -140,10 +121,10 @@ Registered cases can be replayed in the diagnostic GUI with `./build/rm_balance_
 
 ## Leg-Adapter Calibration
 
-The MuJoCo adapter joint offsets are generated from closed-chain poses in the `0.18-0.21 m` standing range. The `armsim` Conda environment must provide MuJoCo, NumPy, and SciPy.
+The MuJoCo adapter joint offsets are generated from closed-chain poses in the `0.18-0.21 m` standing range. The `sim` Conda environment must provide MuJoCo, NumPy, and SciPy.
 
 ```powershell
-conda run -n armsim python tools/calibration/calibrate_leg_adapter.py --check
+conda run -n sim python tools/calibration/calibrate_leg_adapter.py --check
 ```
 
 Use `--write` only after an intentional MJCF or calibration change. It updates the tracked JSON record and C++ header when the standing-range accuracy and full-range non-regression gates pass.
