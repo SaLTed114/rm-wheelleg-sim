@@ -8,7 +8,7 @@
 #include <limits>
 
 #include "balance/math_utils.h"
-#include "generated/mujoco_leg_calibration.hpp"
+#include "generated/ustl/mujoco_leg_calibration.hpp"
 #include "mujoco_adapter.hpp"
 #include "mujoco_plant.hpp"
 #include "performance/performance_scenario.hpp"
@@ -412,14 +412,14 @@ int main(int argc, char **argv) {
                     mapped_joint_names[side][joint]);
                 const int qpos = plant.model().jnt_qposadr[model_joint];
                 const double expected =
-                    balance::sim::calibration::kJointScales[side][joint] *
+                    balance::sim::cod_calibration::kJointScales[side][joint] *
                         plant.data().qpos[qpos] +
-                    balance::sim::calibration::kJointOffsets[side][joint];
+                    balance::sim::cod_calibration::kJointOffsets[side][joint];
                 const double error = std::abs(
                     feedback.leg[side].joint[joint].angle -
                     expected);
                 const double expected_torque =
-                    balance::sim::calibration::kJointScales[side][joint] *
+                    balance::sim::cod_calibration::kJointScales[side][joint] *
                     (1.0 + 2.0 * side + joint);
                 if (error > 1.0e-6 ||
                     std::abs(feedback.leg[side].joint[joint].torque -

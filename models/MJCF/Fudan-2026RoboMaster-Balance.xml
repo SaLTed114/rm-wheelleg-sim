@@ -111,10 +111,10 @@
          base collision during the required free-release phase. -->
     <body name="base_link" pos="0 0 0.07" quat="1 0 0 0">
       <freejoint name="base_free_joint" />
-      <inertial pos="-0.00406060 0.0008523 0.09714204" mass="16.8775740" fullinertia="0.3595155 0.35249 0.45655 -0.00174358 -0.00825907 -0.00214156" />
-      <site name="imu_site" pos="0 0 0" size="0.005" quat="1 0 0 0" />
-      <geom name="base_link_collision" type="mesh" rgba="1 1 1 1" mesh="base_link" conaffinity="1" />
-      <body name="Left_rear_link" pos="0 -0.1877 0.08725" quat="0.707105 0.707108 0 0">
+      <inertial pos="0.0040606 -0.0008523 0.09714204" mass="16.8775740" fullinertia="0.3595155 0.35249 0.45655 -0.00174358 0.00825907 0.00214156" />
+      <site name="imu_site" pos="0 0 0" size="0.005" quat="0 0 0 1" />
+      <geom name="base_link_collision" type="mesh" rgba="1 1 1 1" mesh="base_link" conaffinity="1" quat="0 0 0 1" />
+      <body name="Left_rear_link" pos="0 0.1877 0.08725" quat="0 0 0.707108281185553 0.70710528118436">
         <inertial pos="0.0552763 -0.0165544 -0.00927161" quat="-0.005176 0.693173 0.0544357 0.718694" mass="1.1132" diaginertia="0.00641833 0.00468513 0.00204569" />
         <joint name="Left_rear_joint" pos="0 0 0" axis="0 0 1" armature="0" damping="0.03" frictionloss="0.015" range="-100 100" actuatorfrcrange="-100 100" />
         <geom type="mesh" rgba="1 1 1 1" mesh="Left_rear_link" conaffinity="1" name="rf0_collision" />
@@ -142,7 +142,7 @@
           </body>
         </body>
       </body>
-      <body name="Right_rear_link" pos="0 0.1877 0.08725" quat="0.707105 -0.707108 0 0">
+      <body name="Right_rear_link" pos="0 -0.1877 0.08725" quat="0 0 -0.707108281185553 0.70710528118436">
         <inertial pos="0.055403 0.016584 -0.0092702" quat="0.00463484 0.693099 -0.0538381 0.718814" mass="1.1128" diaginertia="0.00641157 0.0046755 0.00204815" />
         <joint name="Right_rear_joint" pos="0 0 0" axis="0 0 1" armature="0" damping="0.03" frictionloss="0.015" range="-100 100" actuatorfrcrange="-100 100" />
         <geom type="mesh" rgba="1 1 1 1" mesh="Right_rear_link" conaffinity="1" name="lf0_collision" />
@@ -170,7 +170,7 @@
           </body>
         </body>
       </body>
-      <body name="Left_front_link" pos="0 -0.1877 0.08725" quat="0.707105 0.707108 0 0">
+      <body name="Left_front_link" pos="0 0.1877 0.08725" quat="0 0 0.707108281185553 0.70710528118436">
         <inertial pos="-0.0077129 -0.044014 0.0053168" quat="0.54287 0.453598 -0.539995 0.456012" mass="0.058433" diaginertia="0.000101653 9.09634e-05 1.15321e-05" />
         <joint name="Left_front_joint" pos="0 0 0" axis="0 0 1" armature="0.00" damping="0.03" frictionloss="0.015" actuatorfrcrange="-100 100" />
         <geom type="mesh" rgba="1 1 1 1" mesh="Left_front_link" conaffinity="1" />
@@ -195,7 +195,7 @@
           </body>
         </body>
       </body>
-      <body name="Right_front_link" pos="0 0.1877 0.08725" quat="0.707105 -0.707108 0 0">
+      <body name="Right_front_link" pos="0 -0.1877 0.08725" quat="0 0 -0.707108281185553 0.70710528118436">
         <inertial pos="-0.0077129 -0.044014 0.0053168" quat="-0.066476 0.705194 0.0534809 0.703863" mass="0.058433" diaginertia="7.83158e-05 7.61355e-05 2.77958e-06" />
         <joint name="Right_front_joint" pos="0 0 0" axis="0 0 1" armature="0.00" damping="0.03" frictionloss="0.015" actuatorfrcrange="-100 100" />
         <geom type="mesh" rgba="1 1 1 1" mesh="Right_front_link" conaffinity="1" />
@@ -220,9 +220,8 @@
           </body>
         </body>
       </body>
-      <site name="control_frame_site" pos="0 0 0" size="0.001" quat="0 0 0 1" rgba="0 0 0 0" />
-      <site name="Left_virtual_hip_site" pos="0 -0.1877 0.08725" size="0.005" rgba="0 1 0 1" />
-      <site name="Right_virtual_hip_site" pos="0 0.1877 0.08725" size="0.005" rgba="0 1 0 1" />
+      <site name="Left_virtual_hip_site" pos="0 0.1877 0.08725" size="0.005" rgba="0 1 0 1" />
+      <site name="Right_virtual_hip_site" pos="0 -0.1877 0.08725" size="0.005" rgba="0 1 0 1" />
     </body>
   </worldbody>
   <contact>

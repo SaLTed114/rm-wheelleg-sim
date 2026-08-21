@@ -37,6 +37,8 @@ private:
     std::array<std::array<ChannelAddress, BC_JOINT_NUM>, BC_SIDE_NUM>
         joint_addresses_{};
     std::array<ChannelAddress, BC_SIDE_NUM> wheel_addresses_{};
+    std::array<mjtNum, 9> base_from_imu_rotation_{};
+    std::array<mjtNum, 4> imu_to_base_quaternion_{};
     int imu_attitude_address_{};
     int imu_gyro_address_{};
     int imu_acceleration_address_{};

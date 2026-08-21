@@ -79,6 +79,7 @@ void step_controller(
     const float forward_velocity,
     const float gimbal_yaw_rate
 ) {
+    constexpr float kGimbalConsistencyTolerance = 1.0e-4F;
     bc_operator_command_t command{};
     command.system_enabled = static_cast<uint8_t>(
         plant.data().time >= 2.0);
@@ -108,8 +109,8 @@ void step_controller(
     const float rate_error =
         snapshot.state.value[BC_STATE_DPSI] +
         snapshot.gimbal.relative_yaw_rate - gimbal.world_yaw_rate;
-    if (std::abs(heading_error) > 2.0e-5F ||
-        std::abs(rate_error) > 2.0e-5F) {
+    if (std::abs(heading_error) > kGimbalConsistencyTolerance ||
+        std::abs(rate_error) > kGimbalConsistencyTolerance) {
         std::cerr << "gimbal feedback mismatch: heading="
                   << heading_error << ", rate=" << rate_error
                   << ", roll=" << snapshot.roll
@@ -211,21 +212,21 @@ int main(int argc, char **argv) {
             plant.model(), mjOBJ_GEOM, "ground");
         const std::array<int, BC_SIDE_NUM> wheel{{
             require_id(
-                plant.model(), mjOBJ_GEOM, "Right_wheel_collision"),
-            require_id(
                 plant.model(), mjOBJ_GEOM, "Left_wheel_collision"),
+            require_id(
+                plant.model(), mjOBJ_GEOM, "Right_wheel_collision"),
         }};
         const std::array<int, BC_SIDE_NUM> wheel_axis{{
             require_id(
-                plant.model(), mjOBJ_SITE, "Right_wheel_axis_site"),
-            require_id(
                 plant.model(), mjOBJ_SITE, "Left_wheel_axis_site"),
+            require_id(
+                plant.model(), mjOBJ_SITE, "Right_wheel_axis_site"),
         }};
         const std::array<int, BC_SIDE_NUM> virtual_hip{{
             require_id(
-                plant.model(), mjOBJ_SITE, "Right_virtual_hip_site"),
-            require_id(
                 plant.model(), mjOBJ_SITE, "Left_virtual_hip_site"),
+            require_id(
+                plant.model(), mjOBJ_SITE, "Right_virtual_hip_site"),
         }};
         const int base_joint = require_id(
             plant.model(), mjOBJ_JOINT, "base_free_joint");

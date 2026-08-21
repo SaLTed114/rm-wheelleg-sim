@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -20,23 +21,23 @@ struct ChannelSpec {
 
 constexpr std::array<std::array<ChannelSpec, BC_JOINT_NUM>, BC_SIDE_NUM>
     kJointSpecs{{
-        {{{"Right_front_joint", "Right_front_joint_actuator",
+        {{{"Left_front_joint", "Left_front_joint_actuator",
            calibration::kJointScales[BC_L][BC_FRONT],
            calibration::kJointOffsets[BC_L][BC_FRONT]},
-          {"Right_rear_joint", "Right_rear_joint_actuator",
+          {"Left_rear_joint", "Left_rear_joint_actuator",
            calibration::kJointScales[BC_L][BC_REAR],
            calibration::kJointOffsets[BC_L][BC_REAR]}}},
-        {{{"Left_front_joint", "Left_front_joint_actuator",
+        {{{"Right_front_joint", "Right_front_joint_actuator",
            calibration::kJointScales[BC_R][BC_FRONT],
            calibration::kJointOffsets[BC_R][BC_FRONT]},
-          {"Left_rear_joint", "Left_rear_joint_actuator",
+          {"Right_rear_joint", "Right_rear_joint_actuator",
            calibration::kJointScales[BC_R][BC_REAR],
            calibration::kJointOffsets[BC_R][BC_REAR]}}},
     }};
 
 constexpr std::array<ChannelSpec, BC_SIDE_NUM> kWheelSpecs{{
-    {"Right_Wheel_joint", "Right_Wheel_joint_actuator", -1.0, 0.0},
-    {"Left_Wheel_joint", "Left_Wheel_joint_actuator", +1.0, 0.0},
+    {"Left_Wheel_joint", "Left_Wheel_joint_actuator", 1.0, 0.0},
+    {"Right_Wheel_joint", "Right_Wheel_joint_actuator", 1.0, 0.0},
 }};
 
 constexpr std::size_t kActuatorNum =
@@ -143,11 +144,77 @@ MujocoAdapter::MujocoAdapter(const mjModel &model)
     require_unique(dof_addresses, "joint velocity");
     require_unique(actuator_ids, "actuator");
 
-    imu_attitude_address_ = resolve_sensor(
-        model, "imu_attitude_sensor", 4);
-    imu_gyro_address_ = resolve_sensor(model, "imu_gyro_sensor", 3);
-    imu_acceleration_address_ = resolve_sensor(
-        model, "imu_acceleration_sensor", 3);
+    const int base = require_named_id(model, mjOBJ_BODY, "base_link");
+    const int imu_site = require_named_id(model, mjOBJ_SITE, "imu_site");
+    if (model.site_bodyid[imu_site] != base) {
+        throw std::runtime_error("IMU site must be attached to base_link");
+    }
+    mju_negQuat(
+        imu_to_base_quaternion_.data(),
+        model.site_quat + 4 * imu_site);
+    mjtNum imu_to_base_rotation[9];
+    mju_quat2Mat(
+        imu_to_base_rotation,
+        imu_to_base_quaternion_.data());
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            base_from_imu_rotation_[3 * row + column] =
+                imu_to_base_rotation[3 * column + row];
+        }
+    }
+
+    const auto resolve_imu_sensor = [&](const char *name,
+                                        const int dimension) {
+        const int sensor = require_named_id(model, mjOBJ_SENSOR, name);
+        if (model.sensor_dim[sensor] != dimension ||
+            model.sensor_objtype[sensor] != mjOBJ_SITE ||
+            model.sensor_objid[sensor] != imu_site) {
+            throw std::runtime_error(
+                "unexpected IMU sensor definition '" +
+                std::string(name) + "'");
+        }
+        return model.sensor_adr[sensor];
+    };
+    imu_attitude_address_ = resolve_imu_sensor(
+        "imu_attitude_sensor", 4);
+    imu_gyro_address_ = resolve_imu_sensor("imu_gyro_sensor", 3);
+    imu_acceleration_address_ = resolve_imu_sensor(
+        "imu_acceleration_sensor", 3);
+
+    std::unique_ptr<mjData, decltype(&mj_deleteData)> reference_data(
+        mj_makeData(&model), mj_deleteData);
+    if (!reference_data) {
+        throw std::runtime_error(
+            "failed to allocate MuJoCo data for adapter calibration");
+    }
+    mj_forward(&model, reference_data.get());
+    const mjtNum *base_rotation = reference_data->xmat + 9 * base;
+    for (std::size_t side = 0; side < BC_SIDE_NUM; ++side) {
+        const int joint = require_named_id(
+            model, mjOBJ_JOINT, kWheelSpecs[side].joint_name);
+        const mjtNum *world_axis = reference_data->xaxis + 3 * joint;
+        const double axis_base_x =
+            base_rotation[0] * world_axis[0] +
+            base_rotation[3] * world_axis[1] +
+            base_rotation[6] * world_axis[2];
+        const double axis_base_y =
+            base_rotation[1] * world_axis[0] +
+            base_rotation[4] * world_axis[1] +
+            base_rotation[7] * world_axis[2];
+        const double axis_base_z =
+            base_rotation[2] * world_axis[0] +
+            base_rotation[5] * world_axis[1] +
+            base_rotation[8] * world_axis[2];
+        if (std::abs(axis_base_y) < 0.999 ||
+            std::abs(axis_base_x) > 1.0e-3 ||
+            std::abs(axis_base_z) > 1.0e-3) {
+            throw std::runtime_error(
+                "wheel joint axis is not aligned with the chassis Y axis: " +
+                std::string(kWheelSpecs[side].joint_name));
+        }
+        wheel_addresses_[side].scale =
+            std::copysign(1.0, axis_base_y);
+    }
 }
 
 void MujocoAdapter::read(
@@ -174,9 +241,14 @@ void MujocoAdapter::read(
             address.scale * data.qvel[address.dof]);
     }
 
-    const double *quaternion = data.sensordata + imu_attitude_address_;
+    const mjtNum *imu_quaternion =
+        data.sensordata + imu_attitude_address_;
+    mjtNum body_quaternion[4];
+    mju_mulQuat(
+        body_quaternion, imu_quaternion,
+        imu_to_base_quaternion_.data());
     double rotation[9];
-    mju_quat2Mat(rotation, quaternion);
+    mju_quat2Mat(rotation, body_quaternion);
 
     feedback.imu.roll = static_cast<float>(
         std::atan2(rotation[7], rotation[8]));
@@ -185,16 +257,26 @@ void MujocoAdapter::read(
     feedback.imu.yaw = static_cast<float>(
         std::atan2(rotation[3], rotation[0]));
 
-    const double *gyro = data.sensordata + imu_gyro_address_;
-    feedback.imu.roll_rate = static_cast<float>(gyro[0]);
-    feedback.imu.pitch_rate = static_cast<float>(gyro[1]);
-    feedback.imu.yaw_rate = static_cast<float>(gyro[2]);
+    const mjtNum *imu_gyro = data.sensordata + imu_gyro_address_;
+    mjtNum body_gyro[3];
+    mju_mulMatVec3(
+        body_gyro, base_from_imu_rotation_.data(), imu_gyro);
+    feedback.imu.roll_rate = static_cast<float>(body_gyro[0]);
+    feedback.imu.pitch_rate = static_cast<float>(body_gyro[1]);
+    feedback.imu.yaw_rate = static_cast<float>(body_gyro[2]);
 
-    const double *specific_force =
+    const mjtNum *imu_specific_force =
         data.sensordata + imu_acceleration_address_;
-    feedback.imu.specific_force_x = static_cast<float>(specific_force[0]);
-    feedback.imu.specific_force_y = static_cast<float>(specific_force[1]);
-    feedback.imu.specific_force_z = static_cast<float>(specific_force[2]);
+    mjtNum body_specific_force[3];
+    mju_mulMatVec3(
+        body_specific_force, base_from_imu_rotation_.data(),
+        imu_specific_force);
+    feedback.imu.specific_force_x =
+        static_cast<float>(body_specific_force[0]);
+    feedback.imu.specific_force_y =
+        static_cast<float>(body_specific_force[1]);
+    feedback.imu.specific_force_z =
+        static_cast<float>(body_specific_force[2]);
 }
 
 void MujocoAdapter::write(

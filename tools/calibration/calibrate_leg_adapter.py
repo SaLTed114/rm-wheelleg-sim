@@ -24,7 +24,7 @@ from model_parameters import ModelParameterExtractor, SIDE_SPECS  # noqa: E402
 
 DEFAULT_MODEL = (
     REPOSITORY_ROOT / "models" / "MJCF" /
-    "COD-2026RoboMaster-Balance.xml"
+    "Fudan-2026RoboMaster-Balance.xml"
 )
 DEFAULT_JSON = (
     REPOSITORY_ROOT / "tools" / "calibration" / "generated" /
@@ -37,10 +37,12 @@ DEFAULT_HEADER = (
 
 SIDE_NAMES = ("left", "right")
 JOINT_NAMES = ("front", "rear")
-JOINT_SCALES = ((-1.0, 1.0), (1.0, -1.0))
+# Fudan's joint axes use the same sign on the front/rear pair.  These are the
+# fitted standing-pose offsets used as the new model baseline.
+JOINT_SCALES = ((+1.0, +1.0), (-1.0, -1.0))
 LEGACY_OFFSETS = (
-    (-3.032150759729568, -0.067812378106530),
-    (-3.030735772282508, -0.032996075602418),
+    (-1.700323600945978, -0.000896018156600),
+    (-1.700323600945066, -0.000896018155538),
 )
 
 LOCAL_LENGTHS = np.arange(0.18, 0.2100001, 0.005)
@@ -449,8 +451,8 @@ def main() -> int:
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--json", type=Path, default=DEFAULT_JSON)
     parser.add_argument("--header", type=Path, default=DEFAULT_HEADER)
-    parser.add_argument("--hip-link-length", type=float, default=0.215)
-    parser.add_argument("--wheel-link-length", type=float, default=0.254)
+    parser.add_argument("--hip-link-length", type=float, default=0.175)
+    parser.add_argument("--wheel-link-length", type=float, default=0.208)
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--write", action="store_true")
     action.add_argument("--check", action="store_true")

@@ -337,7 +337,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(drop_scenario_test)
   add_test(NAME drop_scenario
     COMMAND drop_scenario_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml")
 
   add_executable(mujoco_drop_test tests/mujoco_drop_test.cpp)
   target_link_libraries(mujoco_drop_test PRIVATE balance_benchmark_support)
@@ -345,7 +345,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_drop_test)
   add_test(NAME mujoco_drop
     COMMAND mujoco_drop_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/drop")
 
   add_executable(mujoco_platform_drop_test
@@ -356,7 +356,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_platform_drop_test)
   add_test(NAME mujoco_platform_drop
     COMMAND mujoco_platform_drop_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/platform-drop")
 
   add_executable(mujoco_active_landing_test
@@ -367,7 +367,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_active_landing_test)
   add_test(NAME mujoco_active_landing
     COMMAND mujoco_active_landing_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/active-landing")
 
   add_executable(mujoco_ramp_climb_test
@@ -378,7 +378,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_ramp_climb_test)
   add_test(NAME mujoco_ramp_climb_recovery
     COMMAND mujoco_ramp_climb_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/ramp-climb")
 
   add_executable(mujoco_ramp_course_test
@@ -389,7 +389,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_ramp_course_test)
   add_test(NAME mujoco_ramp_course_matrix
     COMMAND mujoco_ramp_course_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/ramp-course")
 
   add_executable(mujoco_ramp_jump_test
@@ -400,7 +400,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_ramp_jump_test)
   add_test(NAME mujoco_ramp_jump_sweep
     COMMAND mujoco_ramp_jump_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/ramp-jump")
 
   add_executable(mujoco_jump_impulse_test
@@ -411,7 +411,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_jump_impulse_test)
   add_test(NAME mujoco_jump_impulse_sweep
     COMMAND mujoco_jump_impulse_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/jump-impulse")
 
   add_executable(mujoco_step_dock_test
@@ -422,7 +422,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_step_dock_test)
   add_test(NAME mujoco_step_dock_complete
     COMMAND mujoco_step_dock_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/step-dock")
 
   add_executable(mujoco_impact_observer_matrix_test
@@ -433,7 +433,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_impact_observer_matrix_test)
   add_test(NAME mujoco_impact_observer_negative_matrix
     COMMAND mujoco_impact_observer_matrix_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml"
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml"
       "${CMAKE_CURRENT_BINARY_DIR}/test-results/impact-observer-negative")
 
   add_executable(mujoco_smoke_test tests/mujoco_smoke_test.cpp)
@@ -442,7 +442,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_smoke_test)
   add_test(NAME mujoco_model_smoke
     COMMAND mujoco_smoke_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml")
 
   add_executable(mujoco_leg_test tests/mujoco_leg_test.cpp)
   target_link_libraries(mujoco_leg_test PRIVATE balance_simulation)
@@ -450,7 +450,7 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_leg_test)
   add_test(NAME mujoco_leg_kinematics_and_control
     COMMAND mujoco_leg_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml")
 
   add_executable(mujoco_static_stand_test
     tests/mujoco_static_stand_test.cpp)
@@ -459,5 +459,5 @@ if(BUILD_TESTING)
   balance_configure_mujoco_runtime(mujoco_static_stand_test)
   add_test(NAME mujoco_static_stand
     COMMAND mujoco_static_stand_test
-      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/COD-2026RoboMaster-Balance.xml")
+      "${CMAKE_CURRENT_SOURCE_DIR}/models/MJCF/Fudan-2026RoboMaster-Balance.xml")
 endif()

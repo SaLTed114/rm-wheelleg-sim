@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -143,6 +144,65 @@ COLLISION_GEOM_NAMES = {
     "Right_front_child2_link": "l22_collision",
 }
 
+REBASE_QUATERNION = (0.0, 0.0, 0.0, 1.0)
+
+
+def format_values(values: tuple[float, ...]) -> str:
+    return " ".join(
+        "0" if abs(value) < 1.0e-15 else f"{value:.15g}"
+        for value in values
+    )
+
+
+def multiply_quaternions(
+    left: tuple[float, float, float, float],
+    right: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    lw, lx, ly, lz = left
+    rw, rx, ry, rz = right
+    result = (
+        lw * rw - lx * rx - ly * ry - lz * rz,
+        lw * rx + lx * rw + ly * rz - lz * ry,
+        lw * ry - lx * rz + ly * rw + lz * rx,
+        lw * rz + lx * ry - ly * rx + lz * rw,
+    )
+    norm = math.sqrt(sum(value * value for value in result))
+    return tuple(value / norm for value in result)
+
+
+def rebase_pose(node: ET.Element) -> None:
+    if node.get("pos") is not None:
+        x, y, z = (float(value) for value in node.get("pos").split())
+        node.set("pos", format_values((-x, -y, z)))
+    quaternion = tuple(float(value) for value in node.get(
+        "quat", "1 0 0 0").split())
+    node.set("quat", format_values(multiply_quaternions(
+        REBASE_QUATERNION, quaternion)))
+
+
+def rebase_robot_contents(base: ET.Element) -> None:
+    for child in base:
+        if child.tag in {"body", "geom", "site", "camera", "light"}:
+            rebase_pose(child)
+        elif child.tag == "inertial":
+            if child.get("pos") is not None:
+                x, y, z = (
+                    float(value) for value in child.get("pos").split())
+                child.set("pos", format_values((-x, -y, z)))
+            if child.get("quat") is not None:
+                quaternion = tuple(
+                    float(value) for value in child.get("quat").split())
+                child.set("quat", format_values(multiply_quaternions(
+                    REBASE_QUATERNION, quaternion)))
+            if child.get("fullinertia") is not None:
+                ixx, iyy, izz, ixy, ixz, iyz = (
+                    float(value)
+                    for value in child.get("fullinertia").split()
+                )
+                child.set("fullinertia", format_values((
+                    ixx, iyy, izz, ixy, -ixz, -iyz,
+                )))
+
 def sync_assets() -> None:
     ASSET_DIR.mkdir(parents=True, exist_ok=True)
     for target_path in set(MESH_FILES.values()):
@@ -242,6 +302,7 @@ def replace_robot(root: ET.Element, fudan_root: ET.Element) -> None:
         raise RuntimeError("missing robot base body")
 
     base = rename_robot_tree(source_base)
+    rebase_robot_contents(base)
     base.set("name", "base_link")
     base.set("pos", "0 0 0.07")
     base.set("quat", "1 0 0 0")
@@ -322,23 +383,15 @@ def replace_robot(root: ET.Element, fudan_root: ET.Element) -> None:
     imu_site = base.find("site[@name='imu_site']")
     if imu_site is None:
         raise RuntimeError("Fudan base is missing IMU site")
-    imu_site.set("quat", "1 0 0 0")
-    ET.SubElement(base, "site", {
-        "name": "control_frame_site",
-        "pos": "0 0 0",
-        "size": "0.001",
-        "quat": "0 0 0 1",
-        "rgba": "0 0 0 0",
-    })
     ET.SubElement(base, "site", {
         "name": "Left_virtual_hip_site",
-        "pos": "0 -0.1877 0.08725",
+        "pos": "0 0.1877 0.08725",
         "size": "0.005",
         "rgba": "0 1 0 1",
     })
     ET.SubElement(base, "site", {
         "name": "Right_virtual_hip_site",
-        "pos": "0 0.1877 0.08725",
+        "pos": "0 -0.1877 0.08725",
         "size": "0.005",
         "rgba": "0 1 0 1",
     })
